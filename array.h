@@ -38,9 +38,9 @@ namespace jot
     template <class First, class... Rest>
     Array(First, Rest...) -> Array<First, 1 + sizeof...(Rest)>;
 
-    //Adds self to span
+    //Adds self to slice
     template <class T, size_t size, class Size>
-    Span(Array<T, size, Size>) -> Span<T, Size, size>;
+    Slice(Array<T, size, Size>) -> Slice<T, Size, size>;
 
     namespace detail 
     {

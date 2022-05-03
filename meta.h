@@ -5,12 +5,12 @@
 
 namespace jot 
 {
-    template<class T >
-    struct dummy {};
-
     using std::integral_constant;
     using std::true_type;
     using std::false_type;
+
+    template<class T >
+    struct dummy {};
 
     template <auto val, class T = decltype(val)>
     using Const = std::integral_constant<T, val>;
@@ -43,6 +43,8 @@ namespace jot
     template <class T, class... Ts>
     static constexpr bool are_same_v = are_same<T, Ts...>::value; 
 
+
+    //A lightweight compile time only tuple used for storing types
     template<class... Types >
     struct type_collection;
 
@@ -119,6 +121,7 @@ namespace jot
         static constexpr bool has = (std::is_same_v<What, Types> || ...);
     };
 
+    //Tagging
     struct NoTag {};
 
     struct UnsetTag
@@ -156,6 +159,3 @@ namespace std
     template< size_t I, class... Types >
     struct tuple_element< I, jot::type_collection<Types...> > : jot::tuple_element<I, Types...> {};
 }
-
-
-

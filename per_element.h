@@ -1,19 +1,29 @@
 #pragma once
-#include <cstddef>
-#include <cassert>
-#include <utility>
-#include "span.h"
-#include "meta.h"
+
+#include "utils.h"
 #include "defines.h"
 
 namespace jot
 {
+    //Per element is a generic class used to perform simple operations on each
+    //  element of a collection
+    //  it can be hooked into by specializing the operator().
+    //This is so that containers can specialize all operators but can still be used
+    //  conveniniently
+    //Used like such
+    //    Array arr1 = {1, 2, 3};
+    //    Array arr2 = {4, 5, 8};
+    // 
+    //    arr1() += arr2();       //Add each element of arr2 to arr2
+    //    arr1() -= 5;            //Remove 5 from every element
+    //    arr1() ++;              //Increments every element
+    //    if(arr1() >= arr2() && arr1() < 5) {} //Per element comparisons
 
     template<typename T>
     concept per_elem_like = requires(T t)
     {
-        t.begin;
-        t.end;
+        *t.begin;
+        *t.end;
     };
 
     template<typename T>
@@ -180,6 +190,7 @@ namespace jot
     template <class It>
     PerElem(It, It) -> PerElem<It>;
 
+    //Per default hooks into every single container supporting begin end
     func custom_invoke(mut&& container, PerElementDummy) noexcept 
         requires requires (){ PerElem{std::begin(container), std::end(container)}; }
     { return PerElem{std::begin(container), std::end(container)}; }
