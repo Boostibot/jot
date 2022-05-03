@@ -6,7 +6,6 @@
 #include <limits>
 #include "meta.h"
 #include "types.h"
-#include "extendible.h"
 #include "defines.h"
 
 namespace jot
@@ -41,7 +40,7 @@ namespace jot
         using ExtentConst = Const<DYNAMIC_EXTENT, Extent>;
 
         template<typename T, typename Size, typename Extent>
-        struct SpanData
+        struct SliceData
         {
             using Tag = StaticContainerTag;
 
@@ -49,22 +48,19 @@ namespace jot
             constexpr static Size size = cast(Size) Extent::value;
             constexpr static Size capacity = cast(Size) Extent::value;
 
-            constexpr bool operator==(const SpanData&) const noexcept = default;
+            constexpr bool operator==(const SliceData&) const noexcept = default;
         };
 
         template<typename T, typename Size>
-        struct SpanData<T, Size, ExtentConst>
+        struct SliceData<T, Size, ExtentConst>
         {
             T* data = nullptr;
             Size size = 0;
             constexpr static Size capacity = std::numeric_limits<Size>::max();
 
-            constexpr bool operator==(const SpanData&) const noexcept = default;
+            constexpr bool operator==(const SliceData&) const noexcept = default;
         };
-    }
 
-    namespace impl
-    {
         template <class It>
         constexpr auto addr(It&& it) noexcept -> decltype(&(*it))
         {
@@ -91,43 +87,43 @@ namespace jot
     }
 
     template<typename T, typename Size = i64, auto extent = DYNAMIC_EXTENT>
-    struct Span : detail::SpanData<T, Size, Const<extent, decltype(extent)>>
+    struct Slice : detail::SliceData<T, Size, Const<extent, decltype(extent)>>
     {
-        using SpanData = detail::SpanData<T, Size, Const<extent, decltype(extent)>>;
+        using SliceData = detail::SliceData<T, Size, Const<extent, decltype(extent)>>;
         constexpr static bool is_static = !are_same_v<decltype(extent), Extent>;
 
-        constexpr Span() = default;
+        constexpr Slice() = default;
 
-        template <class It> requires (is_static) && impl::matching_iter<It, T>
-        constexpr Span(It it) noexcept
-            : SpanData{ impl::addr(it) } {};
+        template <class It> requires (is_static) && detail::matching_iter<It, T>
+        constexpr Slice(It it) noexcept
+            : SliceData{ detail::addr(it) } {};
 
-        template <class It> requires (!is_static) && impl::matching_iter<It, T>
-        constexpr Span(It it, Size size) noexcept
-            : SpanData{ impl::addr(it), size } {};
+        template <class It> requires (!is_static) && detail::matching_iter<It, T>
+        constexpr Slice(It it, Size size) noexcept
+            : SliceData{ detail::addr(it), size } {};
 
         template <class Begin, class End>  
-            requires (!is_static) && impl::matching_iter<Begin, T> && impl::iter_range<Begin, End>
-        constexpr Span(Begin begin, End end) noexcept
-            : SpanData{ impl::addr(begin), impl::addr(begin) - impl::addr(end)} {};
+            requires (!is_static) && detail::matching_iter<Begin, T> && detail::iter_range<Begin, End>
+        constexpr Slice(Begin begin, End end) noexcept
+            : SliceData{ detail::addr(begin), detail::addr(begin) - detail::addr(end)} {};
 
-        constexpr operator Span<T, Size>() const noexcept requires (is_static) { return Span<T, Size>{this->data, this->size}; }
-        constexpr operator Span<T, Size>()       noexcept requires (is_static) { return Span<T, Size>{this->data, this->size}; }
+        constexpr operator Slice<T, Size>() const noexcept requires (is_static) { return Slice<T, Size>{this->data, this->size}; }
+        constexpr operator Slice<T, Size>()       noexcept requires (is_static) { return Slice<T, Size>{this->data, this->size}; }
 
         #include "span_array_shared_text.h"
     };
 
     //deduction guide
     template <class Begin, class Size>
-        requires (!impl::addressable<Size>)
-    Span(Begin begin, Size) -> Span<impl::IterValue<Begin>>;
+        requires (!detail::addressable<Size>)
+    Slice(Begin begin, Size) -> Slice<detail::IterValue<Begin>>;
 
     template <class Begin, class End>
-        requires (impl::addressable<End>)
-    Span(Begin begin, End) -> Span<impl::IterValue<Begin>>;
+        requires (detail::addressable<End>)
+    Slice(Begin begin, End) -> Slice<detail::IterValue<Begin>>;
 
     template <class T, size_t size>
-    Span(T (&elem)[size]) -> Span<T, i64, size>;
+    Slice(T (&elem)[size]) -> Slice<T, i64, size>;
 
     template<typename Container>
     concept direct_container = requires(Container container)
