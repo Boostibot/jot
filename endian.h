@@ -119,6 +119,15 @@ namespace jot
             }, local_endian
         );
     }
+
+    template <typename IntegerT, typename EndianT = EndianBase>
+    proc to_endian(const IntegerT& integer, let to_endian, EndianT from_endian = LOCAL_ENDIAN)
+    {
+        if(to_endian == from_endian)
+            return integer;
+        else
+            return byteswap(integer);
+    }
 }
 
 #include "undefs.h"
