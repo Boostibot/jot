@@ -40,12 +40,12 @@ func& operator[](Size index) const noexcept { assert(index < this->size); return
 func& operator[](Size index) noexcept       { assert(index < this->size); return this->data[index]; }
 
 //slicing
-func operator()(Size from, Size to) const noexcept   {return Slice<T, Size>{this->data + from, to - from};}
-func operator()(Begin begin, Size to) const noexcept {return Slice<T, Size>{this->data + cast(Size)(begin), to};}
-func operator()(Size from, End end) const noexcept   {return Slice<T, Size>{this->data + from, this->size - from + cast(Size)(end)};}
-func operator()(Begin begin, End end) const noexcept {return Slice<T, Size>{this->data + cast(Size)(begin), this->size - cast(Size)(begin) + cast(Size)(end)};}
+func operator()(Size from, Size to) const noexcept   {return const_slice_type{this->data + from, to - from};}
+func operator()(Begin begin, Size to) const noexcept {return const_slice_type{this->data + cast(Size)(begin), to};}
+func operator()(Size from, End end) const noexcept   {return const_slice_type{this->data + from, this->size - from + cast(Size)(end)};}
+func operator()(Begin begin, End end) const noexcept {return const_slice_type{this->data + cast(Size)(begin), this->size - cast(Size)(begin) + cast(Size)(end)};}
 
-func operator()(Size from, Size to) noexcept         {return Slice<T, Size>{this->data + from, to - from};}
-func operator()(Begin begin, Size to) noexcept       {return Slice<T, Size>{this->data + cast(Size)(begin), to};}
-func operator()(Size from, End end) noexcept         {return Slice<T, Size>{this->data + from, this->size - from + cast(Size)(end)};}
-func operator()(Begin begin, End end) noexcept       {return Slice<T, Size>{this->data + cast(Size)(begin), this->size - cast(Size)(begin) + cast(Size)(end)};}
+func operator()(Size from, Size to) noexcept         {return slice_type{this->data + from, to - from};}
+func operator()(Begin begin, Size to) noexcept       {return slice_type{this->data + cast(Size)(begin), to};}
+func operator()(Size from, End end) noexcept         {return slice_type{this->data + from, this->size - from + cast(Size)(end)};}
+func operator()(Begin begin, End end) noexcept       {return slice_type{this->data + cast(Size)(begin), this->size - cast(Size)(begin) + cast(Size)(end)};}

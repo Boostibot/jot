@@ -20,4 +20,5 @@ namespace jot
 
     using byte = u8;
     using std::size_t;
+    using cstring = const char*;
 }

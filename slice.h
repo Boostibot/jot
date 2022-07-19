@@ -3,7 +3,11 @@
 #include <cstddef>
 #include <cassert>
 #include <utility>
+//@TODO: How many do i need?
+
 #include <limits>
+
+
 #include "meta.h"
 #include "types.h"
 #include "defines.h"
@@ -54,6 +58,8 @@ namespace jot
         template<typename T, typename Size>
         struct SliceData<T, Size, ExtentConst>
         {
+            using Tag = void;
+
             T* data = nullptr;
             Size size = 0;
             constexpr static Size capacity = std::numeric_limits<Size>::max();
@@ -90,6 +96,9 @@ namespace jot
     struct Slice : detail::SliceData<T, Size, Const<extent, decltype(extent)>>
     {
         using SliceData = detail::SliceData<T, Size, Const<extent, decltype(extent)>>;
+        using slice_type = Slice<T, Size>;
+        using const_slice_type = Slice<const T, Size>;
+
         constexpr static bool is_static = !are_same_v<decltype(extent), Extent>;
 
         constexpr Slice() = default;

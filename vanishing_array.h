@@ -58,6 +58,8 @@ namespace jot
         constexpr operator T*()             noexcept { return this->data; }
         constexpr operator const T*() const noexcept { return this->data; }
 
+        using slice_type = Slice<T, Size>;
+
         #include "span_array_shared_text.h"
     };
 

@@ -18,6 +18,9 @@ namespace jot
     struct Array
     {
         using Tag = StaticContainerTag;
+        using slice_type = Slice<T, Size>;
+        using const_slice_type = Slice<const T, Size>;
+
         static constexpr Size size = cast(Size) size_;
         static constexpr Size capacity = size;
         T data[size ? size : 1];
