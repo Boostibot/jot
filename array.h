@@ -34,7 +34,7 @@ namespace jot
         constexpr operator T*() noexcept             { return this->data; }
         constexpr operator const T*() const noexcept { return this->data; }
 
-        #include "span_array_shared_text.h"
+        #include "slice_op_text.h"
     };
 
     //deduction guide

@@ -119,7 +119,7 @@ namespace jot
         constexpr operator Slice<T, Size>() const noexcept requires (is_static) { return Slice<T, Size>{this->data, this->size}; }
         constexpr operator Slice<T, Size>()       noexcept requires (is_static) { return Slice<T, Size>{this->data, this->size}; }
 
-        #include "span_array_shared_text.h"
+        #include "slice_op_text.h"
     };
 
     //deduction guide
@@ -162,23 +162,30 @@ namespace std
     struct tuple_size<Cont> : integral_constant<size_t, Cont::size> {};
 
     template<size_t I, jot::static_direct_container Cont>
+    struct tuple_element<I, Cont> 
+        {using type = typename Cont::value_type;};
+
+    template<size_t I, jot::static_direct_container Cont>
     func get(Cont& arr) noexcept -> typename Cont::value_type&
     {
         static_assert(I < arr.size, "access out of bounds");
         return arr[I];
     }
+
     template<size_t I, jot::static_direct_container Cont>
     func get(Cont&& arr) noexcept -> typename Cont::value_type&&
     {
         static_assert(I < arr.size, "access out of bounds");
         return move(arr[I]);
     }
+
     template<size_t I, jot::static_direct_container Cont>
     func get(const Cont& arr) noexcept -> const typename Cont::value_type&
     {
         static_assert(I < arr.size, "access out of bounds");
         return arr[I];
-    }
+    } 
+
     template<size_t I, jot::static_direct_container Cont>
     func get(const Cont&& arr) noexcept -> const typename Cont::value_type&&
     {
