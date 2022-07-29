@@ -78,6 +78,7 @@ namespace jot
         }
     };
 
+
     template <
         typename T, 
         size_t static_capacity_ = 0, 
@@ -98,8 +99,8 @@ namespace jot
         constexpr static bool has_stateful_alloc = !std::is_empty_v<Alloc>;
 
         constexpr Stack() = default;
-        constexpr Stack(Stack&& other) noexcept { swap(other); }
-        constexpr Stack(Size size) { alloc_self(size); }
+        constexpr Stack(Stack&& other) noexcept { swap(this, &other); }
+        constexpr Stack(Size size) { alloc_data(size); }
 
         constexpr Stack(
             T* data, Size size, Size capacity, 
@@ -118,100 +119,134 @@ namespace jot
             : Stack_Data{alloc} {}
 
         constexpr Stack(const Stack& other)
-            requires (std::is_copy_constructible_v<T>)
+            requires (std::is_copy_constructible_v<T>) : Stack_Data{other.alloc()}
         {
-            alloc_self(other.size);
+            alloc_data(this, other.size);
+            copy_construct_elems(this, other);
             this->size = other.size;
-
-            for (Size i = 0; i < this->size; i++)
-                std::construct_at(this->data + i, other.data[i]);
         }
 
         constexpr ~Stack() noexcept
         {
-            destroy_elems();
-
-            if (this->data != nullptr)
-                dealloc_self();
+            destroy_elems(this);
+            dealloc_data(this);
         }
 
-        constexpr Stack& operator=(const Stack& vec)
+        constexpr Stack& operator=(const Stack& other)
             requires (std::is_copy_assignable_v<T> || std::is_copy_constructible_v<T>)
         {
-            if(this->capacity >= vec.size)
+            if(this->capacity >= other.size)
             {
+                //If the elems are copy constructible we can save potential allocations of elems
+                // by using copy assignment instead (for example with Stack<Stack<>...>)
                 if constexpr (std::is_copy_assignable_v<T>)
                 {
                     //destroy extra
-                    for (Size i = this->size; i < vec.size; i++)
+                    for (Size i = other.size; i < this->size; i++)
                         this->data[i].~T();
 
-                    //copy missing
-                    for (Size i = vec.size; i < this->size; i++)
-                        this->data[i] = vec.data[i];
+                    //construct missing
+                    for (Size i = this->size; i < other.size; i++)
+                        std::construct_at(this->data + i, other.data[i]);
 
-                    this->size = vec.size;
+                    //copy rest
+                    Size to_size = std::min(this->size, other.size);
+                    for (Size i = 0; i < to_size; i++)
+                        this->data[i] = other.data[i];
+
+                    this->size = other.size;
                 }
                 else
                 {
-                    //destroy all
-                    for (Size i = 0; i < this->size; i++)
-                        this->data[i].~T();
+                    destroy_elems(this);
+                    copy_construct_elems(this, other);
 
-                    //fill all
-                    for (Size i = this->size; i < vec.size; i++)
-                        std::construct_at(this->data + i, vec.data[i]);
-
-                    this->size = vec.size;
+                    this->size = other.size;
                 }
             }
             else
             {
-                Stack copy(vec);
-                swap(copy);
+                destroy_elems(this);
+                dealloc_data(this);
+                
+                alloc_data(this, other.size);
+                copy_construct_elems(this, other);
+                
+                this->size = other.size;
             }
 
             return *this;
         }
 
-        constexpr Stack& operator=(Stack&& vec)
+        constexpr Stack& operator=(Stack&& other) noexcept
         {
-            swap(vec);
+            swap(this, &other);
             return *this;
         }
 
+        //this is pretty pointless since its impossible to create a by byte copy...
         func operator<=>(const Stack&) const noexcept = default;
         constexpr bool operator==(const Stack&) const noexcept = default;
 
         proc alloc() noexcept -> Alloc& {return *cast(Alloc*)this; }
         proc alloc() const noexcept -> Alloc const& {return *cast(Alloc*)this; }
 
-        proc swap(Stack& other) noexcept
-        {
-            if(this->capacity <= static_capacity)
-            {
-                Size to_size = 0;
-
-                //Litle optim for large static arrays/little arrays and loop unrolling
-                if constexpr (static_capacity * sizeof(T) > 64)
-                    to_size = std::min(this->capacity, other.capacity);
-                else
-                    to_size = static_capacity;
-
-                for(Size i = 0; i < to_size; i++)
-                    std::swap((*this)[i], other[i]);
-            }
-            else
-                std::swap(this->data, other.data);
-
-            std::swap(this->size, other.size);
-            std::swap(this->capacity, other.capacity);
-
-            if constexpr(has_stateful_alloc)
-                std::swap(this->alloc(), other.alloc());
+        static proc is_static_alloced(const Stack& vec) noexcept -> bool 
+        { 
+            return vec.capacity == static_capacity && has_static_storage; 
         }
 
-        proc alloc_self(Size capacity)
+        static proc swap(Stack* left, Stack* right) noexcept -> void
+        {
+            constexpr let transfer_static = [](Stack* from, Stack* to, Size from_i, Size to_i)
+            {
+                for (Size i = from_i; i < to_i; i++)
+                {
+                    std::construct_at(to->static_data() + i, std::move(from->static_data()[i]));
+                    from->static_data()[i].~T();
+                }
+            };
+
+            constexpr let transfer_half_static = [=](Stack* from, Stack* to)
+            {
+                transfer_static(from, to, 0, from->size);
+
+                from->data = to->data;
+                to->data = to->static_data();
+            };
+
+            if (is_static_alloced(*left) && is_static_alloced(*right))
+            {
+                Size to_size = 0;
+                if (left->size < right->size)
+                {
+                    to_size = left->size;
+                    transfer_static(right, left, left->size, right->size);
+                }
+                else
+                {
+                    to_size = right->size;
+                    transfer_static(left, right, right->size, left->size);
+                }
+
+                for (Size i = 0; i < to_size; i++)
+                    std::swap((*left)[i], (*right)[i]);
+            }
+            else if (is_static_alloced(*left))
+                transfer_half_static(left, right);
+            else if (is_static_alloced(*right))
+                transfer_half_static(right, left);
+            else
+                std::swap(left->data, right->data);
+
+            std::swap(left->size, right->size);
+            std::swap(left->capacity, right->capacity);
+
+            if constexpr(has_stateful_alloc)
+                std::swap(left->alloc(), right->alloc());
+        }
+
+        static proc alloc_data(Stack* vec, Size capacity) -> void
         {
             if(capacity <= static_capacity)
             {
@@ -219,55 +254,70 @@ namespace jot
                 // - that however would make it so that default init is not zero init which could be a slow down
                 //The reallocating path is expensive anyways and this check will fire in so little cases 
                 // (actually only once) that it doesnt matter
-                if(this->capacity < static_capacity)
+                if(vec->capacity < static_capacity)
                 {
-                    this->capacity = static_capacity;
-                    this->data = this->static_data();
+                    vec->capacity = static_capacity;
+                    vec->data = vec->static_data();
                 }
 
                 return;
             }
 
-            this->data = this->allocate(sizeof(T) * this->capacity);
-            this->capacity = capacity;
+            let realloc_to = cast(Size) grow_type::run(
+                cast(size_t) capacity,
+                cast(size_t) vec->capacity,
+                cast(size_t) vec->size,
+                sizeof(T)
+            );
+
+            vec->capacity = realloc_to;
+            vec->data = vec->allocate(sizeof(T) * vec->capacity);
         }
 
-        proc dealloc_self()
+        static proc dealloc_data(Stack* vec) -> void
         {
-            if(this->capacity > static_capacity)
-                this->deallocate(this->data, sizeof(T) * this->capacity);
+            if(vec->capacity > static_capacity)
+                vec->deallocate(vec->data, sizeof(T) * vec->capacity);
         }
 
         //can be used for arbitrary growing/shrinking of data
-        // when called on uninit stack acts as alloc_self
-        // when called with new_capacity = 0 acts as dealloc_self
-        proc realloc_self(Size new_capacity)
+        // when called on uninit stack acts as alloc_data
+        // when called with new_capacity = 0 acts as dealloc_data
+        // Destroys elements when shrinking but does not construct new ones when growing 
+        //  (because doesnt know how to)
+        static proc set_capacity(Stack* vec, Size new_capacity) -> void
         {
             T* new_data = nullptr;
 
             if(new_capacity <= static_capacity)
             {
-                new_data = this->static_data();
-                new_capacity = this->static_capacity;
+                new_data = vec->static_data();
+                new_capacity = vec->static_capacity;
             }
             else
-                new_data = this->allocate(sizeof(T) * new_capacity);
+                new_data = vec->allocate(sizeof(T) * new_capacity);
 
-            let copy_to = std::min(this->size, new_capacity);
+            let copy_to = std::min(vec->size, new_capacity);
             for (Size i = 0; i < copy_to; i++)
-                std::construct_at(new_data + i, std::move(this->data[i]));
+                std::construct_at(new_data + i, std::move(vec->data[i]));
 
-            this->destroy_elems();
-            this->dealloc_self();
+            destroy_elems(vec);
+            dealloc_data(vec);
 
-            this->data = new_data;
-            this->capacity = new_capacity;
+            vec->data = new_data;
+            vec->capacity = new_capacity;
         }
 
-        proc destroy_elems()
+        static proc destroy_elems(Stack* vec) -> void
         {
-            for (Size i = 0; i < this->size; i++)
-                this->data[i].~T();
+            for (Size i = 0; i < vec->size; i++)
+                vec->data[i].~T();
+        }
+
+        static proc copy_construct_elems(Stack* vec, const Stack& other) -> void
+        {
+            for (Size i = 0; i < other.size; i++)
+                std::construct_at(vec->data + i, other.data[i]);
         }
 
         #include "slice_op_text.h"
@@ -283,12 +333,21 @@ namespace std
     template <STACK_TEMPL>
     proc swap(jot::Stack_T& stack1, jot::Stack_T& stack2)
     {
-        return stack1.swap(stack2);
+        return jot::Stack_T::swap(&stack1, &stack2);
     }
 }
 
 namespace jot
 {
+    namespace stack
+    {
+        template <STACK_TEMPL>
+        proc realloc(Stack_T* stack, Size cap)
+        {
+            stack->set_capacity(cap);
+        }
+    }
+
     template <STACK_TEMPL>
     proc reserve(Stack_T* stack, Size to_fit) -> bool
     {
@@ -296,8 +355,8 @@ namespace jot
             return false;
 
         Size realloc_to = 0;
-        //@NOTE: The below line could be merged with the same check in realloc_self
-        // (ie. there could be a version of realloc_self that doesnt have this check)
+        //@NOTE: The below line could be merged with the same check in set_capacity
+        // (ie. there could be a version of set_capacity that doesnt have this check)
         // but the improvemnt is so minor I have excluded it
         if (to_fit <= stack->static_capacity)
             realloc_to = stack->static_capacity;
@@ -310,14 +369,14 @@ namespace jot
             );
 
         assert(realloc_to > to_fit);
-        stack->realloc_self(realloc_to);
+        Stack_T::set_capacity(stack, realloc_to);
         return true;
     }
 
     template <STACK_TEMPL>
     proc clear(Stack_T* stack)
     {
-        stack->destroy_elems();
+        Stack_T::destroy_elems(stack);
         stack.size = 0;
     }
 
@@ -331,6 +390,12 @@ namespace jot
     func is_empty(Stack_T const& stack) noexcept
     {
         return stack->size == 0;
+    }
+
+    template <STACK_TEMPL>
+    func is_static_alloced(Stack_T const& stack) noexcept
+    {
+        return Stack_T::is_static_alloced(stack);
     }
 
     template <STACK_TEMPL>
