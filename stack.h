@@ -65,12 +65,16 @@ namespace jot
         static constexpr size_t ADD = ADD_;
         static constexpr size_t BASE_ELEMS = BASE_ELEMS_;
 
-        static constexpr size_t run(size_t to_fit, size_t capacity, size_t size, size_t elem_size)
+        static constexpr size_t run(size_t to_fit, size_t capacity, size_t size, size_t static_capacity, size_t elem_size)
         {
             cast(void) size;
+            cast(void) static_capacity;
             cast(void) elem_size;
 
-            size_t realloc_to = capacity ? capacity : BASE_ELEMS;
+            size_t realloc_to = capacity 
+                ? capacity * MULT + ADD 
+                : BASE_ELEMS;
+
             while(realloc_to < to_fit)
                 realloc_to = realloc_to * MULT + ADD;
 
@@ -93,6 +97,14 @@ namespace jot
         using const_slice_type = Slice<const T, Size>;
         using grow_type        = Grow;
         using Stack_Data       = detail::Stack_Data<T, Size, Alloc, static_capacity_>;
+
+        using value_type      = T;
+        using size_type       = Size;
+        using difference_type = ptrdiff_t;
+        using pointer         = T*;
+        using const_pointer   = const T*;
+        using reference       = T&;
+        using const_reference = const T&;
 
         constexpr static Size static_capacity = cast(Size) static_capacity_; 
         constexpr static bool has_static_storage = static_capacity != 0;
@@ -267,6 +279,7 @@ namespace jot
                 cast(size_t) capacity,
                 cast(size_t) vec->capacity,
                 cast(size_t) vec->size,
+                cast(size_t) vec->static_capacity,
                 sizeof(T)
             );
 
@@ -323,7 +336,32 @@ namespace jot
         #include "slice_op_text.h"
     };
 
+    template<typename Stack>
+    concept Stack_Concept = requires(Stack stack)
+    {
+        Stack::set_capacity(&stack, 0);
+        Stack::destroy_elems(&stack);
+
+        stack.data = nullptr; 
+        stack.size = 0; 
+        stack.capacity = 0; 
+
+        { Stack::allocator_type    };
+        { Stack::slice_type        };
+        { Stack::const_slice_type  };
+        { Stack::grow_type         };
+        { Stack::size_type         };
+        //{ Stack::Stack_Data        };
+        { stack.static_capacity    } -> std::convertible_to<size_t>;
+        { stack.has_static_storage } -> std::convertible_to<bool>;
+        { stack.has_stateful_alloc } -> std::convertible_to<bool>; 
+    };
+
+    static_assert(Stack_Concept<Stack<i32, 0>> == true);
+    static_assert(Stack_Concept<Stack<i32, 2>> == true);
+    static_assert(Stack_Concept<i32> == false);
 }
+
 
 #define STACK_TEMPL class T, size_t scap, class Size, class Alloc, class Grow
 #define Stack_T Stack<T, scap, Size, Alloc, Grow>
@@ -365,6 +403,7 @@ namespace jot
                 cast(size_t) to_fit, 
                 cast(size_t) stack->capacity, 
                 cast(size_t) stack->size, 
+                cast(size_t) stack->static_capacity,
                 sizeof(T)
             );
 
