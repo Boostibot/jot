@@ -10,30 +10,51 @@ namespace jot
         return (value + to_multiple_of - 1) / to_multiple_of;
     }
 
-    template<typename T, typename ...Ts>
-    func max(T first, Ts... values)
-    {
-        T max = first;
-        const Array<T, sizeof...(values)> vals = {values...};
+    
+    template<typename T>
+    func max() -> T
+    {   
+        return T();
+    }
 
-        for(let& val : vals)
-            if(val > max)
-                max = val;
+    template<typename T>
+    func min() -> T
+    {   
+        return T();
+    }
 
-        return max;
+    template<typename T>
+    func max(T first) -> T
+    {   
+        return first;
+    }
+
+    template<typename T>
+    func min(T first) -> T
+    {   
+        return first;
     }
 
     template<typename T, typename ...Ts>
-    func min(T first, Ts... values)
+    func max(T first, Ts... values)
+        requires (std::convertible_to<Ts, T> && ...)
     {
-        T min = first;
-        const Array<T, sizeof...(values)> vals = {values...};
+        let rest_max = max(values...);
+        if(rest_max > first)
+            return cast(T) rest_max;
+        else
+            return cast(T) first;
+    }
 
-        for(let& val : vals)
-            if(val < min)
-                min = val;
-
-        return min;
+    template<typename T, typename ...Ts>
+    func min(T first, Ts... values...)
+        requires (std::convertible_to<Ts, T> && ...)
+    {
+        let rest_max = max(values...);
+        if(rest_max < first)
+            return cast(T) rest_max;
+        else
+            return cast(T) first;
     }
     
     template <typename Val, typename Container>

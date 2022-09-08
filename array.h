@@ -35,6 +35,7 @@ namespace jot
         constexpr operator const T*() const noexcept { return this->data; }
 
         #include "slice_op_text.h"
+
     };
 
     //deduction guide
@@ -74,6 +75,27 @@ namespace jot
     {
         return detail::to_array_impl(std::move(a), std::make_index_sequence<N>{});
     }
+}
+
+namespace std
+{
+    template <class T, size_t size, class Size>
+    func begin(jot::Array<T,size, Size>& arr) noexcept {return arr.data;}
+    template <class T, size_t size, class Size>
+    func begin(const jot::Array<T,size, Size>& arr) noexcept {return arr.data;}
+
+    template <class T, size_t size, class Size>
+    func end(jot::Array<T,size, Size>& arr) noexcept {return arr.data + arr.size;}
+    template <class T, size_t size, class Size>
+    func end(const jot::Array<T,size, Size>& arr) noexcept {return arr.data + arr.size;}
+
+    template <class T, size_t size, class Size>
+    func cbegin(const jot::Array<T,size, Size>& arr) noexcept {return arr.data;}
+    template <class T, size_t size, class Size>
+    func cend(const jot::Array<T,size, Size>& arr) noexcept {return arr.data + arr.size;}
+
+    template <class T, size_t _size, class Size>
+    func size(const jot::Array<T,_size, Size>& arr) noexcept {return arr.size;}
 }
 
 #include "undefs.h"

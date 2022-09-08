@@ -9,6 +9,31 @@ using const_pointer   = const T*;
 using reference       = T&;
 using const_reference = const T&;
 
+//@NOTE: dont know why but without std::allocator or these containers doesnt satisfy range concept
+// (begin and end are defined outside the class and work for ranged based for loops
+//  but not for range concept?)
+using iterator       = T*;
+using const_iterator = const T*;
+
+using reverse_iterator       = std:: reverse_iterator<iterator>;
+using const_reverse_iterator = std:: reverse_iterator<const_iterator>;
+
+constexpr iterator begin() noexcept {
+    return this->data;
+}
+
+constexpr const_iterator begin() const noexcept {
+    return this->data;
+}
+
+constexpr iterator end() noexcept {
+    return this->data + this->size;
+}
+
+constexpr const_iterator end() const noexcept {
+    return this->data + this->size;
+}
+
 //per element access
 proc operator()() const 
     requires requires() { custom_invoke(*this, PerElementDummy()); } 
