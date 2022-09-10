@@ -61,8 +61,8 @@ proc operator()(T&& ts)
 }
 
 
-func& operator[](Size index) const noexcept { assert(index < this->size); return this->data[index]; }
-func& operator[](Size index) noexcept       { assert(index < this->size); return this->data[index]; }
+func& operator[](Size index) const noexcept { assert(index < this->size && "index out of range"); return this->data[index]; }
+func& operator[](Size index) noexcept       { assert(index < this->size && "index out of range"); return this->data[index]; }
 
 //slicing
 func operator()(Size from, Size to) const noexcept   {return const_slice_type{this->data + from, to - from};}

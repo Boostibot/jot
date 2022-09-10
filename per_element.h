@@ -1,198 +1,256 @@
 #pragma once
 
+#include <ranges>
+
 #include "utils.h"
 #include "defines.h"
 
 namespace jot
 {
-    //Per element is a generic class used to perform simple operations on each
-    //  element of a collection
-    //  it can be hooked into by specializing the operator().
-    //This is so that containers can specialize all operators but can still be used
-    //  conveniniently
-    //Used like such
-    //    Array arr1 = {1, 2, 3};
-    //    Array arr2 = {4, 5, 8};
-    // 
-    //    arr1() += arr2();       //Add each element of arr2 to arr2
-    //    arr1() -= 5;            //Remove 5 from every element
-    //    arr1() ++;              //Increments every element
-    //    if(arr1() >= arr2() && arr1() < 5) {} //Per element comparisons
-
-    template<typename T>
-    concept per_elem_like = requires(T t)
+    template <typename T>
+    concept expr_like = requires(T t)
     {
-        *t.begin;
-        *t.end;
+        t.fn().val;
+        t.fn().has;
+        t.apply = false;
     };
 
-    template<typename T>
-    struct PerElem
+
+    template <typename T>
+    struct Opt
     {
-        T begin;
-        T end;
+        T val;
+        bool has;
+    };
 
-        using Val = std::remove_cvref_t<decltype(*begin)>;
+    template <typename T>
+    Opt(T, bool) -> Opt<T>;
 
-        #define single_for() \
-            for(mut it = begin; it != end; ++it) \
-
-        #define paralel_for(other) \
-            mut it2 = other.begin; \
-            for(mut it1 = begin; it1 != end; ++it1, ++it2) \
-
-        #define single_op_(qual, op) \
-            proc& operator##op(qual Val& other) requires requires() {*begin op other;} \
-            { \
-                single_for() \
-                    *it op other; \
-                return *this; \
-            }
-
-        #define paralel_op_(qual, op) \
-            proc& operator##op(qual per_elem_like auto& other) requires requires() {*begin op *other.begin;} \
-            { \
-                paralel_for(other) \
-                    *it1 op *it2; \
-                return *this; \
-            }
-
-        #define all_of_single_op_(qual, op) \
-            proc operator##op(qual Val& other) requires requires() {*begin op other;} \
-            { \
-                single_for() \
-                { \
-                    if(!(*it op other)) \
-                        return false; \
-                } \
-                return true; \
-            }
-
-        #define all_of_paralel_op_(qual, op) \
-            proc operator##op(qual per_elem_like auto& other) requires requires() {*begin op *other.begin;} \
-            { \
-                paralel_for(other) \
-                { \
-                    if(!(*it1 op *it2)) \
-                        return false; \
-                } \
-                return true; \
-            }
-
-        #define unary_increment_prefix_op(op) \
-            proc& operator##op() requires requires() {op *begin;} \
-            { \
-                single_for() \
-                    op *it; \
-                return *this; \
-            }
-
-        #define unary_increment_postfix_op(op) \
-            proc operator##op(int) requires requires() {*begin op;} \
-            { \
-                single_for() \
-                    *it op; \
-                return *this; \
-            }
-
-        #define single_op(op) \
-            single_op_(const, op); \
-            single_op_(, op); 
-
-        #define paralel_op(op) \
-            paralel_op_(const, op); \
-            paralel_op_(, op); 
-
-        #define all_of_single_op(op) \
-            all_of_single_op_(const, op); \
-            all_of_single_op_(, op); 
-
-        #define all_of_paralel_op(op) \
-            all_of_paralel_op_(const, op); \
-            all_of_paralel_op_(, op); 
-
-        single_op(=);
-        single_op(+=);
-        single_op(-=);
-        single_op(*=);
-        single_op(/=);
-        single_op(%=);
-        single_op(&=);
-        single_op(|=);
-        single_op(^=);
-        single_op(<<=);
-        single_op(>>=);
-
-        paralel_op(+=);
-        paralel_op(-=);
-        paralel_op(*=);
-        paralel_op(/=);
-        paralel_op(%=);
-        paralel_op(&=);
-        paralel_op(|=);
-        paralel_op(^=);
-        paralel_op(<<=);
-        paralel_op(>>=);
-
-        all_of_single_op(==);
-        all_of_single_op(!=);
-        all_of_single_op(<);
-        all_of_single_op(>);
-        all_of_single_op(>=);
-        all_of_single_op(<=);
-
-        all_of_paralel_op(==);
-        all_of_paralel_op(!=);
-        all_of_paralel_op(<);
-        all_of_paralel_op(>);
-        all_of_paralel_op(>=);
-        all_of_paralel_op(<=);
-
-        unary_increment_prefix_op(++);
-        unary_increment_prefix_op(--);
-        unary_increment_postfix_op(++);
-        unary_increment_postfix_op(--);
+    #define Exact_Opt(val, has) Opt<decltype(val)>{val, has}
+    #define Exact_Expr(expr) Expr<decltype(expr)>{expr}
 
 
-        proc& operator=(T&& other) requires requires() {*begin = std::move(*other.begin); } 
-        { 
-            paralel_for(other) 
-                *it1 = std::move(*it2);
-            return *this; 
-        }
+    template <typename Fn>
+    struct Expr
+    {
+        Fn fn;
+        bool top_level = true;
 
-        proc operator<=>(T&& other) requires requires() {*begin <=> *other.begin; }
-        { 
-            using Ret = decltype(*begin <=> *other.begin);
-            paralel_for(other) 
+        constexpr void apply()
+        {
+            while(true)
             {
-                let comp = *it1 <=> *it2;
-                if(comp != 0)
-                    return comp;
+                auto res = fn();
+                if(res.has == false)
+                    break;
             }
-            return cast(Ret)(0); 
         }
 
+        constexpr ~Expr()
+        {
+            if(top_level)
+                apply();
+        }
 
-        #undef single_for
-        #undef paralel_for
-        #undef single_op_
-        #undef paralel_op_
-        #undef all_of_op_
-        #undef unary_increment_prefix_op
-        #undef unary_increment_postfix_op
-        #undef single_op
-        #undef paralel_op
-        #undef all_of_op
+        template <typename Fn2> 
+        constexpr auto operator = (Expr<Fn2>&& right) 
+            requires requires() { 
+            fn().val = right.fn().val; 
+        } 
+        { 
+            top_level = false; 
+            right.top_level = false; 
+
+            auto res = [left = *this, right]() mutable { 
+                auto left_res = left.fn(); 
+                auto right_res = right.fn(); 
+                return Exact_Opt(left_res.val = std::move(right_res.val), left_res.has && right_res.has); 
+            };
+
+            return Exact_Expr(res);
+        } 
+
+
+        template <typename Other> 
+        constexpr auto operator = (Other&& right) 
+            requires (!expr_like<Other>) && requires() { 
+            fn().val = right; 
+        } 
+        { 
+            top_level = false; 
+
+            auto res = [left = *this, right]() mutable { 
+                auto left_res = left.fn(); 
+                return Exact_Opt(left_res.val = std::forward<Other>(right), left_res.has); 
+            };
+
+            return Exact_Expr(res);
+        } 
+
+        template <typename ... Ts>
+        constexpr auto operator()(Ts&& ... ts) 
+            requires requires() { 
+            fn().val(std::forward<Ts>(ts)...); 
+        } 
+        {
+            top_level = false;
+            auto res = [=, left = *this]() mutable { 
+                auto left_res = left.fn(); 
+                return Exact_Opt(left_res.val(std::forward<Ts>(ts)...), left_res.has);
+            };
+
+            return Exact_Expr(res);
+        };
+
+
+        template <typename T>
+        constexpr auto operator[](T&& right) 
+            requires requires() { 
+            fn().val[std::forward<T>(right)]; 
+        } 
+        {
+            top_level = false;
+            auto res = [left = *this, right]() mutable { 
+                auto left_res = left.fn(); 
+                return Exact_Opt(left_res.val[right], left_res.has);
+            };
+
+            return Exact_Expr(res);
+        };
+
     };
 
-    //deduction guide
-    template <class It>
-    PerElem(It, It) -> PerElem<It>;
+    template <typename T>
+    Expr(T) -> Expr<T>;
 
-    //Per default hooks into every single container supporting begin end
-    func custom_invoke(mut&& container, PerElementDummy) noexcept 
-        requires requires (){ PerElem{std::begin(container), std::end(container)}; }
-    { return PerElem{std::begin(container), std::end(container)}; }
+
+    #define unary_mixfix_op(prefix, postfix, decor) \
+        template <typename Fn1> \
+        constexpr auto operator prefix postfix(Expr<Fn1>&& left) \
+            requires requires(decor) { \
+                prefix left.fn().val postfix; \
+            } \
+        { \
+            left.top_level = false; \
+            \
+            return Expr{[left]() mutable { \
+                auto left_res = left.fn(); \
+                return Exact_Opt(prefix std::move(left_res.val) postfix, left_res.has); \
+            }}; \
+        } \
+
+    #define bin_dual_op(op, left_move, right_move) \
+        template <typename Fn1, typename Fn2> \
+        constexpr auto operator op(Expr<Fn1>&& left, Expr<Fn2>&& right) \
+            requires requires() { \
+                left.fn().val op right.fn().val; \
+            } \
+        { \
+            left.top_level = false; \
+            right.top_level = false; \
+            \
+            return Expr{[left, right]() mutable { \
+                auto left_res = left.fn(); \
+                auto right_res = right.fn(); \
+                return Exact_Opt(left_move (left_res.val) op right_move (right_res.val), left_res.has && right_res.has); \
+            }}; \
+        } \
+
+    #define bin_mono_op_left(op, move_fn) \
+        template <typename Other, typename Fn2> \
+        constexpr auto operator op(Other&& left, Expr<Fn2>&& right) \
+            requires (!expr_like<Other>) && requires() { \
+                std::forward<Other>(left) op right.fn().val; \
+            } \
+        { \
+            right.top_level = false; \
+            \
+            return Expr{[left, right]() mutable { \
+                auto right_res = right.fn(); \
+                return Exact_Opt(std::forward<Other>(left) op move_fn (right_res.val), right_res.has); \
+            }}; \
+        } \
+
+    #define bin_mono_op_right(op, move_fn) \
+        template <typename Fn1, typename Other> \
+        constexpr auto operator op(Expr<Fn1>&& left, Other&& right) \
+            requires (!expr_like<Other>) && requires() { \
+                left.fn().val op std::forward<Other>(right); \
+            } \
+        { \
+            left.top_level = false; \
+            \
+            return Expr{[left, right]() mutable { \
+                auto left_res = left.fn(); \
+                return Exact_Opt(move_fn (left_res.val) op std::forward<Other>(right), left_res.has); \
+            }}; \
+        } \
+
+    #define bin_mono_op(op, move_fn) bin_mono_op_left(op, move_fn) bin_mono_op_right(op, move_fn)
+    #define bin_op(op) bin_dual_op(op, std::move, std::move) bin_mono_op(op, std::move)
+    #define bin_assign_op(op) bin_dual_op(op,,std::move) bin_mono_op(op,)
+
+    #define unary_prefix_op(op) unary_mixfix_op(op,,);
+    #define unary_postfix_op(op) unary_mixfix_op(,op,int);
+
+    bin_assign_op(+=);
+    bin_assign_op(-=);
+    bin_assign_op(*=);
+    bin_assign_op(/=);
+    bin_assign_op(%=);
+    bin_assign_op(&=);
+    bin_assign_op(|=);
+    bin_assign_op(^=);
+    bin_assign_op(<<=);
+    bin_assign_op(>>=);
+
+    unary_prefix_op(++);
+    unary_prefix_op(--);
+    unary_postfix_op(++);
+    unary_postfix_op(--);
+
+    unary_prefix_op(+);
+    unary_prefix_op(-);
+    unary_prefix_op(~);
+    bin_op(+);
+    bin_op(-);
+    bin_op(*);
+    bin_op(/);
+    bin_op(%);
+    bin_op(&);
+    bin_op(|);
+    bin_op(^);
+    bin_op(<<);
+    bin_op(>>);
+
+    unary_prefix_op(!);
+    bin_op(&&);
+    bin_op(||);
+
+    bin_op(==);
+    bin_op(!=);
+    bin_op(<);
+    bin_op(>);
+    bin_op(<=);
+    bin_op(>=);
+    bin_op(<=>);
+
+    unary_prefix_op(*);
+    unary_prefix_op(&);
+
+    template <stdr::forward_range T>
+    constexpr auto make_expr(T&& range)
+    {
+        return Expr{[&, iter = stdr::begin(range), end = stdr::end(range)]() mutable {
+            auto copy = iter;
+            return Exact_Opt(*copy, ++iter != end);
+        }};
+    }
+
+    //Per default hooks into every single container supporting begin_it end_it
+    template <stdr::forward_range T>
+    constexpr auto custom_invoke(T&& range, PerElementDummy) noexcept 
+    { 
+        return make_expr(std::forward<T>(range)); 
+    }
 }
-#include "undefs.h"

@@ -381,7 +381,6 @@ namespace std
 
 namespace jot
 {
-
     template <STACK_TEMPL>
     func meets_invariants(const Stack_T& stack) -> bool
     {
@@ -490,11 +489,6 @@ namespace jot
             slice->data[i] = std::move(slice->data[i + by]);
     }
 
-    template <typename T>
-    func abs_diff(T a, T b) noexcept -> T
-    {
-        return a > b ? a - b : b - a;
-    }
 
     template <STACK_TEMPL, typename _Size, stdr::forward_range Inserted>
     proc splice(Stack_T* stack, _Size at, _Size replace_size, Inserted inserted) -> void
@@ -507,62 +501,73 @@ namespace jot
         let insert_to = at + inserted_size;
         let replace_to = at + replace_size;
         let remaining = stack_ref.size - replace_to;
+        let final_size = stack_ref.size + inserted_size - replace_size;
 
         assert(0 <= at && at <= stack_ref.size);
         assert(0 <= replace_to && replace_to <= stack_ref.size);
 
-        let construct_to = min(inserted_size, remaining);
-        Size diff = abs_diff(inserted_size, replace_size);
+        Size move_inserted_size = 0;
 
         if(inserted_size > replace_size)
         {
-            reserve(stack, stack_ref.size + diff);
+            reserve(stack, final_size);
+            let constructed = inserted_size - replace_size;
+            let constructed_in_shift = min(constructed, remaining); 
+            let construction_gap = constructed - constructed_in_shift;
 
-            for (Size i = 0; i < construct_to; i++)
-            {
-                let move_to_i = stack_ref.size + diff - i - 1;
-                let move_from_i = stack_ref.size - i - 1;
-                std::construct_at(stack->data + move_to_i, std::move(stack_ref[move_from_i]));
-            }
+            move_inserted_size = inserted_size - construction_gap;
 
+            //construct some elements by shifting right previous elements into them
+            let to = final_size - constructed_in_shift;
+            for (Size i = final_size; i-- > to; )
+                std::construct_at(stack->data + i, std::move(stack_ref[i - constructed]));
+
+            //shifting right rest of the elems to make space for insertion
             for(Size i = stack_ref.size; i-- > insert_to; )
-                stack_ref[i + diff] = std::move(stack_ref[i]);
-
-            stack->size += diff;
+                stack_ref[i] = std::move(stack_ref[i - constructed]);
         }
         else
         {
-            let furthest = stack_ref.size - diff;
+            move_inserted_size = inserted_size; 
 
-            for (Size i = 0; i < remaining; i++)
-            {
-                let move_to_i = insert_to + i;
-                let move_from_i = insert_to + diff + i;
-                std::construct_at(stack->data + move_to_i, std::move(stack_ref[move_from_i]));
-            }
+            //move elems left to the freed space
+            let removed = replace_size - inserted_size;
+            for (Size i = insert_to; i < final_size; i++)
+                stack_ref[i] = std::move(stack_ref[i + removed]);
 
-            //for(Size i = replace_to; i < furthest; i++)
-                //stack_ref[i] = std::move(stack_ref[i + diff]);
-
-            for (Size i = furthest; i < stack_ref.size; i++)
+            //Destroy all excess elems
+            for (Size i = final_size; i < stack_ref.size; i++)
                 stack_ref[i].~T();
-
-            stack->size = furthest;
         }
 
+        stack->size = final_size;
+
+        //insert the added elems into constructed slots
         mut it = stdr::begin(inserted);
-        let to = at + construct_to;
-        for (Size i = at; i < to; i++, it++)
+        let move_assign_to = at + move_inserted_size;
+        for (Size i = at; i < move_assign_to; i++, ++it)
             stack_ref[i] = std::move(*it);
 
-        for (Size i = construct_to; i < inserted_size; i++, it++)
-        {
-            let move_to_i = to + i;
-            std::construct_at(stack->data + move_to_i, std::move(*it));
-        }
-
+        //insert construct leftover elements
+        for (Size i = move_assign_to; i < insert_to; i++, ++it)
+            std::construct_at(stack->data + i, std::move(*it));
 
         assert(meets_invariants(*stack));
+    }
+
+    template <STACK_TEMPL, typename _Size, stdr::forward_range Removed, stdr::forward_range Inserted>
+    proc splice(Stack_T* stack, _Size at, Removed removed, Inserted inserted) -> void
+        requires std::convertible_to<_Size, Size>
+    {       
+        Stack_T& stack_ref = *stack; //for bounds checks
+
+        mut it = stdr::begin(removed);
+        let end = stdr::end(removed);
+        Size i = at;
+        for (; it != end; i++, ++it)
+            stack_ref[i] = std::move(*it);
+
+        return splice(stack, at, i - at, std::move(inserted));
     }
 
     template <STACK_TEMPL, typename _Size>
@@ -587,15 +592,6 @@ namespace jot
         return stack->data + stack->size - 1;
     }
 
-
-    /*template <STACK_TEMPL, typename _Size>
-    proc pop(Stack_T* stack, _Size count) -> void
-        requires std::convertible_to<_Size, Size>
-    {
-
-    }*/
-
-
     template <STACK_TEMPL>
     proc pop(Stack_T* stack) -> T
     {
@@ -608,6 +604,20 @@ namespace jot
         stack->data[stack->size].~T();
         assert(meets_invariants(*stack));
         return ret;
+    }
+
+    template <STACK_TEMPL, typename ... _Ts>
+    proc push(Stack_T* stack, _Ts ... what) -> void
+        requires (std::convertible_to<_Ts, T> && ...)
+    {
+        splice(stack, stack->size, 0, Array<T, sizeof...(_Ts)>{std::move(what)...});
+    }
+
+    template <STACK_TEMPL, typename _Size>
+    proc pop(Stack_T* stack, _Size count) -> void
+        requires std::convertible_to<_Size, Size>
+    {
+        splice(stack, stack->size - count, count);
     }
 
     template <STACK_TEMPL>
@@ -642,16 +652,17 @@ namespace jot
         return stack.data[0];
     }
 
-    template <STACK_TEMPL, typename _Size, typename _T>
-    proc resize(Stack_T* stack, _Size to, _T fillWith) -> void
-        requires std::convertible_to<_Size, Size> && std::convertible_to<_T, T>
+    template <STACK_TEMPL, typename _Size, typename Fn>
+    proc resize(Stack_T* stack, _Size to, Fn filler_fn) -> void
+        requires std::convertible_to<_Size, Size> 
+            && requires() { {filler_fn(0)} -> std::convertible_to<T>; }
     {
         assert(meets_invariants(*stack));
         assert(0 <= to);
 
         reserve(stack, to);
         for (Size i = stack->size; i < to; i++)
-            std::construct_at(stack->data + i, fillWith);
+            std::construct_at(stack->data + i, filler_fn(i));
 
         for (Size i = to; i < stack->size; i++)
             stack->data[i].~T();
@@ -659,6 +670,14 @@ namespace jot
 
         assert(meets_invariants(*stack));
     }
+
+    template <STACK_TEMPL, typename _Size, typename _T>
+    proc resize(Stack_T* stack, _Size to, _T fillWith) -> void
+        requires std::convertible_to<_Size, Size> && std::convertible_to<_T, T>
+    {
+        return resize(stack, to, [&](Size){return fillWith; });
+    }
+
     template <STACK_TEMPL, typename _Size>
     proc resize(Stack_T* stack, _Size to) -> void
         requires std::convertible_to<_Size, Size>
@@ -666,43 +685,70 @@ namespace jot
         return resize(stack, to, T());
     }
 
-    template <STACK_TEMPL, typename _Size, typename _T>
-    proc insert(Stack_T* stack, _Size at, _T what) -> T*
-        requires std::convertible_to<_Size, Size> && std::convertible_to<_T, T>
-    {
-        assert(meets_invariants(*stack));
-        assert(0 <= at && at <= stack->size);
-            
-        if(stack->size == at)
-            return push(stack, what);
+    #ifndef SLICE_OWN_INSERT
+        template <STACK_TEMPL, typename _Size, typename _T>
+        proc insert(Stack_T* stack, _Size at, _T what) -> T*
+            requires std::convertible_to<_Size, Size> && std::convertible_to<_T, T>
+        {
+            assert(meets_invariants(*stack));
+            assert(0 <= at && at <= stack->size);
 
-        push(stack, std::move(back(stack)));
-        for (Size i = stack->size - 1; i-- > at; )
-            stack->data[i + 1] = std::move(stack->data[i]);
+            Slice<T> view = {&what, 1};
+            splice(stack, at, 0, view);
+            return stack->data + at;
+        }
 
-        stack->data[at] = std::move(what);
-        assert(meets_invariants(*stack));
-        return stack->data + at;
-    }
+        template <STACK_TEMPL, typename _Size>
+        proc remove(Stack_T* stack, _Size at) -> T
+            requires std::convertible_to<_Size, Size>
+        {
+            assert(meets_invariants(*stack));
+            assert(0 <= at && at < stack->size);
+            assert(0 < stack->size);
 
-    template <STACK_TEMPL, typename _Size>
-    proc remove(Stack_T* stack, _Size at) -> T
-        requires std::convertible_to<_Size, Size>
-    {
-        assert(meets_invariants(*stack));
-        assert(0 <= at && at < stack->size);
-        assert(0 < stack->size);
+            T removed = std::move(stack->data[at]);
+            splice(stack, at, 1);
+            return removed;
+        }
+    #else
+        template <STACK_TEMPL, typename _Size, typename _T>
+        proc insert(Stack_T* stack, _Size at, _T what) -> T*
+            requires std::convertible_to<_Size, Size> && std::convertible_to<_T, T>
+        {
+            assert(meets_invariants(*stack));
+            assert(0 <= at && at <= stack->size);
 
-        T removed = std::move(stack->data[at]);
+            if(stack->size == at)
+                return push(stack, what);
 
-        for (Size i = at; i < stack->size - 1; i++)
-            stack->data[i] = std::move(stack->data[i + 1]);
+            push(stack, std::move(back(stack)));
+            for (Size i = stack->size - 1; i-- > at; )
+                stack->data[i + 1] = std::move(stack->data[i]);
 
-        pop(stack);
+            stack->data[at] = std::move(what);
+            assert(meets_invariants(*stack));
+            return stack->data + at;
+        }
 
-        assert(meets_invariants(*stack));
-        return removed;
-    }
+        template <STACK_TEMPL, typename _Size>
+        proc remove(Stack_T* stack, _Size at) -> T
+            requires std::convertible_to<_Size, Size>
+        {
+            assert(meets_invariants(*stack));
+            assert(0 <= at && at < stack->size);
+            assert(0 < stack->size);
+
+            T removed = std::move(stack->data[at]);
+
+            for (Size i = at; i < stack->size - 1; i++)
+                stack->data[i] = std::move(stack->data[i + 1]);
+
+            pop(stack);
+
+            assert(meets_invariants(*stack));
+            return removed;
+        }
+    #endif // SLICE_SPLICE_INSERT
 
     template <STACK_TEMPL, typename _Size>
     proc unordered_remove(Stack_T* stack, Size at) -> T

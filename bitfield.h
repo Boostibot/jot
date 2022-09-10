@@ -10,7 +10,7 @@ namespace jot
         return (value + to_multiple_of - 1) / to_multiple_of;
     }
 
-    
+    //@TODO: move min max out of this file and add to utils (add clamp and circular modulo)
     template<typename T>
     func max() -> T
     {   
