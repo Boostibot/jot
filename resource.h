@@ -9,7 +9,7 @@
 namespace jot 
 {
     template <class Type, class Label = void>
-    struct MovedRes { Type res; };
+    struct Moved_Res { Type res; };
 
     template <class Type, class Label = void>
     struct Res 
@@ -22,7 +22,7 @@ namespace jot
         #endif
 
         constexpr Res() = delete;
-        constexpr Res(MovedRes<Type, Label> moved) : res(std::move(moved.res)) {}
+        constexpr Res(Moved_Res<Type, Label> moved) : res(std::move(moved.res)) {}
 
         #ifndef NDEBUG
         constexpr ~Res() noexcept(false)
@@ -46,7 +46,7 @@ namespace jot
 
 
     template <class T, class L = void>
-    func make() -> MovedRes<T, L>;
+    func make() -> Moved_Res<T, L>;
 
     template <class T, class L = void>
     proc drop(Res<T, L> res) noexcept -> void {}
@@ -56,7 +56,7 @@ namespace jot
         template <class T, class L = void>
         func make(T val) noexcept
         {
-            return Res<T, L>( MovedRes<T, L>(std::move(val)) );
+            return Res<T, L>( Moved_Res<T, L>(std::move(val)) );
         }
 
         template <class T, class L = void>
@@ -68,15 +68,26 @@ namespace jot
     }
 
     template <class T, class L = void>
-    func operator ~(Res<T, L>& res) noexcept -> MovedRes<T, L>
+    func operator ~(Res<T, L>& res) noexcept -> Moved_Res<T, L>
     {
         unsafe::drop(res);
-        return MovedRes<T, L>{res.res};
+        return Moved_Res<T, L>{res.res};
     }
 
     template <class T, class L = void>
-    proc operator ~(MovedRes<T, L> res) noexcept {} //consumes nodicard warning
+    proc operator ~(Moved_Res<T, L> res) noexcept {} //consumes nodicard warning
 
+
+
+    /*template <typename T>
+    struct Opt_Ptr
+    {
+        private:
+            T* val;
+
+        public:
+            constexpr get() const noexcept {return }
+    };*/
 }
 
 #include "undefs.h"

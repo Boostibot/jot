@@ -15,13 +15,11 @@
 
 namespace jot
 {
-
-
     namespace stdr { using namespace std::ranges; };
     namespace stdv { using namespace std::views;  };
 
     template<class Tag>
-    struct BeginEnd
+    struct Begin_End
     {
         i64 val = 0;
 
@@ -29,15 +27,15 @@ namespace jot
             requires requires() {cast(T) val;}
         constexpr explicit operator T() const {return cast(T)val;}
 
-        constexpr BeginEnd operator +(let& value) const { return {cast(i64)(val + value)}; } 
-        constexpr BeginEnd operator -(let& value) const { return {cast(i64)(val - value)}; }  
+        constexpr Begin_End operator +(let& value) const { return {cast(i64)(val + value)}; } 
+        constexpr Begin_End operator -(let& value) const { return {cast(i64)(val - value)}; }  
     };
 
     struct PerElementDummy {};
     struct StaticContainerTag {};
 
-    using Begin = BeginEnd<void>;
-    using End = BeginEnd<char>;
+    using Begin = Begin_End<void>;
+    using End = Begin_End<char>;
 
     constexpr static Begin BEGIN;
     constexpr static End   END;
@@ -141,10 +139,10 @@ namespace jot
 {
     namespace detail
     {
-        using ExtentConst = Const<DYNAMIC_EXTENT, Extent>;
+        using Extent_Const = Const<DYNAMIC_EXTENT, Extent>;
 
         template<typename T, typename Size, typename Extent>
-        struct SliceData
+        struct Slice_Data
         {
             using Tag = StaticContainerTag;
 
@@ -152,11 +150,11 @@ namespace jot
             constexpr static Size size = cast(Size) Extent::value;
             constexpr static Size capacity = cast(Size) Extent::value;
 
-            constexpr bool operator==(const SliceData&) const noexcept = default;
+            constexpr bool operator==(const Slice_Data&) const noexcept = default;
         };
 
         template<typename T, typename Size>
-        struct SliceData<T, Size, ExtentConst>
+        struct Slice_Data<T, Size, Extent_Const>
         {
             using Tag = void;
 
@@ -164,7 +162,7 @@ namespace jot
             Size size = 0;
             constexpr static Size capacity = std::numeric_limits<Size>::max();
 
-            constexpr bool operator==(const SliceData&) const noexcept = default;
+            constexpr bool operator==(const Slice_Data&) const noexcept = default;
         };
 
         template <class It>
@@ -222,9 +220,9 @@ namespace jot
     }
 
     template<typename T, typename Size = size_t, auto extent = DYNAMIC_EXTENT>
-    struct Slice : detail::SliceData<T, Size, Const<extent, decltype(extent)>>
+    struct Slice : detail::Slice_Data<T, Size, Const<extent, decltype(extent)>>
     {
-        using SliceData = detail::SliceData<T, Size, Const<extent, decltype(extent)>>;
+        using Slice_Data = detail::Slice_Data<T, Size, Const<extent, decltype(extent)>>;
         using slice_type = Slice<T, Size>;
         using const_slice_type = Slice<const T, Size>;
 
@@ -236,37 +234,37 @@ namespace jot
         template <detail::cont_iter It> 
             requires (!is_static) && detail::matching_iter<It, T>
         constexpr Slice(It it, Size size) noexcept
-            : SliceData{ detail::addr(it), size } {};
+            : Slice_Data{ detail::addr(it), size } {};
 
         template <detail::cont_iter Begin, detail::cont_iter End>  
             requires (!is_static) && detail::matching_iter<Begin, T>
         constexpr Slice(Begin begin, End end) noexcept
-            : SliceData{ detail::addr(begin), cast(Size) detail::dist(begin, end)} {};
+            : Slice_Data{ detail::addr(begin), cast(Size) detail::dist(begin, end)} {};
 
         template <detail::cont_range R> 
-            requires (!is_static) // && detail::matching_range<R, T>
+            requires (!is_static) && detail::matching_range<R, T>
         constexpr Slice(R& range) noexcept
-            : SliceData{ detail::addr(std::begin<R>(range)), cast(Size) detail::dist(std::begin<R>(range), std::end<R>(range)) } 
+            : Slice_Data{ detail::addr(std::begin<R>(range)), cast(Size) detail::dist(std::begin<R>(range), std::end<R>(range)) } 
         {};
 
         //Static
         template <detail::cont_iter It> 
             requires (is_static) && detail::matching_iter<It, T>
         constexpr Slice(It it) noexcept
-            : SliceData{ detail::addr(it) } {};
+            : Slice_Data{ detail::addr(it) } {};
 
         template <detail::cont_range R> 
             requires (is_static) && detail::matching_range<R, T>
-        constexpr Slice(R&& range) noexcept
-            : SliceData{ detail::addr<R>(std::begin<R>(range)) } 
+        constexpr Slice(R& range) noexcept
+            : Slice_Data{ detail::addr<R>(std::begin<R>(range)) } 
         {
-            assert(this->size == detail::dist<R>(std::forward<R>(range)));
+            assert(this->size == detail::dist<R>(range));
         };
 
         template <detail::cont_iter Begin, detail::cont_iter End>  
             requires (is_static) && detail::matching_iter<Begin, T>
         constexpr Slice(Begin begin, End end) noexcept
-            : SliceData{ detail::addr(begin)} 
+            : Slice_Data{ detail::addr(begin)} 
         {
             assert(this->size == detail::dist(begin, end));
         };

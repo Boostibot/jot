@@ -66,10 +66,10 @@
 namespace jot 
 {
     template<size_t size_>
-    using ByteArray = Array<byte, size_>;
+    using Byte_Array = Array<byte, size_>;
 
     template<typename T>
-    using Bytes = ByteArray<sizeof(T)>;
+    using Bytes = Byte_Array<sizeof(T)>;
 
     constexpr static size_t BYTE_BITS = CHAR_BIT;
 
@@ -87,7 +87,7 @@ namespace jot
     template<typename To>
     func to_bytes(To val)
     {
-        using Rep = ByteArray<sizeof(To)>;
+        using Rep = Byte_Array<sizeof(To)>;
         assert(sizeof(Rep) >= sizeof(To));
         return bitcast<Rep>(val);
     }

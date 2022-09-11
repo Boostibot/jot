@@ -97,9 +97,7 @@ namespace jot
         using grow_type        = Grow;
         using Stack_Data       = detail::Stack_Data<T, Size, Alloc, static_capacity_>;
 
-        using Tag = StaticContainerTag;
-        using slice_type = Slice<T, Size>;
-        using const_slice_type = Slice<const T, Size>;
+        using Tag = std::conditional_t<static_capacity_ != 0, StaticContainerTag, void>;
 
         constexpr static Size static_capacity = cast(Size) static_capacity_; 
         constexpr static bool has_static_storage = static_capacity != 0;
@@ -107,7 +105,20 @@ namespace jot
 
         constexpr Stack() = default;
         constexpr Stack(Stack&& other) noexcept { swap(this, &other); }
-        constexpr Stack(Size size) { alloc_data(size); }
+
+        explicit constexpr Stack(Size size) { alloc_data(size); }
+
+        explicit constexpr Stack(slice_type slice) 
+        { 
+            alloc_data(this, slice.size);
+            copy_construct_elems(this, slice);
+        }
+
+        explicit constexpr Stack(const_slice_type slice) 
+        { 
+            alloc_data(this, slice.size);
+            copy_construct_elems(this, slice);
+        }
 
         constexpr Stack(
             T* data, Size size, Size capacity, 
@@ -331,7 +342,7 @@ namespace jot
                 vec->data[i].~T();
         }
 
-        static proc copy_construct_elems(Stack* vec, const Stack& other) -> void
+        static proc copy_construct_elems(Stack* vec, slice_type other) -> void
         {
             for (Size i = 0; i < other.size; i++)
                 std::construct_at(vec->data + i, other.data[i]);

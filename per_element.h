@@ -17,21 +17,21 @@ namespace jot
 
 
     template <typename T>
-    struct Opt
+    struct Per_Elem_Res
     {
         T val;
         bool has;
     };
 
     template <typename T>
-    Opt(T, bool) -> Opt<T>;
+    Per_Elem_Res(T, bool) -> Per_Elem_Res<T>;
 
-    #define Exact_Opt(val, has) Opt<decltype(val)>{val, has}
-    #define Exact_Expr(expr) Expr<decltype(expr)>{expr}
+    #define Exact_Opt(val, has) Per_Elem_Res<decltype(val)>{val, has}
+    #define Exact_Expr(expr) Per_Elem_Expr<decltype(expr)>{expr}
 
 
     template <typename Fn>
-    struct Expr
+    struct Per_Elem_Expr
     {
         Fn fn;
         bool top_level = true;
@@ -46,14 +46,14 @@ namespace jot
             }
         }
 
-        constexpr ~Expr()
+        constexpr ~Per_Elem_Expr()
         {
             if(top_level)
                 apply();
         }
 
         template <typename Fn2> 
-        constexpr auto operator = (Expr<Fn2>&& right) 
+        constexpr auto operator = (Per_Elem_Expr<Fn2>&& right) 
             requires requires() { 
             fn().val = right.fn().val; 
         } 
@@ -121,19 +121,19 @@ namespace jot
     };
 
     template <typename T>
-    Expr(T) -> Expr<T>;
+    Per_Elem_Expr(T) -> Per_Elem_Expr<T>;
 
 
     #define unary_mixfix_op(prefix, postfix, decor) \
         template <typename Fn1> \
-        constexpr auto operator prefix postfix(Expr<Fn1>&& left) \
+        constexpr auto operator prefix postfix(Per_Elem_Expr<Fn1>&& left) \
             requires requires(decor) { \
                 prefix left.fn().val postfix; \
             } \
         { \
             left.top_level = false; \
             \
-            return Expr{[left]() mutable { \
+            return Per_Elem_Expr{[left]() mutable { \
                 auto left_res = left.fn(); \
                 return Exact_Opt(prefix std::move(left_res.val) postfix, left_res.has); \
             }}; \
@@ -141,7 +141,7 @@ namespace jot
 
     #define bin_dual_op(op, left_move, right_move) \
         template <typename Fn1, typename Fn2> \
-        constexpr auto operator op(Expr<Fn1>&& left, Expr<Fn2>&& right) \
+        constexpr auto operator op(Per_Elem_Expr<Fn1>&& left, Per_Elem_Expr<Fn2>&& right) \
             requires requires() { \
                 left.fn().val op right.fn().val; \
             } \
@@ -149,7 +149,7 @@ namespace jot
             left.top_level = false; \
             right.top_level = false; \
             \
-            return Expr{[left, right]() mutable { \
+            return Per_Elem_Expr{[left, right]() mutable { \
                 auto left_res = left.fn(); \
                 auto right_res = right.fn(); \
                 return Exact_Opt(left_move (left_res.val) op right_move (right_res.val), left_res.has && right_res.has); \
@@ -158,14 +158,14 @@ namespace jot
 
     #define bin_mono_op_left(op, move_fn) \
         template <typename Other, typename Fn2> \
-        constexpr auto operator op(Other&& left, Expr<Fn2>&& right) \
+        constexpr auto operator op(Other&& left, Per_Elem_Expr<Fn2>&& right) \
             requires (!expr_like<Other>) && requires() { \
                 std::forward<Other>(left) op right.fn().val; \
             } \
         { \
             right.top_level = false; \
             \
-            return Expr{[left, right]() mutable { \
+            return Per_Elem_Expr{[left, right]() mutable { \
                 auto right_res = right.fn(); \
                 return Exact_Opt(std::forward<Other>(left) op move_fn (right_res.val), right_res.has); \
             }}; \
@@ -173,14 +173,14 @@ namespace jot
 
     #define bin_mono_op_right(op, move_fn) \
         template <typename Fn1, typename Other> \
-        constexpr auto operator op(Expr<Fn1>&& left, Other&& right) \
+        constexpr auto operator op(Per_Elem_Expr<Fn1>&& left, Other&& right) \
             requires (!expr_like<Other>) && requires() { \
                 left.fn().val op std::forward<Other>(right); \
             } \
         { \
             left.top_level = false; \
             \
-            return Expr{[left, right]() mutable { \
+            return Per_Elem_Expr{[left, right]() mutable { \
                 auto left_res = left.fn(); \
                 return Exact_Opt(move_fn (left_res.val) op std::forward<Other>(right), left_res.has); \
             }}; \
@@ -241,7 +241,7 @@ namespace jot
     template <stdr::forward_range T>
     constexpr auto make_expr(T&& range)
     {
-        return Expr{[&, iter = stdr::begin(range), end = stdr::end(range)]() mutable {
+        return Per_Elem_Expr{[&, iter = stdr::begin(range), end = stdr::end(range)]() mutable {
             auto copy = iter;
             return Exact_Opt(*copy, ++iter != end);
         }};
@@ -253,4 +253,20 @@ namespace jot
     { 
         return make_expr(std::forward<T>(range)); 
     }
+
+    
+    #undef Exact_Opt
+    #undef Exact_Expr
+
+    #undef unary_mixfix_op
+    #undef bin_dual_op
+    #undef bin_mono_op_left
+    #undef bin_mono_op_right
+    #undef bin_mono_op
+    #undef bin_op
+    #undef bin_assign_op
+    #undef unary_prefix_op
+    #undef unary_postfix_op
 }
+
+#include "undefs.h"

@@ -173,20 +173,20 @@ namespace jot
         set_array_bytefield(containers + from_cont, 0, total_cont_size, span);
     }
 
-    struct BitfieldTag {};
+    struct Bitfield_Tag {};
 
     template <class T, size_t bit_count_>
     struct Bitfield
     {
-        using Tag = BitfieldTag;
+        using Tag = Bitfield_Tag;
         using type = T;
         static constexpr size_t bit_count = bit_count_;
     };
 
-    //Class to facilitate the use of bitfields - declare a BitStorage as a list of Bitfields
+    //Class to facilitate the use of bitfields - declare a Bit_Storage as a list of Bitfields
     // and then simply get/set them using the appropriate types
-    template <class... Fields> requires (Tagged<Fields, BitfieldTag> && ...)
-    struct BitStorage
+    template <class... Fields> requires (Tagged<Fields, Bitfield_Tag> && ...)
+    struct Bit_Storage
     {
         static_assert(sizeof...(Fields) > 0, "At least one field must be set");
 
@@ -209,7 +209,7 @@ namespace jot
             assert(max(bitcounts...) > 0 && "At least one field has to have not 0");
             assert(max(bitcounts...) < BIT_COUNT<u64> && "All sizes must be less then 8 bytes");
 
-            BitStorage::Info<sizeof...(bitcounts)> info;
+            Bit_Storage::Info<sizeof...(bitcounts)> info;
             info.bit_count = {bitcounts...};
             info.field_count = sizeof...(bitcounts);
 
@@ -234,7 +234,7 @@ namespace jot
 
         using Max = u64;
 
-        static constexpr let info = BitStorage::get_info(Fields::bit_count...);
+        static constexpr let info = Bit_Storage::get_info(Fields::bit_count...);
         static constexpr size_t field_count = info.field_count;
         static constexpr size_t bit_count = info.total_bit_count;
         static constexpr size_t byte_size = info.total_byte_size;
@@ -275,10 +275,10 @@ namespace jot
         }
 
         template <size_t field_i>
-        func get() const                             { return BitStorage::array::get<field_i, FieldType<field_i>, byte>(this->data); }
+        func get() const                             { return Bit_Storage::array::get<field_i, FieldType<field_i>, byte>(this->data); }
 
         template <size_t field_i>
-        proc set(const FieldType<field_i>& to_value) { return BitStorage::array::set<field_i, FieldType<field_i>, byte>(this->data, to_value); }
+        proc set(const FieldType<field_i>& to_value) { return Bit_Storage::array::set<field_i, FieldType<field_i>, byte>(this->data, to_value); }
     };
 }
 

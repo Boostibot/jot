@@ -5,11 +5,11 @@
 
 namespace jot 
 {
-    using EndianBase = u8;
+    using Endian_Base = u8;
 
     namespace detail
     {
-        enum EndianType : EndianBase
+        enum Endian_Type : Endian_Base
         {
             Little = 0,
             Big = 1,
@@ -21,7 +21,7 @@ namespace jot
         };
     }
     
-    using Endian = detail::EndianType;
+    using Endian = detail::Endian_Type;
 
     func get_local_endian()
     {
@@ -42,7 +42,7 @@ namespace jot
 
     constexpr let LOCAL_ENDIAN = get_local_endian();
 
-    template <typename EndianT = EndianBase>
+    template <typename EndianT = Endian_Base>
     func lower_bytes_offset(let size, let field_size, EndianT endian = LOCAL_ENDIAN)
     {
         using Res = decltype(field_size - size);
@@ -52,7 +52,7 @@ namespace jot
             return field_size - size;
     }
 
-    template <typename EndianT = EndianBase>
+    template <typename EndianT = Endian_Base>
     func higher_bytes_offset(let size, let field_size, EndianT endian = LOCAL_ENDIAN)
     {
         return lower_bytes_offset(size, field_size, endian) + field_size - size; 
@@ -60,7 +60,7 @@ namespace jot
 
     //Optimization that assumes only little and big endian
     // - removes one jump
-    template <typename EndianT = EndianBase>
+    template <typename EndianT = Endian_Base>
     proc place_endian(let size, let field_size, let endian, mut&& same_lambda, mut&& opposite_lambda, EndianT local_endian = LOCAL_ENDIAN)
     {
         if(endian == Endian::Little)
@@ -79,7 +79,7 @@ namespace jot
         }
     }
 
-    template <typename IntegerT, typename EndianT = EndianBase>
+    template <typename IntegerT, typename EndianT = Endian_Base>
     proc from_endian(let* input_bytes, let size, let endian, EndianT local_endian = LOCAL_ENDIAN)
     {
         Bytes<IntegerT> rep = {0};
@@ -96,13 +96,13 @@ namespace jot
         );
     }
 
-    template <typename IntegerT, typename EndianT = EndianBase>
+    template <typename IntegerT, typename EndianT = Endian_Base>
     proc from_endian_to(IntegerT& integer, let* input_bytes, let size, let endian, EndianT local_endian = LOCAL_ENDIAN)
     {
         integer = from_endian<IntegerT>(input_bytes, size, endian, local_endian);
     }
 
-    template <typename IntegerT, typename EndianT = EndianBase>
+    template <typename IntegerT, typename EndianT = Endian_Base>
     proc to_endian(const IntegerT& integer, mut* output_bytes, let size, let endian, EndianT local_endian = LOCAL_ENDIAN)
     {
         using Rep = Bytes<IntegerT>;
@@ -120,7 +120,7 @@ namespace jot
         );
     }
 
-    template <typename IntegerT, typename EndianT = EndianBase>
+    template <typename IntegerT, typename EndianT = Endian_Base>
     proc to_endian(const IntegerT& integer, let to_endian, EndianT from_endian = LOCAL_ENDIAN)
     {
         if(to_endian == from_endian)

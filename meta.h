@@ -122,36 +122,36 @@ namespace jot
     };
 
     //Tagging
-    struct NoTag {};
+    struct No_Tag {};
 
     struct UnsetTag
     {
-        using type = NoTag;
+        using type = No_Tag;
         static constexpr bool value = false; 
     };
 
     template <class Class, class Tag>
-    struct TagRegister : UnsetTag {};
+    struct Tag_Register : UnsetTag {};
 
     template <class T, class With>
-    concept ContainsTag = requires(T)
+    concept Contains_Tag = requires(T)
     {
         requires(tuple_has<T, With>::value);
     };
 
-    template <class T, class With = NoTag>
-    concept DirectTagged = requires(T)
+    template <class T, class With = No_Tag>
+    concept Direct_Tagged = requires(T)
     {
         requires(std::is_same_v<typename T::Tag, With> //Has the check directly
-                 || std::is_same_v<With, NoTag>  //No checking required
-                 || ContainsTag<T, With> //Is type collection with type
+                 || std::is_same_v<With, No_Tag>  //No checking required
+                 || Contains_Tag<T, With> //Is type collection with type
         );
     };
 
-    template <class T, class With = NoTag>
+    template <class T, class With = No_Tag>
     concept Tagged = 
-        (std::is_same_v<typename TagRegister<T, With>::type, NoTag> && DirectTagged<T, With>) || 
-        (!std::is_same_v<typename TagRegister<T, With>::type, NoTag> && TagRegister<T, With>::value);
+        (std::is_same_v<typename Tag_Register<T, With>::type, No_Tag> && Direct_Tagged<T, With>) || 
+        (!std::is_same_v<typename Tag_Register<T, With>::type, No_Tag> && Tag_Register<T, With>::value);
 }
 
 namespace std

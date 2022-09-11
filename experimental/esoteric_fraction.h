@@ -4,43 +4,43 @@
 #include <cmath>
 #include <cassert>
 
-#include "types.h"
-#include "meta.h"
-#include "fraction.h"
+#include "../types.h"
+#include "../meta.h"
+#include "../fraction.h"
 
-#include "defines.h"
+#include "../defines.h"
 
 namespace jot 
 {
 
     template <fraction_data FracData>
-    struct ManualFraction : TrivialFraction<FracData> 
+    struct Manual_Fraction : TrivialFraction<FracData> 
     {
         static_assert(!(std::is_unsigned_v<FracData::Numerator> && std::is_signed_v<FracData::Denominator>), 
             "must not be (unsigned)/(signed)");
 
-        using FractionData = FracData;
+        using Fraction_Data = FracData;
         using Numerator = typename FracData::Numerator;
         using Denominator = typename FracData::Denominator;
         static constexpr bool is_signed = is_signed_frac_v<FracData>;
 
         private:
-        using Frac = ManualFraction;
+        using Frac = Manual_Fraction;
         using Num = Numerator;
         using Den = Denominator;
         using Common = common_int_t<Num, Den>;
 
         public:
-        constexpr ManualFraction() = default;
-        constexpr ManualFraction(const Frac&) = default;
-        constexpr ManualFraction(Frac&&) = default;
+        constexpr Manual_Fraction() = default;
+        constexpr Manual_Fraction(const Frac&) = default;
+        constexpr Manual_Fraction(Frac&&) = default;
 
-        constexpr ManualFraction(const FracData& data)           : TrivialFraction<FracData>(data) {}
-        constexpr ManualFraction(FracData&& data)                : TrivialFraction<FracData>(std::move(data)) {}
-        constexpr ManualFraction(Num num, Den den = cast(Den)(1)) : TrivialFraction<FracData>(num, den) {} 
+        constexpr Manual_Fraction(const FracData& data)           : TrivialFraction<FracData>(data) {}
+        constexpr Manual_Fraction(FracData&& data)                : TrivialFraction<FracData>(std::move(data)) {}
+        constexpr Manual_Fraction(Num num, Den den = cast(Den)(1)) : TrivialFraction<FracData>(num, den) {} 
 
         template <std::floating_point Float, std::integral Int = i64>
-        constexpr ManualFraction(Float number, Int cycles = cast(Int)(DEF_TO_FRAC_CYCLES), Float precision = cast(Float)(DEF_TO_FRAC_PRECISION))
+        constexpr Manual_Fraction(Float number, Int cycles = cast(Int)(DEF_TO_FRAC_CYCLES), Float precision = cast(Float)(DEF_TO_FRAC_PRECISION))
             : TrivialFraction<FracData>(number, cycles, precision) {}
 
         constexpr Frac& operator=(const Frac&) = default;
@@ -240,4 +240,4 @@ namespace jot
     };
 }
 
-#include "undefs.h"
+#include "../undefs.h"

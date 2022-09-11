@@ -18,42 +18,42 @@ namespace jot
     namespace detail
     {
         template<typename T, typename SizeVal, typename Size>
-        struct ArrayData
+        struct Array_Data
         {
             static constexpr Size size = cast(Size) SizeVal::value;
             static constexpr Size capacity = size;
             T data[size];
 
-            func operator<=>(const ArrayData&) const noexcept = default;
+            func operator<=>(const Array_Data&) const noexcept = default;
         };
 
         template<typename T, typename Size>
-        struct ArrayData<T, Const<0, size_t>, Size>
+        struct Array_Data<T, Const<0, size_t>, Size>
         {
             static constexpr Size size = 0;
             static constexpr Size capacity = 0;
             static constexpr T data[1] = {T()};
 
-            func operator<=>(const ArrayData&) const noexcept = default;
+            func operator<=>(const Array_Data&) const noexcept = default;
         };
     }
 
     template<typename T, size_t size, typename Size = size_t>
-    struct VanishingArray : detail::ArrayData<T, Const<size, size_t>, Size>
+    struct Vanishing_Array : detail::Array_Data<T, Const<size, size_t>, Size>
     {
         using Tag = StaticContainerTag;
-        using ArrayData = detail::ArrayData<T, Const<size>, Size>;
+        using Array_Data = detail::Array_Data<T, Const<size>, Size>;
 
-        constexpr VanishingArray() = default;
-        constexpr VanishingArray(const T&) noexcept requires (size == 0) : ArrayData{} {}
+        constexpr Vanishing_Array() = default;
+        constexpr Vanishing_Array(const T&) noexcept requires (size == 0) : Array_Data{} {}
 
         template <typename ...Args> 
             requires (size != 0) && (std::is_integral_v<T> == false) && are_same_v<Args...>
-        constexpr VanishingArray(Args&&... args) noexcept : ArrayData{std::forward<Args>(args)...} {}
+        constexpr Vanishing_Array(Args&&... args) noexcept : Array_Data{std::forward<Args>(args)...} {}
 
         template <typename ...Args> 
             requires (size != 0) && (std::is_integral_v<T> == true) && (std::is_integral_v<Args> && ...)
-        constexpr VanishingArray(Args... args) noexcept : ArrayData{cast(T)(args) ...} {}
+        constexpr Vanishing_Array(Args... args) noexcept : Array_Data{cast(T)(args) ...} {}
 
         constexpr operator T*()             noexcept { return this->data; }
         constexpr operator const T*() const noexcept { return this->data; }
@@ -65,11 +65,11 @@ namespace jot
 
     //deduction guide
     template <class First, class... Rest>
-    VanishingArray(First, Rest...) -> VanishingArray<First, 1 + sizeof...(Rest)>;
+    Vanishing_Array(First, Rest...) -> Vanishing_Array<First, 1 + sizeof...(Rest)>;
 
     //Adds self to span
     template <class T, size_t size, class Size>
-    Slice(VanishingArray<T, size, Size>) -> Slice<T, Size, size>;
+    Slice(Vanishing_Array<T, size, Size>) -> Slice<T, Size, size>;
 }
 
 #include "undefs.h"

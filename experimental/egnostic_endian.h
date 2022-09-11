@@ -94,7 +94,7 @@ namespace jot::egnostic
     }
 
     template <typename RetT = u64, typename BytesT>
-    proc from_endian(BytesT&& bytes, EndianBase endian)
+    proc from_endian(BytesT&& bytes, Endian_Base endian)
     {
         using std::forward;
         let size = std::size(bytes);
@@ -120,7 +120,7 @@ namespace jot::egnostic
     }
 
     template <typename BytesT>
-    proc to_endian(let num, BytesT&& bytes, EndianBase endian)
+    proc to_endian(let num, BytesT&& bytes, Endian_Base endian)
     {
         using std::forward;
         let size = std::size(bytes);

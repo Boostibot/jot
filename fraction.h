@@ -64,7 +64,7 @@ namespace jot
 
     //A trivial implementation of fraction_data
     template <typename Num, typename Den>
-    struct FractionData
+    struct Fraction_Data
     {
         static_assert(!(std::is_unsigned_v<Num> && std::is_signed_v<Den>), 
             "must not be (unsigned)/(signed)");
@@ -76,7 +76,7 @@ namespace jot
     };
 
     func spread(const fraction_data auto& frac) 
-    { return FractionData{numerator(frac), denominator(frac)}; }
+    { return Fraction_Data{numerator(frac), denominator(frac)}; }
 
     //specials
     namespace detail 
@@ -364,7 +364,7 @@ namespace jot
         static_assert(!(std::is_unsigned_v<FracData::Numerator> && std::is_signed_v<FracData::Denominator>), 
             "must not be (unsigned)/(signed)");
 
-        using FractionData = FracData;
+        using Fraction_Data = FracData;
         using Numerator = typename FracData::Numerator;
         using Denominator = typename FracData::Denominator;
         static constexpr bool is_signed = is_signed_frac_v<FracData>;
