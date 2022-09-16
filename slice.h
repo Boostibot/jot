@@ -213,10 +213,10 @@ namespace jot
         using Range_Value = std::remove_reference_t<decltype(*std::begin(R()))>;
 
         template<class It, typename T>
-        concept matching_iter = are_same_v<Iter_Value<It>, T> || are_same_v<std::remove_const_t<Iter_Value<It>>, T>;
+        concept matching_iter = are_same_v<Iter_Value<It>, T> || are_same_v<Iter_Value<It>, std::remove_const_t<T>>;
 
         template<class R, typename T>
-        concept matching_range = are_same_v<Range_Value<R>, T> || are_same_v<std::remove_const_t<Range_Value<R>>, T>;
+        concept matching_range = are_same_v<Range_Value<R>, T> || are_same_v<Range_Value<R>, std::remove_const_t<T>>;
     }
 
     template<typename T, typename Size = size_t, auto extent = DYNAMIC_EXTENT>
@@ -232,7 +232,7 @@ namespace jot
 
         //Dynamic
         template <detail::cont_iter It> 
-            requires (!is_static) && detail::matching_iter<It, T>
+            //requires (!is_static) && detail::matching_iter<It, T>
         constexpr Slice(It it, Size size) noexcept
             : Slice_Data{ detail::addr(it), size } {};
 

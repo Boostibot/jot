@@ -152,6 +152,20 @@ namespace jot
     concept Tagged = 
         (std::is_same_v<typename Tag_Register<T, With>::type, No_Tag> && Direct_Tagged<T, With>) || 
         (!std::is_same_v<typename Tag_Register<T, With>::type, No_Tag> && Tag_Register<T, With>::value);
+
+
+    //If provided arguments is array decays it into ptr else forwards it
+    template<typename T, size_t N>
+    auto array_decay(T (&x)[N]) -> T*
+    {
+        return x;
+    }
+
+    template<typename T>
+    auto array_decay(T&& x)
+    {
+        return std::forward<T>(x);
+    }
 }
 
 namespace std

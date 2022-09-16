@@ -60,17 +60,61 @@ proc operator()(T&& ts)
     return custom_invoke(*this, std::forward<T>(ts));
 }
 
+func check_slice_bounds(Size from, Size to) const noexcept 
+{
+    assert(from <= to && "slice must be a valid range");
+    assert(0 <= from && from <= this->size && "from must be inside valid data");
+    assert(0 <= to && to <= this->size && "to must be inside valid data");
+}
 
-func& operator[](Size index) const noexcept { assert(index < this->size && "index out of range"); return this->data[index]; }
-func& operator[](Size index) noexcept       { assert(index < this->size && "index out of range"); return this->data[index]; }
+
+func& operator[](Size index) const noexcept { assert(0 <= index && index < this->size && "index out of range"); return this->data[index]; }
+func& operator[](Size index) noexcept       { assert(0 <= index && index < this->size && "index out of range"); return this->data[index]; }
 
 //slicing
-func operator()(Size from, Size to) const noexcept   {return const_slice_type{this->data + from, to - from};}
-func operator()(Begin begin, Size to) const noexcept {return const_slice_type{this->data + cast(Size)(begin), to};}
-func operator()(Size from, End end) const noexcept   {return const_slice_type{this->data + from, this->size - from + cast(Size)(end)};}
-func operator()(Begin begin, End end) const noexcept {return const_slice_type{this->data + cast(Size)(begin), this->size - cast(Size)(begin) + cast(Size)(end)};}
+func operator()(Size from, Size to) const noexcept   
+{ 
+    check_slice_bounds(from, to); 
+    return const_slice_type{this->data + from, to - from};
+}
+func operator()(Begin begin, Size to) const noexcept 
+{ 
+    check_slice_bounds(cast(Size)(begin), to); 
+    return const_slice_type{this->data + cast(Size)(begin), to};
+}
+func operator()(Size from, End end) const noexcept   
+{ 
+    check_slice_bounds(from, from + cast(Size)(end)); 
+    return const_slice_type{this->data + from, this->size - from + cast(Size)(end)};
+}
+func operator()(Begin begin, End end) const noexcept 
+{ 
+    check_slice_bounds(cast(Size)(begin), cast(Size)(begin) + cast(Size)(end)); 
+    return const_slice_type{this->data + cast(Size)(begin), this->size - cast(Size)(begin) + cast(Size)(end)};
+}
 
-func operator()(Size from, Size to) noexcept         {return slice_type{this->data + from, to - from};}
-func operator()(Begin begin, Size to) noexcept       {return slice_type{this->data + cast(Size)(begin), to};}
-func operator()(Size from, End end) noexcept         {return slice_type{this->data + from, this->size - from + cast(Size)(end)};}
-func operator()(Begin begin, End end) noexcept       {return slice_type{this->data + cast(Size)(begin), this->size - cast(Size)(begin) + cast(Size)(end)};}
+func operator()(Size from, Size to) noexcept   
+{ 
+    check_slice_bounds(from, to); 
+    return slice_type{this->data + from, to - from};
+}
+func operator()(Begin begin, Size to) noexcept 
+{ 
+    check_slice_bounds(cast(Size)(begin), to); 
+    return slice_type{this->data + cast(Size)(begin), to};
+}
+func operator()(Size from, End end) noexcept   
+{ 
+    check_slice_bounds(from, from + cast(Size)(end)); 
+    return slice_type{this->data + from, this->size - from + cast(Size)(end)};
+}
+func operator()(Begin begin, End end) noexcept 
+{ 
+    check_slice_bounds(cast(Size)(begin), cast(Size)(begin) + cast(Size)(end)); 
+    return slice_type{this->data + cast(Size)(begin), this->size - cast(Size)(begin) + cast(Size)(end)};
+}
+
+//func operator()(Size from, Size to) noexcept         { return slice_type{this->data + from, to - from};}
+//func operator()(Begin begin, Size to) noexcept       { return slice_type{this->data + cast(Size)(begin), to};}
+//func operator()(Size from, End end) noexcept         { return slice_type{this->data + from, this->size - from + cast(Size)(end)};}
+//func operator()(Begin begin, End end) noexcept       { return slice_type{this->data + cast(Size)(begin), this->size - cast(Size)(begin) + cast(Size)(end)};}

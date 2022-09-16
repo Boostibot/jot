@@ -1,6 +1,7 @@
 #pragma once
 
 #include "stack.h"
+#include "string.h"
 #include "defines.h"
 
 namespace jot
@@ -28,44 +29,35 @@ namespace jot
         constexpr static bool has_static_storage = static_capacity != 0;
         constexpr static bool has_stateful_alloc = !std::is_empty_v<Alloc>;
 
-        explicit constexpr String_Builder_(string_type string) : Stack_Base{}
+        explicit constexpr String_Builder_(string_type string) : Stack_Base{} {}
 
         constexpr String_Builder_() = default;
-        constexpr String_Builder_(Stack&& other) noexcept { swap(this, &other); }
-        explicit constexpr String_Builder_(Size size) { alloc_data(size); }
+        constexpr String_Builder_(String_Builder_&&) noexcept = default;
+        constexpr String_Builder_(String_Builder_ const&) noexcept = default;
 
-        constexpr Stack(
+        explicit constexpr String_Builder_(Size size) : Stack_Base{size}{}
+
+        constexpr String_Builder_(
             T* data, Size size, Size capacity, 
             Alloc alloc, const T (&static_data)[static_capacity]
         ) noexcept requires (has_static_storage)
-            : Stack_Data{alloc, data, size, capacity} 
-        {
-            for(Size i = 0; i < static_capacity; i++)
-                this->static_data()[i] = static_data[i];
-        }
+            : Stack_Base{data, size, capacity, alloc, static_data} {}
 
-        constexpr Stack(T* data, Size size, Size capacity, Alloc alloc = Alloc()) noexcept
-            : Stack_Data{alloc, data, size, capacity} {}
+        constexpr String_Builder_(T* data, Size size, Size capacity, Alloc alloc = Alloc()) noexcept
+            : Stack_Base{data, size, capacity, alloc} {}
 
-        constexpr Stack(Alloc alloc) noexcept
-            : Stack_Data{alloc} {}
+        constexpr String_Builder_(Alloc alloc) noexcept
+            : Stack_Base{alloc} {}
 
-        constexpr Stack(const Stack& other)
-            requires (std::is_copy_constructible_v<T>) : Stack_Data{other.alloc()}
-        {
-            alloc_data(this, other.size);
-            copy_construct_elems(this, other);
-            this->size = other.size;
-        }
+        constexpr operator String_<T, Size>() noexcept 
+            requires are_same_v<std::remove_const_t<T>, T>
+            { return String_<T, Size>{this->data, this->size}; }
 
-        constexpr ~Stack() noexcept
-        {
-            destroy_elems(this);
-            dealloc_data(this);
-        }
+        constexpr operator string_type() const noexcept 
+            { return string_type{this->data, this->size}; }
+
+        #include "slice_op_text.h"
     };
 
     using String_Builder = String_Builder_<char>;
-
-    String_Builder builder;
 }

@@ -407,7 +407,7 @@ namespace jot
     namespace stack
     {
         template <STACK_TEMPL, typename _Size>
-        proc realloc(Stack_T* stack, Size cap)
+        proc realloc(Stack_T* stack, _Size cap)
             requires std::convertible_to<_Size, Size>
         {
             assert(meets_invariants(*stack));
@@ -501,14 +501,14 @@ namespace jot
     }
 
 
-    template <STACK_TEMPL, typename _Size, stdr::forward_range Inserted>
-    proc splice(Stack_T* stack, _Size at, _Size replace_size, Inserted inserted) -> void
-        requires std::convertible_to<_Size, Size>
+    template <STACK_TEMPL, typename _Size1, typename _Size2, stdr::forward_range Inserted>
+    proc splice(Stack_T* stack, _Size1 at, _Size2 replace_size, Inserted inserted) -> void
+        requires std::convertible_to<_Size1, Size> && std::convertible_to<_Size2, Size>
     {       
         Stack_T& stack_ref = *stack; //for bounds checks
         assert(meets_invariants(*stack));
 
-        let inserted_size = cast(_Size) stdr::size(inserted);
+        let inserted_size = cast(Size) stdr::size(inserted);
         let insert_to = at + inserted_size;
         let replace_to = at + replace_size;
         let remaining = stack_ref.size - replace_to;
@@ -581,8 +581,9 @@ namespace jot
         return splice(stack, at, i - at, std::move(inserted));
     }
 
-    template <STACK_TEMPL, typename _Size>
-    proc splice(Stack_T* stack, _Size at, _Size replace_size) -> void
+    template <STACK_TEMPL, typename _Size1, typename _Size2>
+    proc splice(Stack_T* stack, _Size1 at, _Size2 replace_size) -> void
+        requires std::convertible_to<_Size1, Size> && std::convertible_to<_Size2, Size>
     {
         Slice<T, Size> empty;
         return splice(stack, at, replace_size, empty);
@@ -762,7 +763,7 @@ namespace jot
     #endif // SLICE_SPLICE_INSERT
 
     template <STACK_TEMPL, typename _Size>
-    proc unordered_remove(Stack_T* stack, Size at) -> T
+    proc unordered_remove(Stack_T* stack, _Size at) -> T
         requires std::convertible_to<_Size, Size>
     {
         assert(0 <= at && at < stack->size);
@@ -773,7 +774,7 @@ namespace jot
     }
 
     template <STACK_TEMPL, typename _Size, typename _T>
-    proc unordered_insert(Stack_T* stack, Size at, T what) -> T*
+    proc unordered_insert(Stack_T* stack, _Size at, T what) -> T*
         requires std::convertible_to<_Size, Size> && std::convertible_to<_T, T>
     {
         assert(0 <= at && at <= stack->size);
