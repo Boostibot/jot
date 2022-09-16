@@ -15,8 +15,8 @@
 
 namespace jot
 {
-    namespace stdr { using namespace std::ranges; };
-    namespace stdv { using namespace std::views;  };
+    namespace stdr = std::ranges;
+    namespace stdv = std::views;  
 
     template<class Tag>
     struct Begin_End
