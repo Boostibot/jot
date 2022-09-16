@@ -632,11 +632,11 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    proc back(Stack_T* stack) -> T&
+    proc back(Stack_T* stack) -> T*
     {
         assert(meets_invariants(*stack));
         assert(stack->size > 0);
-        return stack->data[stack->size - 1];
+        return &stack->data[stack->size - 1];
     }
 
     template <STACK_TEMPL>
@@ -648,11 +648,11 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    proc front(Stack_T* stack) -> T&
+    proc front(Stack_T* stack) -> T*
     {
         assert(meets_invariants(*stack));
         assert(stack->size > 0);
-        return stack->data[0];
+        return &stack->data[0];
     }
 
     template <STACK_TEMPL>
