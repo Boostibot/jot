@@ -15,6 +15,11 @@ namespace jot
     using i32 = std::int32_t;
     using i64 = std::int64_t;
 
+    using b8 = bool;
+    using b16 = std::uint16_t;
+    using b32 = std::uint32_t;
+    using b64 = std::uint64_t;
+
     using f32 = float;
     using f64 = double;
 

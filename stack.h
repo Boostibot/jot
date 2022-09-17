@@ -106,7 +106,7 @@ namespace jot
         constexpr Stack() = default;
         constexpr Stack(Stack&& other) noexcept { swap(this, &other); }
 
-        explicit constexpr Stack(Size size) { alloc_data(size); }
+        explicit constexpr Stack(Size size) { alloc_data(this, size); }
 
         explicit constexpr Stack(slice_type slice) 
         { 
