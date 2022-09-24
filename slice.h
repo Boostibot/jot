@@ -234,46 +234,46 @@ namespace jot
     };
 
     template<typename T, typename Size = Def_Size, auto extent = DYNAMIC_EXTENT>
-    struct Slice : detail::Slice_Data<T, Size, Const<extent, decltype(extent)>>
+    struct Slice_ : detail::Slice_Data<T, Size, Const<extent, decltype(extent)>>
     {
         using Slice_Data = detail::Slice_Data<T, Size, Const<extent, decltype(extent)>>;
-        using slice_type = Slice<T, Size>;
-        using const_slice_type = Slice<const T, Size>;
+        using slice_type = Slice_<T, Size>;
+        using const_slice_type = Slice_<const T, Size>;
 
         constexpr static bool is_static = !are_same_v<decltype(extent), Extent>;
 
-        constexpr Slice() = default;
+        constexpr Slice_() = default;
 
         //Dynamic
-        constexpr Slice(cstring str) noexcept
+        constexpr Slice_(cstring str) noexcept
             requires (detail::is_literal_compatible<T>)
         : Slice_Data{str, strlen(str)} {}
 
         template <detail::cont_iter It> 
             requires (!is_static) && detail::matching_iter<It, T>
-        constexpr Slice(It it, Size size) noexcept
+        constexpr Slice_(It it, Size size) noexcept
             : Slice_Data{ detail::addr(it), size } {};
 
         template <detail::cont_iter Begin, detail::cont_iter End>  
             requires (!is_static) && detail::matching_iter<Begin, T>
-        constexpr Slice(Begin begin, End end) noexcept
+        constexpr Slice_(Begin begin, End end) noexcept
             : Slice_Data{ detail::addr(begin), cast(Size) detail::dist(begin, end)} {};
 
         template <detail::cont_range R> 
             requires (!is_static) && detail::matching_range<R, T>
-        constexpr Slice(R& range) noexcept
+        constexpr Slice_(R& range) noexcept
             : Slice_Data{ detail::addr(std::begin<R>(range)), cast(Size) detail::dist(std::begin<R>(range), std::end<R>(range)) } 
         {};
 
         //Static
         template <detail::cont_iter It> 
             requires (is_static) && detail::matching_iter<It, T>
-        constexpr Slice(It it) noexcept
+        constexpr Slice_(It it) noexcept
             : Slice_Data{ detail::addr(it) } {};
 
         template <detail::cont_range R> 
             requires (is_static) && detail::matching_range<R, T>
-        constexpr Slice(R& range) noexcept
+        constexpr Slice_(R& range) noexcept
             : Slice_Data{ detail::addr<R>(std::begin<R>(range)) } 
         {
             assert(this->size == detail::dist<R>(range));
@@ -281,15 +281,15 @@ namespace jot
 
         template <detail::cont_iter Begin, detail::cont_iter End>  
             requires (is_static) && detail::matching_iter<Begin, T>
-        constexpr Slice(Begin begin, End end) noexcept
+        constexpr Slice_(Begin begin, End end) noexcept
             : Slice_Data{ detail::addr(begin)} 
         {
             assert(this->size == detail::dist(begin, end));
         };
 
-        constexpr operator Slice<T, Size>() const noexcept requires (is_static) { return Slice<T, Size>{this->data, this->size}; }
-        constexpr operator Slice<T, Size>()       noexcept requires (is_static) { return Slice<T, Size>{this->data, this->size}; }
-        constexpr operator Slice<const T, Size, extent>() const noexcept        { return Slice<const T, Size, extent>{this->data, this->size}; }
+        constexpr operator Slice_<T, Size>() const noexcept requires (is_static) { return Slice_<T, Size>{this->data, this->size}; }
+        constexpr operator Slice_<T, Size>()       noexcept requires (is_static) { return Slice_<T, Size>{this->data, this->size}; }
+        constexpr operator Slice_<const T, Size, extent>() const noexcept        { return Slice_<const T, Size, extent>{this->data, this->size}; }
 
         #include "slice_op_text.h"
     };
@@ -297,17 +297,17 @@ namespace jot
     //deduction guides
     template <detail::cont_iter Begin, class Size>
         requires (!detail::cont_iter<Size>)
-    Slice(Begin begin, Size) -> Slice<detail::Iter_Value<Begin>>;
+    Slice_(Begin begin, Size) -> Slice_<detail::Iter_Value<Begin>>;
 
     template <detail::cont_iter Begin, class End>
         requires (detail::cont_iter<End>)
-    Slice(Begin begin, End) -> Slice<detail::Iter_Value<Begin>>;
+    Slice_(Begin begin, End) -> Slice_<detail::Iter_Value<Begin>>;
 
     template <detail::cont_range Range>
-    Slice(Range) -> Slice<detail::Range_Value<Range>>;
+    Slice_(Range) -> Slice_<detail::Range_Value<Range>>;
 
     template <class T, size_t size>
-    Slice(T (&elem)[size]) -> Slice<T, size_t, size>;
+    Slice_(T (&elem)[size]) -> Slice_<T, size_t, size>;
 }
 
 

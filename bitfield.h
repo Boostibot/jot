@@ -148,7 +148,7 @@ namespace jot
         template <size_t field_count_>
         struct Info 
         {
-            using SizeArray = Array<size_t, field_count_>;
+            using SizeArray = Array_<size_t, field_count_>;
             SizeArray bit_count;
             SizeArray from_bit;
             SizeArray to_bit;

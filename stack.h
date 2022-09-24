@@ -92,8 +92,8 @@ namespace jot
     struct Stack_ : detail::Stack_Data<T, Size, Alloc, static_capacity_>
     {   
         using allocator_type   = Alloc;
-        using slice_type       = Slice<T, Size>;
-        using const_slice_type = Slice<const T, Size>;
+        using slice_type       = Slice_<T, Size>;
+        using const_slice_type = Slice_<const T, Size>;
         using grow_type        = Grow;
         using Stack_Data       = detail::Stack_Data<T, Size, Alloc, static_capacity_>;
 
@@ -206,9 +206,9 @@ namespace jot
         func operator<=>(const Stack_&) const noexcept = default;
         constexpr bool operator==(const Stack_&) const noexcept = default;
 
-        constexpr operator Slice<T, Size>() const noexcept 
+        constexpr operator Slice_<T, Size>() const noexcept 
         {
-            return Slice<T, Size>{this->data, this->size};
+            return Slice_<T, Size>{this->data, this->size};
         }
 
         proc alloc() noexcept -> Alloc& {return *cast(Alloc*)this; }
@@ -487,14 +487,14 @@ namespace jot
     }
 
     template<typename T, typename Size, auto extent>
-    proc shift_left(Slice<T, Size, extent>* slice, Size by)
+    proc shift_left(Slice_<T, Size, extent>* slice, Size by)
     {
         for(Size i = slice->size; i--> 0; )
             slice->data[i + by] = std::move(slice->data[i]);
     }
 
     template<typename T, typename Size, auto extent>
-    proc shift_right(Slice<T, Size, extent>* slice, Size by)
+    proc shift_right(Slice_<T, Size, extent>* slice, Size by)
     {
         for(Size i = 0; i < slice->size; )
             slice->data[i] = std::move(slice->data[i + by]);
@@ -585,7 +585,7 @@ namespace jot
     proc splice(Stack_T* stack, _Size1 at, _Size2 replace_size) -> void
         requires std::convertible_to<_Size1, Size> && std::convertible_to<_Size2, Size>
     {
-        Slice<T, Size> empty;
+        Slice_<T, Size> empty;
         return splice(stack, at, replace_size, empty);
     }
 
@@ -705,7 +705,7 @@ namespace jot
             assert(meets_invariants(*stack));
             assert(0 <= at && at <= stack->size);
 
-            Slice<T> view = {&what, 1};
+            Slice_<T> view = {&what, 1};
             splice(stack, at, 0, view);
             return stack->data + at;
         }

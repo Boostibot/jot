@@ -39,21 +39,21 @@ namespace jot
     }
 
     template<typename T, size_t size, typename Size = Def_Size>
-    struct Vanishing_Array : detail::Array_Data<T, Const<size, size_t>, Size>
+    struct Vanishing_Array_ : detail::Array_Data<T, Const<size, size_t>, Size>
     {
         using Tag = StaticContainerTag;
         using Array_Data = detail::Array_Data<T, Const<size>, Size>;
 
-        constexpr Vanishing_Array() = default;
-        constexpr Vanishing_Array(const T&) noexcept requires (size == 0) : Array_Data{} {}
+        constexpr Vanishing_Array_() = default;
+        constexpr Vanishing_Array_(const T&) noexcept requires (size == 0) : Array_Data{} {}
 
         template <typename ...Args> 
             requires (size != 0) && (std::is_integral_v<T> == false) && are_same_v<Args...>
-        constexpr Vanishing_Array(Args&&... args) noexcept : Array_Data{std::forward<Args>(args)...} {}
+        constexpr Vanishing_Array_(Args&&... args) noexcept : Array_Data{std::forward<Args>(args)...} {}
 
         template <typename ...Args> 
             requires (size != 0) && (std::is_integral_v<T> == true) && (std::is_integral_v<Args> && ...)
-        constexpr Vanishing_Array(Args... args) noexcept : Array_Data{cast(T)(args) ...} {}
+        constexpr Vanishing_Array_(Args... args) noexcept : Array_Data{cast(T)(args) ...} {}
 
         constexpr operator T*()             noexcept { return this->data; }
         constexpr operator const T*() const noexcept { return this->data; }
@@ -65,11 +65,11 @@ namespace jot
 
     //deduction guide
     template <class First, class... Rest>
-    Vanishing_Array(First, Rest...) -> Vanishing_Array<First, 1 + sizeof...(Rest)>;
+    Vanishing_Array_(First, Rest...) -> Vanishing_Array_<First, 1 + sizeof...(Rest)>;
 
     //Adds self to span
     template <class T, size_t size, class Size>
-    Slice(Vanishing_Array<T, size, Size>) -> Slice<T, Size, size>;
+    Slice(Vanishing_Array_<T, size, Size>) -> Slice<T, Size, size>;
 }
 
 #include "undefs.h"
