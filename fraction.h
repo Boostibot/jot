@@ -13,8 +13,8 @@ namespace jot
 {
     func numerator(let& frac)                   { return frac.numerator; }
     func denominator(let& frac)                 { return frac.denominator; }
-    proc numerator(mut& frac, let& set_to_val)  { return (frac.numerator = set_to_val); }
-    proc denominator(mut& frac, let& set_to_val){ return (frac.denominator = set_to_val); }
+    proc numerator(mut* frac, let& set_to_val)  { return (frac->numerator = set_to_val); }
+    proc denominator(mut* frac, let& set_to_val){ return (frac->denominator = set_to_val); }
 
     template <class FracData>
     concept fraction_data = requires (FracData data)
@@ -30,16 +30,16 @@ namespace jot
         numerator(data);
         denominator(data);
 
-        numerator(data, 0);
-        denominator(data, 0U);
+        numerator(&data, 0);
+        denominator(&data, 0U);
     };
 
 
     template <fraction_data Frac>
-    static constexpr bool is_signed_frac_v = std::is_signed_v<Frac::Numerator>;
+    static constexpr bool is_signed_frac_v = std::is_signed_v<typename Frac::Numerator>;
 
     template <fraction_data Frac>
-    static constexpr bool is_purely_signed_frac_v = std::is_signed_v<Frac::Numerator> && std::is_signed_v<Frac::Denominator>;
+    static constexpr bool is_purely_signed_frac_v = std::is_signed_v<typename Frac::Numerator> && std::is_signed_v<typename Frac::Denominator>;
 
     template <typename T1, typename T2>
     struct bigger_type : std::conditional<(sizeof(T1) > sizeof(T2)), T1, T2> {};
@@ -82,55 +82,44 @@ namespace jot
     namespace detail 
     {
         template <fraction_data Frac>
-        func to_num(let num)
+        using common_frac = common_int_t<typename Frac::Numerator, typename  Frac::Denominator>;
+
+        template <fraction_data Frac>
+        func to_num(let num) -> Frac::Numerator
         { return cast(Frac::Numerator)(num); }
 
         template <fraction_data Frac>
-        func to_den(let den)
+        func to_den(let den) -> Frac::Denominator
         { return cast(Frac::Denominator)(den); }
 
         template <fraction_data FracData>
-        func num_(const FracData& frac) 
+        func num_(const FracData& frac) -> FracData::Numerator
         { return numerator(frac); }
 
         template <fraction_data FracData>
-        func den_(const FracData& frac) 
+        func den_(const FracData& frac) -> FracData::Denominator
         {  return denominator(frac); }
 
-        template <fraction_data FracData>
-        func num(const FracData& frac) 
+        template <fraction_data Frac>
+        func num(Frac const& frac) -> common_frac<Frac>
         { 
-            using Common = common_int_t<FracData::Numerator, FracData::Denominator>;
-            return cast(Common) num_(frac); 
-        }
-
-        template <fraction_data FracData>
-        func den(const FracData& frac) 
-        { 
-            using Common = common_int_t<FracData::Numerator, FracData::Denominator>;
-            return cast(Common) den_(frac); 
-        }
-
-        template <fraction_data FracData>
-        proc num(FracData& frac, let& val) 
-        { 
-            using Common = common_int_t<FracData::Numerator, FracData::Denominator>;
-            return cast(Common)(numerator(frac, cast(FracData::Numerator)(val))); 
-        }
-
-        template <fraction_data FracData>
-        proc den(FracData& frac, let& val) 
-        { 
-            using Common = common_int_t<FracData::Numerator, FracData::Denominator>;
-            return cast(Common) denominator(frac, cast(FracData::Denominator)(val)); 
+            return cast(common_frac<Frac>) num_(frac); 
         }
 
         template <fraction_data Frac>
-        func construct(let num, let den)
-        { return Frac(to_num<Frac>(num), to_den<Frac>(den)); }
+        func den(Frac const& frac) -> common_frac<Frac>
+        { 
+            return cast(common_frac<Frac>) den_(frac); 
+        }
 
         template <fraction_data Frac>
-        proc& assign(Frac& frac, let num, let den)
+        func construct(let num, let den) -> Frac
+        { 
+            return Frac(to_num<Frac>(num), to_den<Frac>(den)); 
+        }
+
+        template <fraction_data Frac>
+        proc assign(Frac* frac, let num, let den) -> Frac*
         {
             numerator(frac, to_num<Frac>(num));
             denominator(frac, to_den<Frac>(den));
@@ -139,32 +128,48 @@ namespace jot
     }
 
     template <fraction_data Frac>
-    func nan()                     { return detail::construct<Frac>(0, 0); }
-    proc& nan(fraction_data auto& frac) { return detail::assign(frac, 0, 0); }
+    func nan() -> Frac                     
+    { 
+        return detail::construct<Frac>(0, 0); 
+    }
 
     template <fraction_data Frac>
-    func infinity()                     { return detail::construct<Frac>(1, 0); }
-    proc& infinity(fraction_data auto& frac) { return detail::assign(frac, 1, 0); }
+    proc nan(Frac* frac) -> Frac*
+    { 
+        return detail::assign(frac, 0, 0); 
+    }
 
     template <fraction_data Frac>
-    func negative_infinity()
+    func infinity() -> Frac                
+    { 
+        return detail::construct<Frac>(1, 0); 
+    }
+
+    template <fraction_data Frac>
+    proc infinity(Frac* frac) -> Frac*
+    { 
+        return detail::assign(frac, 1, 0); 
+    }
+
+    template <fraction_data Frac>
+    func negative_infinity() -> Frac
     {
         static_assert(is_signed_frac_v<Frac>);
         return detail::construct<Frac>(-1, 0);
     }
 
     template <fraction_data Frac>
-    proc& negative_infinity(Frac& frac)
+    proc negative_infinity(Frac* frac) -> Frac*
     {
         static_assert(is_signed_frac_v<Frac>);
         return detail::assign<Frac>(frac, -1, 0);
     }
 
-    func is_normal(const fraction_data auto& frac)             { return denominator(frac) != 0; }
-    func is_nan(const fraction_data auto& frac)                { return !is_normal(frac) && numerator(frac) == 0; }
-    func is_infinite(const fraction_data auto& frac)           { return !is_normal(frac) && numerator(frac) != 0; }
-    func is_infinity(const fraction_data auto& frac)           { return !is_normal(frac) && numerator(frac) > 0; }
-    func is_negative_infinity(const fraction_data auto& frac)  { return !is_normal(frac) && numerator(frac) < 0; }
+    func is_normal(const fraction_data auto& frac) -> bool              { return denominator(frac) != 0; }
+    func is_nan(const fraction_data auto& frac) -> bool                 { return !is_normal(frac) && numerator(frac) == 0; }
+    func is_infinite(const fraction_data auto& frac) -> bool            { return !is_normal(frac) && numerator(frac) != 0; }
+    func is_infinity(const fraction_data auto& frac) -> bool            { return !is_normal(frac) && numerator(frac) > 0; }
+    func is_negative_infinity(const fraction_data auto& frac) -> bool   { return !is_normal(frac) && numerator(frac) < 0; }
 
     func sign(const std::integral auto& scalar)
     {
@@ -173,11 +178,12 @@ namespace jot
             : cast(i8) -1;
     }
 
-    func sign(const fraction_data auto& frac)
+    func sign(const fraction_data auto& frac) -> bool
     { return sign(frac.numerator) * sign(frac.denominator); }
 
     func abs(const std::integral auto& scalar) 
     { return scalar * sign(scalar); }
+
     func abs(const fraction_data auto& frac)
     {
         let [num, den] = spread(frac);
@@ -189,12 +195,14 @@ namespace jot
     namespace detail
     {
         template <fraction_data Frac>
-        func norm_ratio(const Frac& frac)
-        { return std::gcd(numerator(frac), denominator(frac)); }
+        func norm_ratio(Frac const& frac)
+        { 
+            return std::gcd(numerator(frac), denominator(frac)); 
+        }
     }
 
     template <fraction_data Frac>
-    func is_invarinat(const Frac& frac)
+    func is_invarinat(Frac const& frac) -> bool
     {
         using namespace detail;
         let [num, den] = spread(frac);
@@ -217,7 +225,7 @@ namespace jot
 
 
     template <fraction_data Frac>
-    func normalize_sign(const Frac& frac)
+    func normalize_sign(Frac const& frac) -> Frac
     {
         if constexpr (is_purely_signed_frac_v<Frac>)
         {
@@ -230,10 +238,10 @@ namespace jot
     }
 
     template <fraction_data Frac>
-    proc& normalize_assign(Frac& frac)
+    proc normalize_assign(Frac* frac) -> Frac*
     {
         using namespace detail;
-        mut [num, den] = spread(frac);
+        mut [num, den] = spread(*frac);
 
         if (den == 0)
         {
@@ -243,11 +251,10 @@ namespace jot
             else if(num < 0)
                 num = to_num<Frac>(-1);
 
-            assign(frac, num, den);
-            return frac;
+            return assign(frac, num, den);
         }
 
-        let ratio = abs(norm_ratio(frac));
+        let ratio = abs(norm_ratio(*frac));
         num /= cast(Frac::Numerator)(ratio);
         den /= cast(Frac::Denominator)(ratio);
         
@@ -260,25 +267,27 @@ namespace jot
 
         assign(frac, num, den);
 
-        assert(is_invarinat(frac));
+        assert(is_invarinat(*frac));
         return frac;
     }
 
-    proc normalize(fraction_data auto frac) 
-    { normalize_assign(frac); return frac; }
+    template <fraction_data Frac>
+    proc normalize(Frac frac) -> Frac
+    { 
+        return *normalize_assign(&frac); 
+    }
 
     static constexpr f64 DEF_TO_FRAC_PRECISION = 5e-8;
     static constexpr i64 DEF_TO_FRAC_CYCLES = 12;
 
     template <fraction_data Frac, std::integral Int>
-    proc& to_fraction(Int number, Frac& out)
+    proc to_fraction(Int number, Frac* out) -> Frac*
     {
-        using namespace detail;
-        return assign(out, number, 1);
+        return detail::assign(out, number, 1);
     }
 
     template <fraction_data Frac, std::floating_point Float, std::integral Int = i64, bool do_precision = true>
-    proc& to_fraction(Float number, Frac& out, Int cycles = cast(Int) DEF_TO_FRAC_CYCLES, Float precision = cast(Float) DEF_TO_FRAC_PRECISION)
+    proc to_fraction(Float number, Frac* out, Int cycles = cast(Int) DEF_TO_FRAC_CYCLES, Float precision = cast(Float) DEF_TO_FRAC_PRECISION) -> Frac*
     {
         using Num = Frac::Numerator;
         using Den = Frac::Denominator;
@@ -337,25 +346,27 @@ namespace jot
         }
 
         return detail::assign(out, result[0] * sign, result[1]);
-        //return normalize_assign(out);
     }
 
     template <fraction_data Frac, std::floating_point Float, std::integral Int = i64, bool do_precision = true>
-    func to_fraction(Float number, Int cycles = DEF_TO_FRAC_CYCLES, Float precision = cast(Float) DEF_TO_FRAC_PRECISION)
+    func to_fraction(Float number, Int cycles = DEF_TO_FRAC_CYCLES, Float precision = cast(Float) DEF_TO_FRAC_PRECISION) -> Frac
     {
         Frac out;
-        return to_fraction<Frac, Float, Int, do_precision>(number, out, cycles, precision);
+        return *to_fraction<Frac, Float, Int, do_precision>(number, &out, cycles, precision);
     }
 
     template <fraction_data Frac, std::integral Int>
-    proc to_fraction(Int number)
+    proc to_fraction(Int number) -> Frac
     {
         Frac out;
-        return to_fraction(number, out);
+        return *to_fraction<Frac, Int>(number, &out);
     }
 
+    //jot::Manual_Fraction<jot::Fraction_Data<jot::i32,jot::i32>> *
+    //jot::Manual_Fraction<jot::Fraction_Data<jot::i32,jot::i32>> &
+
     template <std::floating_point Float = double>
-    func to_float(const fraction_data auto& frac)   { return cast(Float)(numerator(frac)) / denominator(frac); }
+    func to_float(const fraction_data auto& frac) -> Float   { return cast(Float)numerator(frac) / cast(Float) denominator(frac); }
     func to_integer(const fraction_data auto& frac) { return numerator(frac) / denominator(frac); }
 
     template <fraction_data FracData>
@@ -379,7 +390,7 @@ namespace jot
 
         public:
         constexpr TrivialFraction() = default;
-        constexpr TrivialFraction(const Frac&) = default;
+        constexpr TrivialFraction(Frac const&) = default;
         constexpr TrivialFraction(Frac&&) = default;
 
         constexpr TrivialFraction(const FracData& data)           : FracData(data) {}
@@ -389,9 +400,9 @@ namespace jot
         template <std::floating_point Float, std::integral Int = i64>
         constexpr TrivialFraction(Float number, Int cycles = cast(Int) DEF_TO_FRAC_CYCLES, Float precision = cast(Float) DEF_TO_FRAC_PRECISION)
             : FracData() 
-        { to_fraction(number, *this, cycles, precision); }
+        { to_fraction(number, this, cycles, precision); }
 
-        constexpr Frac& operator=(const Frac&) = default;
+        constexpr Frac& operator=(Frac const&) = default;
         constexpr Frac& operator=(Frac&&) = default;
 
         template<std::floating_point T>
@@ -402,53 +413,53 @@ namespace jot
         func operator+() const                    { return *this;}
         func operator-() const requires is_signed { return detail::construct(-numerator(*this), denominator(*this)); }
 
-        proc& operator +=(const Frac& other) 
+        proc& operator +=(Frac const& other) 
         {
             using namespace detail;
             let new_num = num(*this) * den(other) + num(other) * den(*this);
             let new_den = den(*this) * den(other);
 
-            return assign(*this, new_num, new_den);
+            return *assign(this, new_num, new_den);
         }
 
-        proc& operator -=(const Frac& other) 
+        proc& operator -=(Frac const& other) 
         {
             using namespace detail;
             let new_num = num(*this) * den(other) - num(other) * den(*this);
             let new_den = den(*this) * den(other);
 
-            return assign(*this, new_num, new_den);
+            return *assign(this, new_num, new_den);
         }
 
-        proc& operator *=(const Frac& other) 
+        proc& operator *=(Frac const& other) 
         {
             using namespace detail;
             let new_num = num_(*this) * num_(other);
             let new_den = den_(*this) * den_(other);
 
-            return assign(*this, new_num, new_den);
+            return *assign(this, new_num, new_den);
         }
 
-        proc& operator /=(const Frac& other) 
+        proc& operator /=(Frac const& other) 
         {
             using namespace detail;
             let new_num = num(*this) * den(other);
             let new_den = den(*this) * num(other);
 
-            return assign(*this, new_num, new_den);
+            return *assign(this, new_num, new_den);
         }
 
-        proc operator +(const Frac& other) const {mut copy = *this; copy += other; return copy;}
-        proc operator -(const Frac& other) const {mut copy = *this; copy -= other; return copy;}
-        proc operator *(const Frac& other) const {mut copy = *this; copy *= other; return copy;}
-        proc operator /(const Frac& other) const {mut copy = *this; copy /= other; return copy;}
+        proc operator +(Frac const& other) const {mut copy = *this; copy += other; return copy;}
+        proc operator -(Frac const& other) const {mut copy = *this; copy -= other; return copy;}
+        proc operator *(Frac const& other) const {mut copy = *this; copy *= other; return copy;}
+        proc operator /(Frac const& other) const {mut copy = *this; copy /= other; return copy;}
 
-        func operator ==(const Frac& other) const 
+        func operator ==(Frac const& other) const 
         {
             return this->operator<=>(other) == 0;
         }
 
-        func operator <=>(const Frac& other) const 
+        func operator <=>(Frac const& other) const 
         {
             using namespace detail;
             let norm1 = num(*this) * den(other);

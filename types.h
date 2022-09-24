@@ -26,4 +26,11 @@ namespace jot
     using byte = u8;
     using std::size_t;
     using cstring = const char*;
+
+    #ifdef DEFAULT_SIZE_TYPE
+    using Def_Size = DEFAULT_SIZE_TYPE;
+    #else
+    using Def_Size = size_t;
+    #endif // DEFAULT_SIZE_TYPE
+
 }

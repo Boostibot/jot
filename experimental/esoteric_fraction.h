@@ -88,13 +88,13 @@ namespace jot
                 let tn_zero = cast(u8)(this_num != 0);
                 let on_zero = cast(u8)(other_num != 0);
 
-                return assign(*this, (this_num + other_num) * (tn_zero & on_zero), this_den);
+                return *assign(this, (this_num + other_num) * (tn_zero & on_zero), this_den);
             }
 
             let new_num = this_num * other_den + other_num * this_den;
             let new_den = this_den * other_den;
 
-            return assign(*this, new_num, new_den);
+            return *assign(this, new_num, new_den);
         }
 
         proc& operator -=(const Frac& other) 
@@ -119,13 +119,13 @@ namespace jot
                 let tn_zero = cast(u8)(this_num != 0);
                 let on_zero = cast(u8)(other_num != 0);
 
-                return assign(*this, (this_num - other_num) * (tn_zero & on_zero), this_den);
+                return *assign(this, (this_num - other_num) * (tn_zero & on_zero), this_den);
             }
 
             let new_num = this_num * other_den - other_num * this_den;
             let new_den = this_den * other_den;
 
-            return assign(*this, new_num, new_den);
+            return *assign(this, new_num, new_den);
         }
 
         proc& operator *=(const Frac& other) 
@@ -134,7 +134,7 @@ namespace jot
             let new_num = num_(*this) * num_(other);
             let new_den = den_(*this) * den_(other);
 
-            return assign(*this, new_num, new_den);
+            return *assign(this, new_num, new_den);
         }
 
         proc& operator /=(const Frac& other) 
@@ -162,7 +162,7 @@ namespace jot
             let new_num = this_num * other_den;
             let new_den = this_den * other_num;
 
-            return assign(*this, new_num, new_den);
+            return *assign(this, new_num, new_den);
         }
 
         proc operator +(const Frac& other) const {mut copy = *this; copy += other; return copy;}

@@ -1,17 +1,17 @@
 #pragma once
 
-#include "endian.h"
-#include "array.h"
+#include "../endian.h"
+#include "../array.h"
 
-#include "defines.h"
+#include "../defines.h"
 
 namespace jot::egnostic
 {
     namespace shifts 
     {
         constexpr size_t MAX_SUPPORTED_SIZE = 8;
-        using Row = Array<u8, MAX_SUPPORTED_SIZE>;
-        using Table = Array<Row, MAX_SUPPORTED_SIZE + 1>;
+        using Row = Array_<u8, MAX_SUPPORTED_SIZE>;
+        using Table = Array_<Row, MAX_SUPPORTED_SIZE + 1>;
 
         constexpr Table LITTLE = {
             Row{0},
@@ -144,4 +144,4 @@ namespace jot::egnostic
     }
 }
 
-#include "undefs.h"
+#include "../undefs.h"

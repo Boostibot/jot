@@ -22,29 +22,6 @@ namespace jot
     //    arr1() ++;              //Increments every element
     //    if(arr1() >= arr2() && arr1() < 5) {} //Per element comparisons
 
-
-    //@TODO: make into a valid view and add paralelsims to ops
-    //      arr() | arr() | arr() | [&]{
-    //           
-    //      }
-    //      arr() | [&]{return i + 2;} | arr2() | []{
-    //      }
-    //@TODO: make tied iterator and tied range
-    //      for(auto {first, second, third} : Tied(arr1, arr2, arr3))
-    //      {
-    // 
-    //      }
-    //      std::for_each(Tied(arr1, arr2, arr3), [](auto pack){
-    //      
-    //      }
-    // 
-    //      Tied(arr1, arr2, arr3) - [&](elem1, elem2, elem3){
-    //          
-    //      }
-    // 
-    //      Tied(arr1, arr2, arr3) | Map_View()
-    // Or just actually copy multimap & add loop order randomization
-
     template<typename T>
     concept per_elem_like = requires(T t)
     {

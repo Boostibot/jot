@@ -66,7 +66,7 @@
 namespace jot 
 {
     template<size_t size_>
-    using Byte_Array = Array<byte, size_>;
+    using Byte_Array = Array_<byte, size_>;
 
     template<typename T>
     using Bytes = Byte_Array<sizeof(T)>;
@@ -225,7 +225,7 @@ namespace jot
             let to_byte_index = ti % sizeof(T1);
             let from_byte_index = fi % sizeof(T2);
 
-            return Array{to_index, from_index, to_byte_index, from_byte_index};
+            return Array_{to_index, from_index, to_byte_index, from_byte_index};
         }
 
         template <typename T1, typename T2, typename Size>
