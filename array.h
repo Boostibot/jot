@@ -14,7 +14,7 @@ namespace jot
     //Should be compatible with any algorhitms requiring begin(), end(), size() proc as they 
     //   still extist but only as non members which removes the named collsions (defined generically inside span.h)
     //Also includes slicing syntax in the form arr(5, END - 1)
-    template<typename T, size_t size_, typename Size = size_t>
+    template<typename T, size_t size_, typename Size = Def_Size>
     struct Array
     {
         using Tag = StaticContainerTag;

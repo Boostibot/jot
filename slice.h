@@ -217,9 +217,23 @@ namespace jot
 
         template<class R, typename T>
         concept matching_range = are_same_v<Range_Value<R>, T> || are_same_v<Range_Value<R>, std::remove_const_t<T>>;
+
+
+        template <typename T> 
+        concept literal_compatible = are_same_v<T, const char8_t> || are_same_v<T, const char>;
     }
 
-    template<typename T, typename Size = size_t, auto extent = DYNAMIC_EXTENT>
+    func strlen(cstring str) noexcept 
+    {
+        size_t size = 0;
+        while(str[size] != '\0')
+        {
+            size++;
+        }
+        return size;
+    };
+
+    template<typename T, typename Size = Def_Size, auto extent = DYNAMIC_EXTENT>
     struct Slice : detail::Slice_Data<T, Size, Const<extent, decltype(extent)>>
     {
         using Slice_Data = detail::Slice_Data<T, Size, Const<extent, decltype(extent)>>;
@@ -231,8 +245,12 @@ namespace jot
         constexpr Slice() = default;
 
         //Dynamic
+        constexpr Slice(cstring str) noexcept
+            requires (detail::is_literal_compatible<T>)
+        : Slice_Data{str, strlen(str)} {}
+
         template <detail::cont_iter It> 
-            //requires (!is_static) && detail::matching_iter<It, T>
+            requires (!is_static) && detail::matching_iter<It, T>
         constexpr Slice(It it, Size size) noexcept
             : Slice_Data{ detail::addr(it), size } {};
 
@@ -271,6 +289,7 @@ namespace jot
 
         constexpr operator Slice<T, Size>() const noexcept requires (is_static) { return Slice<T, Size>{this->data, this->size}; }
         constexpr operator Slice<T, Size>()       noexcept requires (is_static) { return Slice<T, Size>{this->data, this->size}; }
+        constexpr operator Slice<const T, Size, extent>() const noexcept        { return Slice<const T, Size, extent>{this->data, this->size}; }
 
         #include "slice_op_text.h"
     };

@@ -89,7 +89,7 @@ namespace jot
         typename Alloc = Def_Alloc<T>, 
         typename Grow = Def_Grow<2, 0, 8>
     >
-    struct Stack : detail::Stack_Data<T, Size, Alloc, static_capacity_>
+    struct Stack_ : detail::Stack_Data<T, Size, Alloc, static_capacity_>
     {   
         using allocator_type   = Alloc;
         using slice_type       = Slice<T, Size>;
@@ -103,24 +103,24 @@ namespace jot
         constexpr static bool has_static_storage = static_capacity != 0;
         constexpr static bool has_stateful_alloc = !std::is_empty_v<Alloc>;
 
-        constexpr Stack() = default;
-        constexpr Stack(Stack&& other) noexcept { swap(this, &other); }
+        constexpr Stack_() = default;
+        constexpr Stack_(Stack_&& other) noexcept { swap(this, &other); }
 
-        explicit constexpr Stack(Size size) { alloc_data(this, size); }
+        explicit constexpr Stack_(Size size) { alloc_data(this, size); }
 
-        explicit constexpr Stack(slice_type slice) 
+        explicit constexpr Stack_(slice_type slice) 
         { 
             alloc_data(this, slice.size);
             copy_construct_elems(this, slice);
         }
 
-        explicit constexpr Stack(const_slice_type slice) 
+        explicit constexpr Stack_(const_slice_type slice) 
         { 
             alloc_data(this, slice.size);
             copy_construct_elems(this, slice);
         }
 
-        constexpr Stack(
+        constexpr Stack_(
             T* data, Size size, Size capacity, 
             Alloc alloc, const T (&static_data)[static_capacity]
         ) noexcept requires (has_static_storage)
@@ -130,13 +130,13 @@ namespace jot
                 this->static_data()[i] = static_data[i];
         }
 
-        constexpr Stack(T* data, Size size, Size capacity, Alloc alloc = Alloc()) noexcept
+        constexpr Stack_(T* data, Size size, Size capacity, Alloc alloc = Alloc()) noexcept
             : Stack_Data{alloc, data, size, capacity} {}
 
-        constexpr Stack(Alloc alloc) noexcept
+        constexpr Stack_(Alloc alloc) noexcept
             : Stack_Data{alloc} {}
 
-        constexpr Stack(const Stack& other)
+        constexpr Stack_(const Stack_& other)
             requires (std::is_copy_constructible_v<T>) : Stack_Data{other.alloc()}
         {
             alloc_data(this, other.size);
@@ -144,19 +144,19 @@ namespace jot
             this->size = other.size;
         }
 
-        constexpr ~Stack() noexcept
+        constexpr ~Stack_() noexcept
         {
             destroy_elems(this);
             dealloc_data(this);
         }
 
-        constexpr Stack& operator=(const Stack& other)
+        constexpr Stack_& operator=(const Stack_& other)
             requires (std::is_copy_assignable_v<T> || std::is_copy_constructible_v<T>)
         {
             if(this->capacity >= other.size)
             {
                 //If the elems are copy constructible we can save potential allocations of elems
-                // by using copy assignment instead (for example with Stack<Stack<>...>)
+                // by using copy assignment instead (for example with Stack_<Stack_<>...>)
                 if constexpr (std::is_copy_assignable_v<T>)
                 {
                     //destroy extra
@@ -196,15 +196,15 @@ namespace jot
             return *this;
         }
 
-        constexpr Stack& operator=(Stack&& other) noexcept
+        constexpr Stack_& operator=(Stack_&& other) noexcept
         {
             swap(this, &other);
             return *this;
         }
 
         //this is pretty pointless since its impossible to create a by byte copy...
-        func operator<=>(const Stack&) const noexcept = default;
-        constexpr bool operator==(const Stack&) const noexcept = default;
+        func operator<=>(const Stack_&) const noexcept = default;
+        constexpr bool operator==(const Stack_&) const noexcept = default;
 
         constexpr operator Slice<T, Size>() const noexcept 
         {
@@ -214,14 +214,14 @@ namespace jot
         proc alloc() noexcept -> Alloc& {return *cast(Alloc*)this; }
         proc alloc() const noexcept -> Alloc const& {return *cast(Alloc*)this; }
 
-        static proc is_static_alloced(const Stack& vec) noexcept -> bool 
+        static proc is_static_alloced(const Stack_& vec) noexcept -> bool 
         { 
             return vec.capacity == static_capacity && has_static_storage; 
         }
 
-        static proc swap(Stack* left, Stack* right) noexcept -> void
+        static proc swap(Stack_* left, Stack_* right) noexcept -> void
         {
-            constexpr let transfer_static = [](Stack* from, Stack* to, Size from_i, Size to_i)
+            constexpr let transfer_static = [](Stack_* from, Stack_* to, Size from_i, Size to_i)
             {
                 for (Size i = from_i; i < to_i; i++)
                 {
@@ -230,7 +230,7 @@ namespace jot
                 }
             };
 
-            constexpr let transfer_half_static = [=](Stack* from, Stack* to)
+            constexpr let transfer_half_static = [=](Stack_* from, Stack_* to)
             {
                 transfer_static(from, to, 0, from->size);
 
@@ -273,7 +273,7 @@ namespace jot
                 std::swap(left->alloc(), right->alloc());
         }
 
-        static proc alloc_data(Stack* vec, Size capacity) -> void
+        static proc alloc_data(Stack_* vec, Size capacity) -> void
         {
             if(capacity <= static_capacity)
             {
@@ -302,7 +302,7 @@ namespace jot
             vec->data = vec->allocate(sizeof(T) * vec->capacity);
         }
 
-        static proc dealloc_data(Stack* vec) -> void
+        static proc dealloc_data(Stack_* vec) -> void
         {
             if(vec->capacity > static_capacity)
                 vec->deallocate(vec->data, sizeof(T) * vec->capacity);
@@ -313,7 +313,7 @@ namespace jot
         // when called with new_capacity = 0 acts as dealloc_data
         // Destroys elements when shrinking but does not construct new ones when growing 
         //  (because doesnt know how to)
-        static proc set_capacity(Stack* vec, Size new_capacity) -> void
+        static proc set_capacity(Stack_* vec, Size new_capacity) -> void
         {
             T* new_data = nullptr;
 
@@ -336,13 +336,13 @@ namespace jot
             vec->capacity = new_capacity;
         }
 
-        static proc destroy_elems(Stack* vec) -> void
+        static proc destroy_elems(Stack_* vec) -> void
         {
             for (Size i = 0; i < vec->size; i++)
                 vec->data[i].~T();
         }
 
-        static proc copy_construct_elems(Stack* vec, slice_type other) -> void
+        static proc copy_construct_elems(Stack_* vec, slice_type other) -> void
         {
             for (Size i = 0; i < other.size; i++)
                 std::construct_at(vec->data + i, other.data[i]);
@@ -351,35 +351,35 @@ namespace jot
         #include "slice_op_text.h"
     };
 
-    template<typename Stack>
-    concept Stack_Concept = requires(Stack stack)
+    template<typename Stack_>
+    concept Stack_Concept = requires(Stack_ stack)
     {
-        Stack::set_capacity(&stack, 0);
-        Stack::destroy_elems(&stack);
+        Stack_::set_capacity(&stack, 0);
+        Stack_::destroy_elems(&stack);
 
         stack.data = nullptr; 
         stack.size = 0; 
         stack.capacity = 0; 
 
-        { Stack::allocator_type    };
-        { Stack::slice_type        };
-        { Stack::const_slice_type  };
-        { Stack::grow_type         };
-        { Stack::size_type         };
-        //{ Stack::Stack_Data        };
+        { Stack_::allocator_type    };
+        { Stack_::slice_type        };
+        { Stack_::const_slice_type  };
+        { Stack_::grow_type         };
+        { Stack_::size_type         };
+        //{ Stack_::Stack_Data        };
         { stack.static_capacity    } -> std::convertible_to<size_t>;
         { stack.has_static_storage } -> std::convertible_to<bool>;
         { stack.has_stateful_alloc } -> std::convertible_to<bool>; 
     };
 
-    static_assert(Stack_Concept<Stack<i32, 0>> == true);
-    static_assert(Stack_Concept<Stack<i32, 2>> == true);
+    static_assert(Stack_Concept<Stack_<i32, 0>> == true);
+    static_assert(Stack_Concept<Stack_<i32, 2>> == true);
     static_assert(Stack_Concept<i32> == false);
 }
 
 
 #define STACK_TEMPL class T, size_t scap, class Size, class Alloc, class Grow
-#define Stack_T Stack<T, scap, Size, Alloc, Grow>
+#define Stack_T Stack_<T, scap, Size, Alloc, Grow>
 
 namespace std 
 {

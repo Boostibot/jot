@@ -5,10 +5,10 @@
 
 namespace jot
 {
-    //Specifies settings to the Stack struct 
+    //Specifies settings to the Stack_ struct 
     // All values set to -1 are null values and skipped
     // Clamps the specified number of elements in each categroy (so alloc_elems and static_elems) by the min max byte sizes for each and uses the result
-    // The to_byte_size value works by specifying the total size of the resulting Stack struct and 
+    // The to_byte_size value works by specifying the total size of the resulting Stack_ struct and 
     //  filling all availible space with static elems. This value only takes efect if static_elems is not specified
     // The growth_mult is standard grwoth factor for the storage while growth_add is linear growth added to the
     //  result of using growth_mult on each allocation (new_space = old_space * growth_mult + growth_add)
@@ -121,7 +121,7 @@ namespace jot
         typename Size = size_t, 
         typename Alloc = Def_Alloc<T>, 
         typename Grow = void>
-    using Custom_Stack = Stack<
+    using Custom_Stack = Stack_<
         T, 
         detail::calc_static_size(sizeof(T), detail::Base_Size<T, Size, Alloc>::value, settings), 
         Size, 
@@ -143,7 +143,7 @@ namespace jot
 
             Custom_Stack<int, settings> stack;
 
-            static_assert(sizeof(Stack<int, 10>) == 64);
+            static_assert(sizeof(Stack_<int, 10>) == 64);
             constexpr let base_size = detail::Base_Size<int, size_t, Def_Alloc<int>>::value;
             static_assert(base_size == 24);
 

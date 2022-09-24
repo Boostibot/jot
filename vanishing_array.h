@@ -38,7 +38,7 @@ namespace jot
         };
     }
 
-    template<typename T, size_t size, typename Size = size_t>
+    template<typename T, size_t size, typename Size = Def_Size>
     struct Vanishing_Array : detail::Array_Data<T, Const<size, size_t>, Size>
     {
         using Tag = StaticContainerTag;
@@ -60,7 +60,7 @@ namespace jot
 
         using slice_type = Slice<T, Size>;
 
-        #include "span_array_shared_text.h"
+        #include "slice_op_text.h"
     };
 
     //deduction guide
