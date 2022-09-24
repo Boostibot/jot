@@ -622,7 +622,7 @@ namespace jot
     proc push(Stack_T* stack, _Ts ... what) -> void
         requires (std::convertible_to<_Ts, T> && ...)
     {
-        splice(stack, stack->size, 0, Array<T, sizeof...(_Ts)>{std::move(what)...});
+        splice(stack, stack->size, 0, Array_<T, sizeof...(_Ts)>{std::move(what)...});
     }
 
     template <STACK_TEMPL, typename _Size>

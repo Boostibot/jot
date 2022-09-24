@@ -246,7 +246,7 @@ namespace jot
 
         //Dynamic
         constexpr Slice_(cstring str) noexcept
-            requires (detail::is_literal_compatible<T>)
+            requires detail::literal_compatible<T>
         : Slice_Data{str, strlen(str)} {}
 
         template <detail::cont_iter It> 
