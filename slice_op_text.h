@@ -8,6 +8,7 @@ using pointer         = T*;
 using const_pointer   = const T*;
 using reference       = T&;
 using const_reference = const T&;
+using iterator_category = std::contiguous_iterator_tag;
 
 //@NOTE: dont know why but without std::allocator or these containers doesnt satisfy range concept
 // (begin and end are defined outside the class and work for ranged based for loops
@@ -15,8 +16,8 @@ using const_reference = const T&;
 using iterator       = T*;
 using const_iterator = const T*;
 
-using reverse_iterator       = std:: reverse_iterator<iterator>;
-using const_reverse_iterator = std:: reverse_iterator<const_iterator>;
+using reverse_iterator       = std::reverse_iterator<iterator>;
+using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
 constexpr iterator begin() noexcept {
     return this->data;
