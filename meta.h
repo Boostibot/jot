@@ -168,8 +168,9 @@ namespace jot
     }
 }
 
-namespace std
-{
-    template< size_t I, class... Types >
-    struct tuple_element< I, jot::type_collection<Types...> > : jot::tuple_element<I, Types...> {};
-}
+//#include <tuple>
+//namespace std
+//{
+//    template< size_t I, class... Types >
+//    struct tuple_element< I, jot::type_collection<Types...> > : jot::tuple_element<I, Types...> {};
+//}

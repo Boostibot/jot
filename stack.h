@@ -1,11 +1,11 @@
 #pragma once
 
 #include <memory>
-#include <bit>
-#include <vector>
+//#include <bit>
 
 #include "utils.h"
 #include "slice.h"
+#include "allocator.h"
 #include "defines.h"
 
 namespace jot
@@ -299,7 +299,8 @@ namespace jot
             );
 
             vec->capacity = realloc_to;
-            vec->data = vec->allocate(sizeof(T) * vec->capacity);
+            vec->data = allocate(vec->alloc(), vec->capacity);
+            //vec->data = vec->allocate(vec->capacity);
         }
 
         static proc dealloc_data(Stack_* vec) -> void
@@ -323,7 +324,8 @@ namespace jot
                 new_capacity = vec->static_capacity;
             }
             else
-                new_data = vec->allocate(sizeof(T) * new_capacity);
+                new_data = allocate(vec->alloc(), new_capacity);
+                //new_data = vec->allocate(new_capacity);
 
             let copy_to = std::min(vec->size, new_capacity);
             for (Size i = 0; i < copy_to; i++)
