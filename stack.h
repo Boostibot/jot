@@ -137,8 +137,9 @@ namespace jot
             : Stack_Data{alloc} {}
 
         constexpr Stack_(const Stack_& other)
-            requires (std::is_copy_constructible_v<T>) : Stack_Data{other.alloc()}
+            requires (std::is_copy_constructible_v<T>) : Stack_Data{*other.alloc()}
         {
+            puts("copy stack\n");
             alloc_data(this, other.size);
             copy_construct_elems(this, other);
             this->size = other.size;
@@ -306,7 +307,7 @@ namespace jot
         static proc dealloc_data(Stack_* vec) -> void
         {
             if(vec->capacity > static_capacity)
-                vec->deallocate(vec->data, sizeof(T) * vec->capacity);
+                vec->deallocate(vec->data, vec->capacity);
         }
 
         //can be used for arbitrary growing/shrinking of data

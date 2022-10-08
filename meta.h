@@ -156,16 +156,23 @@ namespace jot
 
     //If provided arguments is array decays it into ptr else forwards it
     template<typename T, size_t N>
-    auto array_decay(T (&x)[N]) -> T*
+    constexpr auto array_decay(T (&x)[N]) -> T*
     {
         return x;
     }
 
-    template<typename T>
-    auto array_decay(T&& x)
-    {
-        return std::forward<T>(x);
+    template <class _Ty>
+    constexpr _Ty&& array_decay(std::remove_reference_t<_Ty>& _Arg) noexcept 
+    { // forward an lvalue as either an lvalue or an rvalue
+        return static_cast<_Ty&&>(_Arg);
     }
+
+    template <class _Ty>
+    constexpr _Ty&& array_decay(std::remove_reference_t<_Ty>&& _Arg) noexcept 
+    { // forward an rvalue as an rvalue
+        return static_cast<_Ty&&>(_Arg);
+    }
+
 }
 
 //#include <tuple>
