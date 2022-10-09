@@ -6,3 +6,5 @@
 #undef pure
 #undef maybe_unused
 #undef address_overlap
+#undef runtime_proc 
+#undef runtime_func 

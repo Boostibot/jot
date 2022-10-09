@@ -5,12 +5,6 @@
 
 namespace jot
 {
-    func div_round_up(let value, let to_multiple_of)
-    {
-        return (value + to_multiple_of - 1) / to_multiple_of;
-    }
-
-    
     
     template <typename Val, typename Container>
     func get_array_bytefield(const Container containers[], let from_byte, let num_bytes, const Val& base = Val())
