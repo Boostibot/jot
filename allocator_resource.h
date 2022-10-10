@@ -78,7 +78,7 @@ namespace jot
             else
             {
                 assert(is_power_of_two(align));
-                return cast(T*) resource->do_allocate(size, align);
+                return cast(T*) resource->do_allocate(size * sizeof(T), align);
             }
         }
 
@@ -94,7 +94,7 @@ namespace jot
             else
             {
                 assert(is_power_of_two(align));
-                return resource->do_deallocate(old_ptr, old_size, align);
+                return resource->do_deallocate(old_ptr, old_size * sizeof(T), align);
             }
         }
 

@@ -9,7 +9,7 @@
 
 namespace jot 
 {
-    template <typename T, typename Size>
+    template <typename T, std::integral Size>
     struct Block 
     {
         Block* next = nullptr;
@@ -17,7 +17,7 @@ namespace jot
         Size size = 0;
     };
 
-    template <typename T, typename Size>
+    template <typename T, std::integral Size>
     proc data(Block<T, Size>* block)
     {
         byte* bytes = cast(byte*) cast(void*) block;
@@ -39,7 +39,7 @@ namespace jot
         return block;
     }
 
-    template <typename T, typename Size = Def_Size>
+    template <typename T, std::integral Size = Def_Size>
     struct Block_List_View_
     {
         using Block = Block<T, Size>;
@@ -50,7 +50,7 @@ namespace jot
         Size size = 0;
     };
 
-    template <typename T, typename Size = Def_Size, typename Alloc = std::allocator<T>>
+    template <typename T, std::integral Size = Def_Size, allocator Alloc = std::allocator<T>>
     struct Block_List_ : Alloc
     {
         using Block = Block<T, Size>;
@@ -278,8 +278,8 @@ namespace jot
     };
 
 
-    #define BLOCK_LIST_TEMPL typename T, typename Size, typename Alloc
-    #define BLOCK_TEMPL typename T, typename Size
+    #define BLOCK_LIST_TEMPL typename T, std::integral Size, typename Alloc
+    #define BLOCK_TEMPL typename T, std::integral Size
     #define Block_T Block<T, Size>
     #define Block_List_T Block_List_<T, Size, Alloc>
 
@@ -292,7 +292,7 @@ namespace jot
     namespace detail 
     {
         //is used to be able to specialize for both const and not const
-        template <typename Block_, typename Size_>
+        template <typename Block_, std::integral Size_>
         func block_at(Block_* from, Size_ block_offset, Iter_Direction direction) -> Block_*
         {
             mut* current = from;
@@ -313,7 +313,7 @@ namespace jot
             return current;
         }
 
-        template <typename T, typename Size>
+        template <typename T, std::integral Size>
         func slice_range(Block<T, Size>* from, Size block_count, Iter_Direction direction) -> Block_List_View_<T, Size>
         {
             mut* current = from;
@@ -347,14 +347,14 @@ namespace jot
             };
         }
 
-        template <typename Block, typename Size>
+        template <typename Block, std::integral Size>
         struct At_Result 
         {
             Block* block;
             Size index;
         };
 
-        template <typename Block_, typename Size_>
+        template <typename Block_, std::integral Size_>
         func block_and_item_at(Block_* from, Size_ item_index, Iter_Direction direction) -> At_Result<Block_, Size_>
         {
             i64 signed_index = item_index;
@@ -379,7 +379,7 @@ namespace jot
             }
         }
 
-        template <typename Block_, typename Size_>
+        template <typename Block_, std::integral Size_>
         func item_at(Block_* from, Size_ item_index) -> Block_*
         {
             mut found = block_and_item_at(from, item_index);
@@ -411,35 +411,35 @@ namespace jot
         }
     }
 
-    template <BLOCK_TEMPL, typename Size_>
+    template <BLOCK_TEMPL, std::integral Size_>
         requires std::convertible_to<Size_, Size>
     func block_at(Block_T* from, Size_ block_index, Iter_Direction dir = Iter_Direction::FORWARD) -> Block_T*
     {
         return detail::block_at(from, block_index);
     }
 
-    template <BLOCK_TEMPL, typename Size_>
+    template <BLOCK_TEMPL, std::integral Size_>
         requires std::convertible_to<Size_, Size>
     func block_at(Block_T const& from, Size_ block_index, Iter_Direction dir = Iter_Direction::FORWARD) -> Block_T
     {
         return *detail::block_at(&from, block_index);
     }
 
-    template <BLOCK_TEMPL, typename Size_>
+    template <BLOCK_TEMPL, std::integral Size_>
         requires std::convertible_to<Size_, Size>
     func item_at(Block_T* from, Size_ item_index, Iter_Direction dir = Iter_Direction::FORWARD) -> T*
     {
         return detail::item_at(from, item_index);
     }
 
-    template <BLOCK_TEMPL, typename Size_>
+    template <BLOCK_TEMPL, std::integral Size_>
         requires std::convertible_to<Size_, Size>
     func item_at(Block_T const& from, Size_ item_index, Iter_Direction dir = Iter_Direction::FORWARD) -> T
     {
         return *detail::item_at(&from, item_index);
     }
 
-    template <BLOCK_LIST_TEMPL, typename Size_>
+    template <BLOCK_LIST_TEMPL, std::integral Size_>
         requires std::convertible_to<Size_, Size>
     func block_at(Block_List_T* list, Size_ block_index, Iter_Direction dir = Iter_Direction::FORWARD) -> Block_T*
     {
@@ -449,7 +449,7 @@ namespace jot
             return block_at(list->last, block_index, dir);
     }
 
-    template <BLOCK_LIST_TEMPL, typename Size_>
+    template <BLOCK_LIST_TEMPL, std::integral Size_>
         requires std::convertible_to<Size_, Size>
     func block_at(Block_List_T const& list, Size_ block_index, Iter_Direction dir = Iter_Direction::FORWARD) -> Block_T
     {
@@ -459,7 +459,7 @@ namespace jot
             return block_at(*list.last, block_index, dir);
     }
 
-    template <BLOCK_LIST_TEMPL, typename Size_>
+    template <BLOCK_LIST_TEMPL, std::integral Size_>
         requires std::convertible_to<Size_, Size>
     func item_at(Block_List_T* list, Size_ item_index, Iter_Direction dir = Iter_Direction::FORWARD) -> T*
     {
@@ -469,7 +469,7 @@ namespace jot
             return item_at(list->last, item_index, dir);
     }
 
-    template <BLOCK_LIST_TEMPL, typename Size_>
+    template <BLOCK_LIST_TEMPL, std::integral Size_>
         requires std::convertible_to<Size_, Size>
     func item_at(Block_List_T const& list, Size_ item_index, Iter_Direction dir = Iter_Direction::FORWARD) -> T
     {
@@ -583,7 +583,7 @@ namespace jot
         *out = std::move(made);
     }
 
-    template <BLOCK_LIST_TEMPL, typename Size_ = int>
+    template <BLOCK_LIST_TEMPL, std::integral Size_ = int>
         requires std::convertible_to<Size_, Size>
     proc pop_back(Block_List_T* block_list, Block_List_T* pop_into, Size_ count) -> void
     {
@@ -601,7 +601,7 @@ namespace jot
         assert(is_invariant(*pop_into));
     }
 
-    template <BLOCK_LIST_TEMPL, typename Size_ = int>
+    template <BLOCK_LIST_TEMPL, std::integral Size_ = int>
         requires std::convertible_to<Size_, Size>
     proc pop_front(Block_List_T* block_list, Block_List_T* pop_into, Size_ count) -> void
     {
@@ -620,7 +620,7 @@ namespace jot
         assert(is_invariant(*pop_into));
     }
 
-    template <BLOCK_LIST_TEMPL, typename Size_ = int>
+    template <BLOCK_LIST_TEMPL, std::integral Size_ = int>
         requires std::convertible_to<Size_, Size>
     proc pop_back(Block_List_T* block_list, Size_ count = 1) -> void
     {
@@ -628,7 +628,7 @@ namespace jot
         pop_back(block_list, &popped, count);
     }
 
-    template <BLOCK_LIST_TEMPL, typename Size_ = int>
+    template <BLOCK_LIST_TEMPL, std::integral Size_ = int>
         requires std::convertible_to<Size_, Size>
     proc pop_front(Block_List_T* block_list, Size_ count = 1) -> void
     {
@@ -686,14 +686,14 @@ namespace jot
             unsafe_to_block_list(at, popped);
     }
 
-    template <BLOCK_LIST_TEMPL, typename Size_ = int>
+    template <BLOCK_LIST_TEMPL, std::integral Size_ = int>
         requires std::convertible_to<Size_, Size>
     proc pop(Block_List_T* block_list, Block_List_T* popped, Size_ count) -> void
     {
         return pop_back(block_list, popped, count);
     }
 
-    template <BLOCK_LIST_TEMPL, typename Size_ = int>
+    template <BLOCK_LIST_TEMPL, std::integral Size_ = int>
         requires std::convertible_to<Size_, Size>
     proc pop(Block_List_T* block_list, Size_ count = 1) -> void
     {
@@ -728,22 +728,22 @@ namespace jot
 
 namespace std
 {
-    template <typename T, typename Size, typename Alloc>
+    template <typename T, std::integral Size, typename Alloc>
     func size(jot::Block_List_<T, Size, Alloc> const& list) noexcept {return list.size;}
 
-    template <typename T, typename Size, typename Alloc>
+    template <typename T, std::integral Size, typename Alloc>
     func begin(jot::Block_List_<T, Size, Alloc>& list) noexcept {return list.begin();}
-    template <typename T, typename Size, typename Alloc>
+    template <typename T, std::integral Size, typename Alloc>
     func begin(jot::Block_List_<T, Size, Alloc> const& list) noexcept {return list.begin();}
 
-    template <typename T, typename Size, typename Alloc>
+    template <typename T, std::integral Size, typename Alloc>
     func end(jot::Block_List_<T, Size, Alloc>& list) noexcept {return list.end();}
-    template <typename T, typename Size, typename Alloc>
+    template <typename T, std::integral Size, typename Alloc>
     func end(jot::Block_List_<T, Size, Alloc> const& list) noexcept {return list.end();}
 
-    template <typename T, typename Size, typename Alloc>
+    template <typename T, std::integral Size, typename Alloc>
     func cbegin(jot::Block_List_<T, Size, Alloc> const& list) noexcept {return list.begin();}
-    template <typename T, typename Size, typename Alloc>
+    template <typename T, std::integral Size, typename Alloc>
     func cend(jot::Block_List_<T, Size, Alloc> const& list) noexcept {return list.end();}
 }
 

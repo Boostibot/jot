@@ -16,7 +16,7 @@ namespace jot
             T* ptr = nullptr;
         };
 
-        enum Action : u32 {};
+        enum class Action : u32 {};
 
         constexpr Action DEALLOC_ALL = cast(Action) 1;
         constexpr Action GROW = cast(Action) 2;
@@ -31,9 +31,10 @@ namespace jot
         size_t old_align, size_t new_align, 
         void* custom_data)
     {
-        { allocate<int>(&res, new_size, new_align) } -> std::convertible_to<int*>;
-        deallocate<int>(&res, old_ptr, old_size, old_align);
-        { action<int>(&res, action_type, old_ptr, old_size, new_size, old_align, new_align, custom_data) } -> std::convertible_to<typename Allocator_Actions::Result<int>>;
+        true; //@NOTE: MSVC is buggy and syntax highlighting breaks
+        //{ allocate<int>(&res, new_size, new_align) } -> std::convertible_to<int*>;
+        //deallocate<void>(&res, old_ptr, old_size, old_align);
+        //{ action<void>(&res, action_type, old_ptr, old_size, new_size, old_align, new_align, custom_data) } -> std::convertible_to<Allocator_Actions::Result<void>>;
     };
 
     //global defaults
@@ -100,6 +101,8 @@ namespace jot
         let recomputed_size = div_round_up(size * sizeof(T), sizeof(value_type));
         return alloc->deallocate(maybe_unsafe_ptr_cast<value_type>(ptr), recomputed_size);
     }
+
+    static_assert(allocator<std::allocator<int>>);
 }
 
 #include "undefs.h"

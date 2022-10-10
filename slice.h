@@ -239,7 +239,7 @@ namespace jot
         return size;
     };
 
-    template<typename T, typename Size = Def_Size, auto extent = DYNAMIC_EXTENT>
+    template<typename T, std::integral Size = Def_Size, auto extent = DYNAMIC_EXTENT>
     struct Slice_ : detail::Slice_Data<T, Size, Const<extent, decltype(extent)>>
     {
         using Slice_Data = detail::Slice_Data<T, Size, Const<extent, decltype(extent)>>;

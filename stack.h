@@ -15,7 +15,7 @@ namespace jot
 
     namespace detail
     {   
-        template<typename T, typename Size, class Alloc, size_t static_capacity_>
+        template<typename T, typename Size, allocator Alloc, size_t static_capacity_>
         struct Stack_Data : Alloc
         {
             T* data = nullptr;
@@ -37,7 +37,7 @@ namespace jot
             constexpr bool operator==(const Stack_Data&) const noexcept = default;
         };
 
-        template<typename T, typename Size, class Alloc>
+        template<typename T, typename Size, allocator Alloc>
         struct Stack_Data<T, Size, Alloc, 0> : Alloc
         {
             T* data = nullptr;
@@ -56,6 +56,12 @@ namespace jot
 
     template <class T>
     using Def_Alloc = std::allocator<T>;
+
+    template <typename Grow>
+    concept grower = requires(size_t to_fit, size_t capacity, size_t size, size_t static_capacity, size_t elem_size)
+    {
+        { Grow::run(to_fit, capacity, size, static_capacity, elem_size) } -> std::convertible_to<size_t>;
+    };
 
     template<size_t MULT_, size_t ADD_, size_t BASE_ELEMS_>
     struct Def_Grow
@@ -81,13 +87,14 @@ namespace jot
         }
     };
 
+    static_assert(grower<Def_Grow<2, 0, 8>>);
 
     template <
         typename T, 
         size_t static_capacity_ = 0, 
-        typename Size = Def_Size, 
-        typename Alloc = Def_Alloc<T>, 
-        typename Grow = Def_Grow<2, 0, 8>
+        std::integral Size = Def_Size, 
+        allocator Alloc = Def_Alloc<T>, 
+        grower Grow = Def_Grow<2, 0, 8>
     >
     struct Stack_ : detail::Stack_Data<T, Size, Alloc, static_capacity_>
     {   
@@ -300,14 +307,17 @@ namespace jot
             );
 
             vec->capacity = realloc_to;
-            //vec->data = allocate(vec->alloc(), vec->capacity);
-            vec->data = vec->allocate(vec->capacity);
+            //@ALLOC
+            vec->data = allocate<T>(vec->alloc(), vec->capacity * sizeof(T), DEF_ALIGNMENT<T>);
+            //vec->data = vec->allocate(vec->capacity);
         }
 
         static proc dealloc_data(Stack_* vec) -> void
         {
+            //@ALLOC
             if(vec->capacity > static_capacity)
-                vec->deallocate(vec->data, vec->capacity);
+                //vec->deallocate(vec->data, vec->capacity);
+                deallocate<T>(vec->alloc(), vec->data, vec->capacity * sizeof(T), DEF_ALIGNMENT<T>);
         }
 
         //can be used for arbitrary growing/shrinking of data
@@ -325,8 +335,9 @@ namespace jot
                 new_capacity = vec->static_capacity;
             }
             else
-                //new_data = allocate(vec->alloc(), new_capacity);
-                new_data = vec->allocate(new_capacity);
+            //@ALLOC
+                new_data = allocate<T>(vec->alloc(), new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
+                //new_data = vec->allocate(new_capacity);
 
             let copy_to = std::min(vec->size, new_capacity);
             for (Size i = 0; i < copy_to; i++)
