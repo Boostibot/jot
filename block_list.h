@@ -61,21 +61,16 @@ namespace jot
         Size size = 0;
 
         template <stdr::forward_range Inserted>
-        explicit Block_List_(Inserted&& inserted, Alloc alloc)
-            : alloc(std::move(alloc)), first(), last(), item_size()
+        explicit Block_List_(Inserted&& inserted, Alloc alloc = Alloc())
+            : Alloc(std::move(alloc)), first(), last(), item_size()
         {
             unsafe_init(std::forward<Inserted>(inserted));
         }
 
-        template <stdr::forward_range Inserted>
-            requires std::is_default_constructible_v<Alloc>
-        explicit Block_List_(Inserted&& inserted)
-        {
-            unsafe_init(std::forward<Inserted>(inserted));
-        }
 
-        explicit Block_List_(Size size)
+        explicit Block_List_(Size size, Alloc alloc = Alloc())
             requires std::is_default_constructible_v<T>
+            : Alloc(std::move(alloc)), first(), last(), item_size()
         {
             unsafe_init(size);
 

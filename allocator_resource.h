@@ -28,99 +28,44 @@ namespace jot
     template <class Resource>
     concept allocator_resource = std::derived_from<Resource, Allocator_Resource>;
 
-    func is_power_of_two_zero(std::integral auto n) noexcept -> bool
-    {
-        return (n & (n-1)) == 0;
-    }
-
     func is_power_of_two(std::integral auto n) noexcept -> bool
     {
         return (n>0 && ((n & (n-1)) == 0));
     }
 
     template <typename T>
-    concept not_void = (!are_same_v<T, void>);
-
-    template <not_void T>
-    func constexpr_allocate(size_t byte_size) -> T*
+    func allocate(Allocator_Resource* resource, size_t byte_size, size_t align) -> T*
     {
-        std::allocator<T> alloc;
-        return cast(T*) alloc.allocate(div_round_up(byte_size, sizeof(T)));
-    }
-
-    template <not_void T>
-    func constexpr_deallocate(T* old_ptr, size_t old_size) -> void
-    {
-        std::allocator<T> alloc;
-        return alloc.deallocate( old_ptr, div_round_up(old_size, sizeof(T)));
-    }
-
-    template <typename T>
-    struct Allocator_
-    {
-        Allocator_Resource* resource;
-        using value_type = T;
-
-        constexpr Allocator_() = delete;
-        constexpr Allocator_(Allocator_Resource* resource) 
-            : resource(resource) {};
-
-        //member procs so that Allocator_ also matches the concept for a regular allocator
-        func allocate(size_t size, size_t align = STANDARD_ALIGNMENT<T>) -> T*
-        {
-            if(std::is_constant_evaluated())
-            {
-                if constexpr(are_same_v<T, void>)
-                    throw std::exception("void cannot be constexpr allocated");
-                else
-                    return constexpr_allocate<T>(size);
-            }
-            else
-            {
-                assert(is_power_of_two(align));
-                return cast(T*) resource->do_allocate(size * sizeof(T), align);
-            }
-        }
-
-        proc deallocate(T* old_ptr, size_t old_size, size_t align = STANDARD_ALIGNMENT<T>) -> void 
-        {
-            if(std::is_constant_evaluated())
-            {
-                if constexpr (are_same_v<T, void>)
-                    throw std::exception("void cannot be constexpr deallocated");
-                else
-                    return constexpr_deallocate<T>(old_ptr, old_size);
-            }
-            else
-            {
-                assert(is_power_of_two(align));
-                return resource->do_deallocate(old_ptr, old_size * sizeof(T), align);
-            }
-        }
-
-        constexpr bool operator ==(Allocator_ const& other) const { return resource->do_is_equal(* cast(std::pmr::memory_resource*) &other); }
-        constexpr bool operator !=(Allocator_ const& other) const = default;
-    };
-
-    using Allocator = Allocator_<byte>;
-
-    template <typename T>
-    func allocate(Allocator_Resource* resource, size_t size, size_t align) -> T*
-    {   
         if(std::is_constant_evaluated())
-            return constexpr_allocate<T>(size);
+        {
+            if constexpr(are_same_v<T, void>)
+                throw std::exception("void cannot be constexpr allocated");
+            else
+            {
+                std::allocator<T> alloc;
+                return cast(T*) alloc.allocate(div_round_up(byte_size, sizeof(T)));
+            }
+        }
         else
         {
             assert(is_power_of_two(align));
-            return cast(T*) resource->do_allocate(size, align);
+            return cast(T*) resource->do_allocate(byte_size, align);
         }
     }
 
     template <typename T>
-    func deallocate(Allocator_Resource* resource, T* old_ptr, size_t old_size, size_t align) -> void
+    func deallocate(Allocator_Resource* resource, T* old_ptr, size_t old_size, size_t align) -> void 
     {
         if(std::is_constant_evaluated())
-            return constexpr_deallocate<T>(old_ptr, old_size);
+        {
+            if constexpr (are_same_v<T, void>)
+                throw std::exception("void cannot be constexpr deallocated");
+            else
+            {
+                std::allocator<T> alloc;
+                return alloc.deallocate( old_ptr, div_round_up(old_size, sizeof(T)));
+            }
+        }
         else
         {
             assert(is_power_of_two(align));
@@ -152,17 +97,36 @@ namespace jot
         return resource.do_upstream_resource();
     }
 
+    template <typename T>
+    struct Allocator_
+    {
+        Allocator_Resource* resource;
+        using value_type = T;
+
+        constexpr Allocator_() = delete;
+        constexpr Allocator_(Allocator_Resource* resource) 
+            : resource(resource) {};
+
+        func allocate(size_t size, size_t align = STANDARD_ALIGNMENT<T>) -> T*
+            { return allocate(resource, size, align); }
+
+        proc deallocate(T* old_ptr, size_t old_size, size_t align = STANDARD_ALIGNMENT<T>) -> void 
+            { return deallocate(resource, old_ptr, old_size, align); }
+
+        constexpr bool operator ==(Allocator_ const& other) const 
+            { return resource->do_is_equal(* cast(std::pmr::memory_resource*) &other); }
+        constexpr bool operator !=(Allocator_ const& other) const = default;
+    };
+
+    using Allocator = Allocator_<byte>;
+
     template <typename T, typename Def>
     func allocate(Allocator_<Def>* alloc, size_t size, size_t align) -> T*
-    {   
-        return allocate<T>(alloc->resource, size, align);
-    }
+        { return allocate<T>(alloc->resource, size, align);}
 
     template <typename T, typename Def>
     func deallocate(Allocator_<Def>* alloc, T* old_ptr, size_t old_size, size_t align) -> void
-    {
-        return deallocate<T>(alloc->resource, old_ptr, old_size, align);
-    }
+        { return deallocate<T>(alloc->resource, old_ptr, old_size, align);}
 
     template <typename T, typename Def>
     func action(Allocator_<Def>* alloc, 
@@ -186,24 +150,17 @@ namespace jot
         constexpr New_Delete_Resource() = default;
 
         runtime_proc do_allocate(size_t byte_size, size_t align) -> void* override
-        {
-            return ::operator new (byte_size, std::align_val_t{align});
-        }
+            { return ::operator new (byte_size, std::align_val_t{align});}
 
         runtime_proc do_deallocate(void* old_ptr, size_t byte_size, size_t align) -> void override
-        {
-            ::operator delete(old_ptr, byte_size, std::align_val_t{align});
-        }
+            { ::operator delete(old_ptr, byte_size, std::align_val_t{align});}
 
+        //has no upstream and no sate
         func do_upstream_resource() const noexcept -> Allocator_Resource* override
-        {
-            return nullptr; //has no upstream
-        }
+            { return nullptr;}
 
         func do_is_equal(std::pmr::memory_resource const& other) const noexcept -> bool override
-        {
-            return true; //stateless
-        }
+            { return true; }
 
         constexpr bool operator ==(New_Delete_Resource const& other) const { return this->do_is_equal(* cast(std::pmr::memory_resource*) &other); }
         constexpr bool operator !=(New_Delete_Resource const& other) const = default;

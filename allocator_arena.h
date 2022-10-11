@@ -11,7 +11,7 @@ namespace jot
     struct Unbound_Arena_Resource;
 
     runtime_proc allocate(Unbound_Arena_Resource* resource, size_t size, size_t align) -> void*;
-    runtime_proc deallocate(Unbound_Arena_Resource* resource, void* ptr, size_t old_size) -> void;
+    runtime_proc deallocate(Unbound_Arena_Resource* resource, void* ptr, size_t old_size, size_t align) -> void;
     runtime_proc grow(Unbound_Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool;
     runtime_proc shrink(Unbound_Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool;
     runtime_proc deallocate_all(Unbound_Arena_Resource* resource) -> void;
@@ -71,7 +71,7 @@ namespace jot
         }
     };
 
-    runtime_proc allocate(Unbound_Arena_Resource* resource, size_t size, size_t align) -> void* 
+    runtime_proc allocate(Unbound_Arena_Resource* resource, size_t byte_size, size_t align) -> void* 
     {
         assert(align > 0);
 
@@ -79,12 +79,10 @@ namespace jot
         using Block_List = Alloc::Block_List;
         using Block = Alloc::Block;
 
-        size_t byte_size = size;
         size_t filled_to = resource->filled_to;
-        size_t padding = (filled_to + align - 1) % align;
-        size_t total_size = padding + byte_size;
-        size_t from = filled_to + padding;
+        size_t from = div_round_up(filled_to, align) * align;
         size_t to = from + byte_size;
+        size_t total_size = to - filled_to;
 
         mut* last_block = resource->blocks.last;
 
@@ -106,13 +104,16 @@ namespace jot
             }
 
             if(found == nullptr)
-                push(&resource->blocks, Block_List{total_alloced}); 
+                push(&resource->blocks, Block_List{total_alloced, resource->upstream}); 
             else
             {
                 //Block_List popped{resource->do_upstream_resource()};
                 //pop_block(&resource->free_blocks, popped, found);
                 //push(&resource->blocks, move(popped));
             }
+
+            last_block = resource->blocks.last;
+            resource->filled_to = 0;
         }
 
         resource->last_allocation = data(last_block) + from;
@@ -120,12 +121,10 @@ namespace jot
         return resource->last_allocation;
     }
 
-    runtime_proc deallocate(Unbound_Arena_Resource* resource, void* ptr, size_t old_size) -> void
+    runtime_proc deallocate(Unbound_Arena_Resource* resource, void* ptr, size_t old_size, size_t align) -> void
     {
-        cast(void) resource;
-        cast(void) ptr;
-        cast(void) old_size;
-        //do nothing
+        //attempts to free up 
+        cast(void) shrink(resource, ptr, old_size, 0);
     }
 
     runtime_proc grow(Unbound_Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool 
