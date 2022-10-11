@@ -146,7 +146,6 @@ namespace jot
         constexpr Stack_(const Stack_& other)
             requires (std::is_copy_constructible_v<T>) : Stack_Data{*other.alloc()}
         {
-            puts("copy stack\n");
             alloc_data(this, other.size);
             copy_construct_elems(this, other);
             this->size = other.size;
@@ -307,16 +306,12 @@ namespace jot
             );
 
             vec->capacity = realloc_to;
-            //@ALLOC
             vec->data = allocate<T>(vec->alloc(), vec->capacity * sizeof(T), DEF_ALIGNMENT<T>);
-            //vec->data = vec->allocate(vec->capacity);
         }
 
         static proc dealloc_data(Stack_* vec) -> void
         {
-            //@ALLOC
             if(vec->capacity > static_capacity)
-                //vec->deallocate(vec->data, vec->capacity);
                 deallocate<T>(vec->alloc(), vec->data, vec->capacity * sizeof(T), DEF_ALIGNMENT<T>);
         }
 
@@ -335,9 +330,7 @@ namespace jot
                 new_capacity = vec->static_capacity;
             }
             else
-            //@ALLOC
                 new_data = allocate<T>(vec->alloc(), new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
-                //new_data = vec->allocate(new_capacity);
 
             let copy_to = std::min(vec->size, new_capacity);
             for (Size i = 0; i < copy_to; i++)
@@ -615,7 +608,7 @@ namespace jot
         requires std::convertible_to<_Size1, Size> && std::convertible_to<_Size2, Size>
     {
         Slice_<T, Size> empty;
-        return splice(stack, at, replace_size, empty);
+        return splice(stack, at, replace_size, std::move(empty));
     }
 
     template <STACK_TEMPL, typename _T>
@@ -744,7 +737,7 @@ namespace jot
             assert(0 <= at && at <= stack->size);
 
             Slice_<T> view = {&what, 1};
-            splice(stack, at, 0, view);
+            splice(stack, at, 0, std::move(view));
             return stack->data + at;
         }
 
