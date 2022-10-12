@@ -111,17 +111,21 @@ namespace jot
         constexpr static bool has_stateful_alloc = !std::is_empty_v<Alloc>;
 
         constexpr Stack_() = default;
-        constexpr Stack_(Stack_&& other) noexcept { swap(this, &other); }
+        constexpr Stack_(Stack_&& other, Alloc alloc = Alloc()) noexcept
+            : Stack_Data{alloc} { swap(this, &other); }
 
-        explicit constexpr Stack_(Size size) { alloc_data(this, size); }
+        explicit constexpr Stack_(Size size, Alloc alloc = Alloc()) 
+            : Stack_Data{alloc} { alloc_data(this, size); }
 
-        explicit constexpr Stack_(slice_type slice) 
+        explicit constexpr Stack_(slice_type slice, Alloc alloc = Alloc()) 
+            : Stack_Data{alloc} 
         { 
             alloc_data(this, slice.size);
             copy_construct_elems(this, slice);
         }
 
-        explicit constexpr Stack_(const_slice_type slice) 
+        explicit constexpr Stack_(const_slice_type slice, Alloc alloc = Alloc()) 
+            : Stack_Data{alloc} 
         { 
             alloc_data(this, slice.size);
             copy_construct_elems(this, slice);
@@ -144,7 +148,7 @@ namespace jot
             : Stack_Data{alloc} {}
 
         constexpr Stack_(const Stack_& other)
-            requires (std::is_copy_constructible_v<T>) : Stack_Data{*other.alloc()}
+            requires (std::is_copy_constructible_v<T>) : Stack_Data{*other.allocator()}
         {
             alloc_data(this, other.size);
             copy_construct_elems(this, other);
@@ -218,8 +222,8 @@ namespace jot
             return Slice_<T, Size>{this->data, this->size};
         }
 
-        proc alloc() noexcept -> Alloc* {return cast(Alloc*)this; }
-        proc alloc() const noexcept -> Alloc const* {return cast(Alloc*)this; }
+        proc allocator() noexcept -> Alloc* {return cast(Alloc*)this; }
+        proc allocator() const noexcept -> Alloc const* {return cast(Alloc*)this; }
 
         static proc is_static_alloced(const Stack_& vec) noexcept -> bool 
         { 
@@ -277,7 +281,7 @@ namespace jot
             std::swap(left->capacity, right->capacity);
 
             if constexpr(has_stateful_alloc)
-                std::swap(*left->alloc(), *right->alloc());
+                std::swap(*left->allocator(), *right->allocator());
         }
 
         static proc alloc_data(Stack_* vec, Size capacity) -> void
@@ -306,13 +310,13 @@ namespace jot
             );
 
             vec->capacity = realloc_to;
-            vec->data = allocate<T>(vec->alloc(), vec->capacity * sizeof(T), DEF_ALIGNMENT<T>);
+            vec->data = allocate<T>(vec->allocator(), vec->capacity * sizeof(T), DEF_ALIGNMENT<T>);
         }
 
         static proc dealloc_data(Stack_* vec) -> void
         {
             if(vec->capacity > static_capacity)
-                deallocate<T>(vec->alloc(), vec->data, vec->capacity * sizeof(T), DEF_ALIGNMENT<T>);
+                deallocate<T>(vec->allocator(), vec->data, vec->capacity * sizeof(T), DEF_ALIGNMENT<T>);
         }
 
         //can be used for arbitrary growing/shrinking of data
@@ -330,7 +334,17 @@ namespace jot
                 new_capacity = vec->static_capacity;
             }
             else
-                new_data = allocate<T>(vec->alloc(), new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
+            {
+                let resize_res = action<T>(vec->allocator(), Allocator_Actions::RESIZE, vec->data, vec->capacity * sizeof(T), new_capacity * sizeof(T));
+                if(resize_res.action_exists && resize_res.ptr != nullptr)
+                {
+                    vec->data = resize_res.ptr;
+                    vec->capacity = new_capacity;
+                    return;
+                }
+                else
+                    new_data = allocate<T>(vec->allocator(), new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
+            }
 
             let copy_to = std::min(vec->size, new_capacity);
             for (Size i = 0; i < copy_to; i++)

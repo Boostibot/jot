@@ -31,7 +31,6 @@ namespace jot
     {
         using Block = Block<T, Size>;
 
-        //Block* block = cast(Block*) cast(void*) alloc->allocate(sizeof(Block) + sizeof(T) * item_count);
         Block* block = cast(Block*) cast(void*) allocate<byte>(alloc, sizeof(Block) + sizeof(T) * item_count, DEF_ALIGNMENT<Block>);
         *block = Block{
             .size = item_count
@@ -87,10 +86,15 @@ namespace jot
             : Alloc(allocator), first(), last(), item_size(), size() {}
         Block_List_(Block_List_ && other) noexcept
         {
-            std::swap(this->first, other.first);
-            std::swap(this->last, other.last);
-            std::swap(this->item_size, other.item_size);
+            swap(&other);
         }
+
+        Block_List_& operator=(Block_List_&& other) noexcept
+        {
+            swap(&other);
+            return *this;
+        }
+
 
         ~Block_List_() noexcept
         {
@@ -112,10 +116,10 @@ namespace jot
                 for(Size i = 0; i < current->size; i++)
                     items[i].~T();
 
+
+                
                 Block* next = current->next;
-                //@TODO:
-                deallocate(alloc(), cast(byte*) cast(void*) current, DEF_ALIGNMENT<Block>);
-                //this->deallocate(cast(byte*) cast(void*) current, current->size);
+                deallocate<byte>(allocator(), cast(byte*) cast(void*) current, current->size * sizeof(T), DEF_ALIGNMENT<Block>);
                 if(next == nullptr)
                     break;
 
@@ -126,8 +130,8 @@ namespace jot
             assert(current == last && "broken node chain");
         }
 
-        proc alloc() noexcept -> Alloc* {return cast(Alloc*)this; }
-        proc alloc() const noexcept -> Alloc const* {return cast(Alloc*)this; }
+        proc allocator() noexcept -> Alloc* {return cast(Alloc*)this; }
+        proc allocator() const noexcept -> Alloc const* {return cast(Alloc*)this; }
 
         template <stdr::forward_range Inserted>
         proc unsafe_init(Inserted&& inserted) -> void
@@ -151,12 +155,19 @@ namespace jot
 
         proc unsafe_init(Size item_size) -> void
         {
-            Block* block = allocate_block<T>(item_size, alloc());
+            Block* block = allocate_block<T>(item_size, allocator());
 
             this->first = block;
             this->last = block;
             this->size = 1;
             this->item_size = block->size;
+        }
+
+        void swap(Block_List_* other) noexcept 
+        {
+            std::swap(this->first, other->first);
+            std::swap(this->last, other->last);
+            std::swap(this->item_size, other->item_size);
         }
 
         operator Block_List_View_<T, Size>() const noexcept {
@@ -258,11 +269,11 @@ namespace jot
         }
 
         func end() noexcept -> iterator{
-            return iterator{.block = this->last};
+            return iterator{.block = nullptr};
         }
 
         func end() const noexcept -> const_iterator{
-            return const_iterator{.block = this->last};
+            return const_iterator{.block = nullptr};
         }
 
         static_assert(std::input_iterator<iterator>, "failed input iterator");
@@ -504,6 +515,9 @@ namespace jot
         return ret;
     }
 
+    //@TODO: this too complex seek to find a shorter alternative
+
+
     template <BLOCK_LIST_TEMPL, stdr::forward_range Inserted>
     proc push_back(Block_List_T* block_list, Inserted&& inserted) -> Block_List_View_<T, Size>
     {
@@ -568,68 +582,65 @@ namespace jot
     }
 
     template <BLOCK_LIST_TEMPL>
-    func unsafe_to_block_list(Block_List_View_<T, Size> const& view, Block_List_T* out) -> void
+    func unsafe_to_block_list(Block_List_View_<T, Size> const& view, Alloc const& alloc) -> Block_List_T
     {
-        Block_List_T made;
+        Block_List_T made{alloc};
         made.first = view.first;
         made.last = view.last;
         made.size = view.size;
         made.item_size = view.item_size;
-        *out = std::move(made);
+        return made;
     }
 
     template <BLOCK_LIST_TEMPL, std::integral Size_ = int>
         requires std::convertible_to<Size_, Size>
-    proc pop_back(Block_List_T* block_list, Block_List_T* pop_into, Size_ count) -> void
+    proc pop_back(Block_List_T* block_list, Size_ count = 1) -> Block_List_T
     {
         assert(is_invariant(*block_list));
 
         let slice = detail::slice_range(block_list->last, cast(Size) count, Iter_Direction::BACKWARD);
-        unsafe_to_block_list(slice, pop_into);
+        mut popped = unsafe_to_block_list(slice, *block_list->allocator());
 
         block_list->last = slice.first->prev;
-        block_list->size -= pop_into->size;
-        block_list->item_size -= pop_into->item_size;
+        block_list->size -= popped.size;
+        block_list->item_size -= popped.item_size;
 
-        detail::unlink<Block_T>(block_list->last, pop_into->first, pop_into->last, nullptr);
+        detail::unlink<Block_T>(block_list->last, popped.first, popped.last, nullptr);
+        if(block_list->last == nullptr)
+            block_list->first = nullptr;
+
         assert(is_invariant(*block_list));
-        assert(is_invariant(*pop_into));
+        assert(is_invariant(popped));
+
+        return popped;
     }
 
     template <BLOCK_LIST_TEMPL, std::integral Size_ = int>
         requires std::convertible_to<Size_, Size>
-    proc pop_front(Block_List_T* block_list, Block_List_T* pop_into, Size_ count) -> void
+    proc pop_front(Block_List_T* block_list, Size_ count = 1) -> Block_List_T
     {
         assert(is_invariant(*block_list));
         assert(block_list->first != nullptr && "cannot pop empty list");
 
         let slice = detail::slice_range(block_list->first, cast(Size) count, Iter_Direction::FORWARD);
-        unsafe_to_block_list(slice, pop_into);
+        mut popped = unsafe_to_block_list(slice, *block_list->allocator());
 
         block_list->first = block_list->first->next;
-        block_list->size -= pop_into->size;
-        block_list->item_size -= pop_into->item_size;
+        block_list->size -= popped.size;
+        block_list->item_size -= popped.item_size;
 
-        detail::unlink<Block_T>(nullptr, pop_into->first, pop_into->last, block_list->first);
+        detail::unlink<Block_T>(nullptr, popped.first, popped.last, block_list->first);
+        if(block_list->first == nullptr)
+            block_list->last = nullptr;
+
         assert(is_invariant(*block_list));
-        assert(is_invariant(*pop_into));
+        assert(is_invariant(popped));
+
+        return popped;
     }
 
-    template <BLOCK_LIST_TEMPL, std::integral Size_ = int>
-        requires std::convertible_to<Size_, Size>
-    proc pop_back(Block_List_T* block_list, Size_ count = 1) -> void
-    {
-        Block_List_T popped;
-        pop_back(block_list, &popped, count);
-    }
-
-    template <BLOCK_LIST_TEMPL, std::integral Size_ = int>
-        requires std::convertible_to<Size_, Size>
-    proc pop_front(Block_List_T* block_list, Size_ count = 1) -> void
-    {
-        Block_List_T popped;
-        pop_front(block_list, &popped, count);
-    }
+    //this 4 replication is insane...
+    namespace {};
 
     template <BLOCK_LIST_TEMPL>
     proc push(Block_List_T* block_list, Block_List_T&& inserted) -> Block_List_View_<T, Size>
@@ -658,34 +669,27 @@ namespace jot
 
 
     template <BLOCK_LIST_TEMPL>
-    func unsafe_to_block_list(Block_T* block, Block_List_T* out) -> void
+    func unsafe_to_block_list(Block_T* block, Alloc const& alloc) -> Block_List_T
     {
-        detail::unlink(block.prev, block, block, block.next);
-        Block_List_T made;
+        detail::unlink(block->prev, block, block, block->next);
+        Block_List_T made{alloc};
         made.first = block;
         made.last = block;
         made.size = 1;
         made.item_size = block->size;
 
-        *out = std::move(made);
+        return made;
     }
 
     template <BLOCK_LIST_TEMPL>
-    proc pop_block(Block_List_T* block_list, Block_List_T* popped, Block_T* at) -> void
+    proc pop_block(Block_List_T* block_list, Block_T* at) -> Block_List_T
     {
-        if(popped == block_list.first)
-            pop_front(block_list, popped);
-        else if(popped == block_list.last)
-            pop_back(block_list, popped);
-        else
-            unsafe_to_block_list(at, popped);
-    }
-
-    template <BLOCK_LIST_TEMPL, std::integral Size_ = int>
-        requires std::convertible_to<Size_, Size>
-    proc pop(Block_List_T* block_list, Block_List_T* popped, Size_ count) -> void
-    {
-        return pop_back(block_list, popped, count);
+        if(at == block_list->first)
+            return pop_front(block_list);
+        if(at == block_list->last)
+            return pop_back(block_list);
+        
+        return unsafe_to_block_list(at, *block_list->allocator());
     }
 
     template <BLOCK_LIST_TEMPL, std::integral Size_ = int>

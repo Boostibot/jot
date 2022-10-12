@@ -19,8 +19,7 @@ namespace jot
         enum class Action : u32 {};
 
         constexpr Action DEALLOC_ALL = cast(Action) 1;
-        constexpr Action GROW = cast(Action) 2;
-        constexpr Action SHRINK = cast(Action) 3;
+        constexpr Action RESIZE = cast(Action) 2;
     }
 
     template <typename Resource>
@@ -56,7 +55,7 @@ namespace jot
         return deallocate<T>(alloc, ptr, size, DEF_ALIGNMENT<T>);
     }
 
-    template <typename T, typename Alloc>
+    template <typename T, allocator Alloc>
     proc action(Alloc* alloc, 
         Allocator_Actions::Action action_type, 
         void* old_ptr, 
@@ -64,7 +63,16 @@ namespace jot
         size_t old_align, size_t new_align, 
         void* custom_data = nullptr) -> Allocator_Actions::Result<T>
     {
-        return Allocator_Actions::Result{false, nullptr};
+        return Allocator_Actions::Result<T>{false, nullptr};
+    }
+
+    template <typename T, allocator Alloc>
+    proc action(Alloc* alloc, 
+        Allocator_Actions::Action action_type, 
+        void* old_ptr, 
+        size_t old_size, size_t new_size) -> Allocator_Actions::Result<T>
+    {
+        return action<T, Alloc>(alloc, action_type, old_ptr, old_size, new_size, DEF_ALIGNMENT<T>, DEF_ALIGNMENT<T>, nullptr);
     }
 
     //STD allocator

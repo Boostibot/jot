@@ -8,3 +8,4 @@
 #undef address_overlap
 #undef runtime_proc 
 #undef runtime_func 
+#undef transmute

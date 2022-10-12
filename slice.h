@@ -53,8 +53,9 @@ namespace jot
     template<typename Container>
     concept direct_container = requires(Container container)
     {
-        container[0];
-        container.size;
+        { container.data } -> std::convertible_to<void*>;
+        { container.size } -> std::convertible_to<size_t>;
+        requires(!are_same_v<decltype(container.data), void>);
     };
 
     template<typename Container>

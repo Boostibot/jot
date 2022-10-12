@@ -8,24 +8,24 @@
 namespace jot 
 {
 
-    struct Unbound_Arena_Resource;
+    struct Arena_Resource;
 
-    runtime_proc allocate(Unbound_Arena_Resource* resource, size_t size, size_t align) -> void*;
-    runtime_proc deallocate(Unbound_Arena_Resource* resource, void* ptr, size_t old_size, size_t align) -> void;
-    runtime_proc grow(Unbound_Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool;
-    runtime_proc shrink(Unbound_Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool;
-    runtime_proc deallocate_all(Unbound_Arena_Resource* resource) -> void;
+    runtime_proc allocate(Arena_Resource* resource, size_t size, size_t align) -> void*;
+    runtime_proc deallocate(Arena_Resource* resource, void* ptr, size_t old_size, size_t align) -> void;
+    runtime_proc resize(Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool;
+    runtime_proc deallocate_all(Arena_Resource* resource) -> void;
     runtime_proc action(
-        Unbound_Arena_Resource* resource, 
+        Arena_Resource* resource, 
         Allocator_Actions::Action action_type, 
         void* old_ptr, 
         size_t old_size, size_t new_size, 
         size_t old_align, size_t new_align, 
         void* custom_data = nullptr) -> Allocator_Actions::Result<void>;
 
-    struct Unbound_Arena_Resource : Allocator_Resource
+    //func align_size(size_t current_pos, )
+
+    struct Arena_Resource : Allocator_Resource
     {
-        using size_t = size_t;
         using Block_List = Block_List_<byte, size_t, Allocator>;
         using Block = Block<byte, size_t>;
 
@@ -36,8 +36,8 @@ namespace jot
         size_t chunk_size = 2097152; //2MiB
         byte* last_allocation = nullptr;
 
-        Unbound_Arena_Resource() = default;
-        Unbound_Arena_Resource(size_t chunk_size) 
+        Arena_Resource() = default;
+        Arena_Resource(size_t chunk_size) 
         {
             this->chunk_size = chunk_size;
         }
@@ -71,11 +71,11 @@ namespace jot
         }
     };
 
-    runtime_proc allocate(Unbound_Arena_Resource* resource, size_t byte_size, size_t align) -> void* 
+    runtime_proc allocate(Arena_Resource* resource, size_t byte_size, size_t align) -> void* 
     {
         assert(align > 0);
 
-        using Alloc = Unbound_Arena_Resource;
+        using Alloc = Arena_Resource;
         using Block_List = Alloc::Block_List;
         using Block = Alloc::Block;
 
@@ -107,9 +107,8 @@ namespace jot
                 push(&resource->blocks, Block_List{total_alloced, resource->upstream}); 
             else
             {
-                //Block_List popped{resource->do_upstream_resource()};
-                //pop_block(&resource->free_blocks, popped, found);
-                //push(&resource->blocks, move(popped));
+                Block_List popped = pop_block(&resource->free_blocks, found);
+                push(&resource->blocks, move(popped));
             }
 
             last_block = resource->blocks.last;
@@ -121,13 +120,12 @@ namespace jot
         return resource->last_allocation;
     }
 
-    runtime_proc deallocate(Unbound_Arena_Resource* resource, void* ptr, size_t old_size, size_t align) -> void
+    runtime_proc deallocate(Arena_Resource* resource, void* ptr, size_t old_size, size_t align) -> void
     {
-        //attempts to free up 
-        cast(void) shrink(resource, ptr, old_size, 0);
+        cast(void) resize(resource, ptr, old_size, 0);
     }
 
-    runtime_proc grow(Unbound_Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool 
+    runtime_proc resize(Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool 
     {
         byte* byte_ptr = cast(byte*) ptr;
         if(resource->last_allocation != byte_ptr)
@@ -137,9 +135,6 @@ namespace jot
         mut* block_data = data(resource->blocks.last);
 
         let prev_offset = cast(size_t) (byte_ptr - block_data);
-        let prev_size = resource->filled_to - prev_offset;
-
-        assert(new_size >= prev_size);
 
         if(prev_offset + new_size < last_block->size)
         {
@@ -149,24 +144,7 @@ namespace jot
         return false;
     }
 
-    runtime_proc shrink(Unbound_Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool 
-    {
-        byte* byte_ptr = cast(byte*) ptr;
-        if(resource->last_allocation != byte_ptr)
-            return false;
-
-        mut* block_data = data(resource->blocks.last);
-
-        let prev_offset = cast(size_t) (byte_ptr - block_data);
-        let prev_size = resource->filled_to - prev_offset;
-
-        assert(new_size <= prev_size);
-
-        resource->filled_to = prev_offset + new_size;
-        return true;
-    }
-
-    runtime_proc deallocate_all(Unbound_Arena_Resource* resource) -> void
+    runtime_proc deallocate_all(Arena_Resource* resource) -> void
     {
         push(&resource->free_blocks, move(resource->blocks));
         resource->filled_to = 0;
@@ -174,7 +152,7 @@ namespace jot
     }
 
     runtime_proc action(
-        Unbound_Arena_Resource* resource, 
+        Arena_Resource* resource, 
         Allocator_Actions::Action action_type, 
         void* old_ptr, 
         size_t old_size, size_t new_size, 
@@ -189,17 +167,90 @@ namespace jot
                 deallocate_all(resource); 
                 return Result{true, nullptr};
             }
-            case GROW: {
-                bool ok = grow(resource, old_ptr, old_size, new_size);
-                return Result{true, ok ? old_ptr : nullptr};
-            }
-            case SHRINK: {
-                bool ok = shrink(resource, old_ptr, old_size, new_size);
+            case RESIZE: {
+                bool ok = resize(resource, old_ptr, old_size, new_size);
                 return Result{true, ok ? old_ptr : nullptr};
             }
         }
         return Result{false, nullptr};
     }
+
+    struct Flat_Arena_Resource : Allocator_Resource
+    {
+        void* data;
+        size_t size;
+        size_t filled_to = 0;
+        void* last_alloc = nullptr;
+
+        using Result = Allocator_Actions::Result<void>;
+
+        Flat_Arena_Resource() = delete; 
+        Flat_Arena_Resource(void* data, size_t size)
+            : data(data), size(size) {}
+
+        runtime_proc do_allocate(size_t bytes, size_t alignment) -> void* override
+        {
+            size_t space = this->size - this->filled_to;
+            void* ptr = cast(byte*) this->data + this->size;
+
+            //this is such a horribly designed function...
+            if(std::align(alignment, bytes, ptr, space) == nullptr)
+                throw std::bad_alloc();
+
+            this->last_alloc = ptr;
+            return ptr;
+        }
+        runtime_proc do_deallocate(void* old_ptr, size_t bytes, size_t alignment) -> void override
+        {
+            cast(void) resize(old_ptr, bytes, 0);
+        }
+
+        runtime_proc resize(void* ptr, size_t old_size, size_t new_size) -> bool
+        {
+            if(ptr != this->last_alloc)
+                return false;
+
+            size_t start_index = cast(uintptr_t)this->data - cast(uintptr_t)ptr;
+            if(start_index + new_size > this->size)
+                return false;
+            
+            this->size = start_index + new_size;
+            return true;
+        }
+
+        runtime_proc do_action(
+            Allocator_Actions::Action action_type, 
+            void* old_ptr, 
+            size_t old_size, size_t new_size, 
+            size_t old_align, size_t new_align, 
+            void* custom_data = nullptr) -> Result override
+        {
+            using namespace Allocator_Actions;
+            switch(action_type)
+            {
+                case DEALLOC_ALL: {
+                    filled_to = 0;
+                    last_alloc = nullptr;
+                }
+                case RESIZE: {
+                    bool ok = resize(old_ptr, old_size, new_size);
+                    return Result{true, ok ? old_ptr : nullptr};
+                }
+            }
+            return Result{false, nullptr};
+        }
+
+        runtime_proc do_upstream_resource() const noexcept -> Allocator_Resource* override
+        {
+            return nullptr;
+        }
+
+        runtime_proc do_is_equal(std::pmr::memory_resource const& other) const noexcept -> bool override
+        {
+            //@TODO: use dynamic cast and compare data ptrs
+            return cast(std::pmr::memory_resource*)(this) == &other;
+        }
+    };
 }
 
 #include "undefs.h"
