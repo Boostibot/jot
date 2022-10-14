@@ -9,7 +9,25 @@
 
 namespace jot 
 {
-    template <typename T, std::integral Size>
+    //we need something like a linked stack (queue!) thats stable to grwoing and shrinking [0] - [0, 0] - [0, 0, 0, 0]
+    //[0, 0, 0, 0] -- [0, 0, 0] ~~> [-, 0, 0, 0] -- [0, -, -] //empty space gets padded 
+    //we can just make the blocks statically sized as to allow constant time indexing with just 2 ptr indirections (if the size is power of two the division needed for indexing will be just simple shift. We also need to offset if by the missing space in front
+    // all of this means that we need the following fields => {first_block, last_block, item_size, block_size, front_ignored, back_ignored} => 48 bytes 
+    //we also need to reuse part of the implementation for: single linked list, single lined list without the size field  - solve by giving the alloc block a header template 
+    // force header template to follow next prev to determine ops
+    // somehow solve how the size will be stored (possibky just a function taking list, block and header type) and returning size
+    // size will be filled within the allocation function
+
+    struct List_Block_Tag {};
+
+    template <typename Block>
+    concept list_block = requires(Block block)
+    {
+        requires(std::derived_from<Block, List_Block_Tag>);
+        typename Block::value_type;
+    };
+
+    template <std::integral Size>
     struct Block 
     {
         Block* next = nullptr;
@@ -17,21 +35,19 @@ namespace jot
         Size size = 0;
     };
 
-    template <typename T, std::integral Size>
-    proc data(Block<T, Size>* block)
+    template <std::integral Size>
+    proc data(Block<Size>* block)
     {
         byte* bytes = cast(byte*) cast(void*) block;
-        return cast(T*) cast(void*) (bytes + sizeof(Block<T, Size>));
+        return cast(T*) cast(void*) (bytes + sizeof(Block<Size>));
     }
 
     constexpr size_t BLOCK_ALIGN = 16;
 
-    template <typename T, std::integral Size, typename Allocator>
-    proc allocate_block(Size item_count, Allocator* alloc) -> Block<T, Size>*
+    template <typename Block, std::integral Size, typename Allocator>
+    proc allocate_block(Allocator* alloc, Size byte_count) -> Block*
     {
-        using Block = Block<T, Size>;
-
-        Block* block = cast(Block*) cast(void*) allocate<byte>(alloc, sizeof(Block) + sizeof(T) * item_count, DEF_ALIGNMENT<Block>);
+        Block* block = cast(Block*) cast(void*) allocate<byte>(alloc, sizeof(Block) + byte_count, DEF_ALIGNMENT<Block>);
         *block = Block{
             .size = item_count
         };
@@ -155,7 +171,7 @@ namespace jot
 
         proc unsafe_init(Size item_size) -> void
         {
-            Block* block = allocate_block<T>(item_size, allocator());
+            Block* block = allocate_block<Block<Size>>(this->allocator(), item_size * sizeof(T));
 
             this->first = block;
             this->last = block;
@@ -286,7 +302,7 @@ namespace jot
 
     #define BLOCK_LIST_TEMPL typename T, std::integral Size, typename Alloc
     #define BLOCK_TEMPL typename T, std::integral Size
-    #define Block_T Block<T, Size>
+    #define Block_T Block<Size>
     #define Block_List_T Block_List_<T, Size, Alloc>
 
     enum class Iter_Direction 
@@ -320,7 +336,7 @@ namespace jot
         }
 
         template <typename T, std::integral Size>
-        func slice_range(Block<T, Size>* from, Size block_count, Iter_Direction direction) -> Block_List_View_<T, Size>
+        func slice_range(Block<Size>* from, Size block_count, Iter_Direction direction) -> Block_List_View_<T, Size>
         {
             mut* current = from;
             Size passed_size = 0;

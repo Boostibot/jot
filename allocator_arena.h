@@ -71,26 +71,48 @@ namespace jot
         }
     };
 
+
+    func align_forward(uintptr_t ptr_num, size_t align_to) -> uintptr_t
+    {
+        return div_round_up(ptr_num, align_to) * align_to;
+    }
+
+    runtime_func align_forward(void* ptr, size_t align_to) -> void*
+    {
+        return cast(void*)(align_forward(cast(uintptr_t) ptr, align_to));
+    }
+
     runtime_proc allocate(Arena_Resource* resource, size_t byte_size, size_t align) -> void* 
     {
-        assert(align > 0);
+        assert(is_power_of_two(align));
 
         using Alloc = Arena_Resource;
         using Block_List = Alloc::Block_List;
         using Block = Alloc::Block;
 
-        size_t filled_to = resource->filled_to;
-        size_t from = div_round_up(filled_to, align) * align;
-        size_t to = from + byte_size;
-        size_t total_size = to - filled_to;
+        byte* block_from = nullptr;
+        byte* block_to = nullptr;
+        byte* filled_to_ptr = nullptr;
+        byte* allocated_from = nullptr;
+        byte* allocated_to = block_to + 1;
 
-        mut* last_block = resource->blocks.last;
-
-        if(is_empty(resource->blocks) || to > last_block->size)
+        let calc_all_ptrs = [&](Block* last_block) 
         {
-            assert(total_size > 1);
+            block_from = data(last_block);
+            block_to = block_from + last_block->size;
+            filled_to_ptr = block_from + resource->filled_to;
+            allocated_from = cast(byte*) align_forward(filled_to_ptr, align);
+            allocated_to = allocated_from + byte_size;
+        };
+
+        if(!is_empty(resource->blocks))
+            calc_all_ptrs(resource->blocks.last);
+
+        //will trigger even if all variables unitialized
+        if(allocated_to > block_to)
+        {
             size_t chunk_size = resource->chunk_size;
-            size_t chunk_count = (total_size + chunk_size - 1) / chunk_size;
+            size_t chunk_count = div_round_up(byte_size + align, chunk_size);
             size_t total_alloced = chunk_count * chunk_size;
 
             Block* found = nullptr;
@@ -111,17 +133,23 @@ namespace jot
                 push(&resource->blocks, move(popped));
             }
 
-            last_block = resource->blocks.last;
-            resource->filled_to = 0;
+            calc_all_ptrs(resource->blocks.last);
         }
 
-        resource->last_allocation = data(last_block) + from;
-        resource->filled_to += total_size;
+        assert(filled_to_ptr >= block_from);
+        assert(allocated_from >= filled_to_ptr);
+        assert(block_to >= allocated_to);
+
+        resource->last_allocation = allocated_from;
+        resource->filled_to = allocated_to - block_from;
+
+        assert(resource->filled_to > 0);
         return resource->last_allocation;
     }
 
     runtime_proc deallocate(Arena_Resource* resource, void* ptr, size_t old_size, size_t align) -> void
     {
+        assert(is_power_of_two(align));
         cast(void) resize(resource, ptr, old_size, 0);
     }
 
