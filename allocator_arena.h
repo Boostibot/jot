@@ -27,7 +27,7 @@ namespace jot
     struct Arena_Resource : Allocator_Resource
     {
         using Block_List = Block_List_<byte, size_t, Allocator>;
-        using Block = Block<byte, size_t>;
+        using Header = Block_List::Header;
 
         Allocator_Resource* upstream = new_delete_resource();
         Block_List blocks = Block_List{upstream};
@@ -88,7 +88,7 @@ namespace jot
 
         using Alloc = Arena_Resource;
         using Block_List = Alloc::Block_List;
-        using Block = Alloc::Block;
+        using Header = Alloc::Header;
 
         byte* block_from = nullptr;
         byte* block_to = nullptr;
@@ -96,7 +96,7 @@ namespace jot
         byte* allocated_from = nullptr;
         byte* allocated_to = block_to + 1;
 
-        let calc_all_ptrs = [&](Block* last_block) 
+        let calc_all_ptrs = [&](Header* last_block) 
         {
             block_from = data(last_block);
             block_to = block_from + last_block->size;
@@ -115,7 +115,7 @@ namespace jot
             size_t chunk_count = div_round_up(byte_size + align, chunk_size);
             size_t total_alloced = chunk_count * chunk_size;
 
-            Block* found = nullptr;
+            Header* found = nullptr;
             for(mut& block : resource->free_blocks)
             {
                 if(block.size >= total_alloced)
@@ -126,11 +126,14 @@ namespace jot
             }
 
             if(found == nullptr)
-                push(&resource->blocks, Block_List{total_alloced, resource->upstream}); 
+            {
+                let filler = [](size_t){return 0;};            
+                push_back(&resource->blocks, make_block<Header, Allocator>(resource->upstream, total_alloced, filler)); 
+            }
             else
             {
                 Block_List popped = pop_block(&resource->free_blocks, found);
-                push(&resource->blocks, move(popped));
+                push_back(&resource->blocks, move(popped));
             }
 
             calc_all_ptrs(resource->blocks.last);
@@ -174,7 +177,7 @@ namespace jot
 
     runtime_proc deallocate_all(Arena_Resource* resource) -> void
     {
-        push(&resource->free_blocks, move(resource->blocks));
+        push_back(&resource->free_blocks, move(resource->blocks));
         resource->filled_to = 0;
         resource->last_allocation = nullptr;
     }

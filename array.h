@@ -17,7 +17,7 @@ namespace jot
     template<typename T, size_t size_, typename Size = Def_Size>
     struct Array_
     {
-        using Tag = StaticContainerTag;
+        using tag_type = Static_Container_Tag;
         using slice_type = Slice_<T, Size>;
         using const_slice_type = Slice_<const T, Size>;
 

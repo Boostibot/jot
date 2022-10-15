@@ -127,7 +127,7 @@ namespace jot
     template <class T, size_t bit_count_>
     struct Bitfield
     {
-        using Tag = Bitfield_Tag;
+        using tag_type = Bitfield_Tag;
         using type = T;
         static constexpr size_t bit_count = bit_count_;
     };

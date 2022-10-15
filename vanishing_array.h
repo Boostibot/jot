@@ -41,14 +41,14 @@ namespace jot
     template<typename T, size_t size, typename Size = Def_Size>
     struct Vanishing_Array_ : detail::Array_Data<T, Const<size, size_t>, Size>
     {
-        using Tag = StaticContainerTag;
+        using tag_type = Static_Container_Tag;
         using Array_Data = detail::Array_Data<T, Const<size>, Size>;
 
         constexpr Vanishing_Array_() = default;
         constexpr Vanishing_Array_(const T&) noexcept requires (size == 0) : Array_Data{} {}
 
         template <typename ...Args> 
-            requires (size != 0) && (std::is_integral_v<T> == false) && are_same_v<Args...>
+            requires (size != 0) && (std::is_integral_v<T> == false) && same<Args...>
         constexpr Vanishing_Array_(Args&&... args) noexcept : Array_Data{std::forward<Args>(args)...} {}
 
         template <typename ...Args> 

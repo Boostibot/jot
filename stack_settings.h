@@ -103,7 +103,7 @@ namespace jot
         }
 
         template<size_t elem_size, Stack_Settings stngs, typename Grow = void>
-        using Calc_Grow = std::conditional_t<are_same_v<Grow, void>,
+        using Calc_Grow = std::conditional_t<same<Grow, void>,
             Def_Grow<calc_growth_mult(stngs), calc_growth_add(stngs), calc_alloc_size(elem_size, stngs)>,
             Grow
         >;

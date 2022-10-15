@@ -38,7 +38,7 @@ namespace jot
     };
 
     struct PerElementDummy {};
-    struct StaticContainerTag {};
+    struct Static_Container_Tag {};
 
     using Begin = Begin_End<void>;
     using End = Begin_End<char>;
@@ -48,18 +48,22 @@ namespace jot
 
     enum class Extent : u8 {Dynamic};
     constexpr static Extent DYNAMIC_EXTENT = Extent::Dynamic; 
-    
+
+    using Def_Size = size_t;
+
+    template <class T>
+    using Def_Alloc = std::allocator<T>;
 
     template<typename Container>
     concept direct_container = requires(Container container)
     {
         { container.data } -> std::convertible_to<void*>;
         { container.size } -> std::convertible_to<size_t>;
-        requires(!are_same_v<decltype(container.data), void>);
+        requires(!same<decltype(container.data), void>);
     };
 
     template<typename Container>
-    concept static_direct_container = direct_container<Container> && Tagged<Container, StaticContainerTag>;
+    concept static_direct_container = direct_container<Container> && Tagged<Container, Static_Container_Tag>;
 }
 
 
@@ -151,7 +155,7 @@ namespace jot
         template<typename T, typename Size, typename Extent>
         struct Slice_Data
         {
-            using Tag = StaticContainerTag;
+            using tag_type = Static_Container_Tag;
 
             T* data = nullptr;
             constexpr static Size size = cast(Size) Extent::value;
@@ -163,7 +167,7 @@ namespace jot
         template<typename T, typename Size>
         struct Slice_Data<T, Size, Extent_Const>
         {
-            using Tag = void;
+            using tag_type = void;
 
             T* data = nullptr;
             Size size = 0;
@@ -220,14 +224,14 @@ namespace jot
         using Range_Value = std::remove_reference_t<decltype(*std::begin(R()))>;
 
         template<class It, typename T>
-        concept matching_iter = are_same_v<Iter_Value<It>, T> || are_same_v<Iter_Value<It>, std::remove_const_t<T>>;
+        concept matching_iter = same<Iter_Value<It>, T> || same<Iter_Value<It>, std::remove_const_t<T>>;
 
         template<class R, typename T>
-        concept matching_range = are_same_v<Range_Value<R>, T> || are_same_v<Range_Value<R>, std::remove_const_t<T>>;
+        concept matching_range = same<Range_Value<R>, T> || same<Range_Value<R>, std::remove_const_t<T>>;
 
 
         template <typename T> 
-        concept literal_compatible = are_same_v<T, const char8_t> || are_same_v<T, const char>;
+        concept literal_compatible = same<T, const char8_t> || same<T, const char>;
     }
 
     func strlen(cstring str) noexcept 
@@ -247,7 +251,7 @@ namespace jot
         using slice_type = Slice_<T, Size>;
         using const_slice_type = Slice_<const T, Size>;
 
-        constexpr static bool is_static = !are_same_v<decltype(extent), Extent>;
+        constexpr static bool is_static = !same<decltype(extent), Extent>;
 
         constexpr Slice_() = default;
 

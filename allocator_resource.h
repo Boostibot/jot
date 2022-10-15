@@ -38,7 +38,7 @@ namespace jot
     {
         if(std::is_constant_evaluated())
         {
-            if constexpr(are_same_v<T, void>)
+            if constexpr(same<T, void>)
                 throw std::exception("void cannot be constexpr allocated");
             else
             {
@@ -58,7 +58,7 @@ namespace jot
     {
         if(std::is_constant_evaluated())
         {
-            if constexpr (are_same_v<T, void>)
+            if constexpr (same<T, void>)
                 throw std::exception("void cannot be constexpr deallocated");
             else
             {

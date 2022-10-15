@@ -8,8 +8,14 @@ namespace jot
     using std::integral_constant;
     using std::true_type;
     using std::false_type;
+    using std::integral;
+    using std::floating_point;
 
-    template<class T >
+
+    template<class T>
+    concept non_void = (std::is_same_v<T, void> == false);
+
+    template<class T>
     struct dummy {};
 
     template <auto val, class T = decltype(val)>
@@ -18,10 +24,10 @@ namespace jot
     namespace detail 
     {
         template <typename AlwaysVoid, typename... Ts>
-        struct has_common_type_impl : std::false_type {};
+        struct has_common_type_impl : false_type {};
 
         template <typename... Ts>
-        struct has_common_type_impl<std::void_t<std::common_type_t<Ts...>>, Ts...> : std::true_type {};
+        struct has_common_type_impl<std::void_t<std::common_type_t<Ts...>>, Ts...> : true_type {};
     }
 
     template <typename... Ts>
@@ -38,11 +44,7 @@ namespace jot
     };
 
     template <class T, class... Ts>
-    struct are_same : std::bool_constant<(std::is_same_v<T, Ts> && ...)> {};
-
-    template <class T, class... Ts>
-    static constexpr bool are_same_v = are_same<T, Ts...>::value; 
-
+    concept same = (std::is_same_v<T, Ts> && ...); 
 
     //A lightweight compile time only tuple used for storing types
     template<class... Types >
@@ -67,17 +69,17 @@ namespace jot
     struct tuple_element;
 
     template< size_t I, class... Types >
-    struct tuple_element<I, jot::type_collection<Types...>>
+    struct tuple_element<I, type_collection<Types...>>
     {
         static_assert(I < sizeof...(Types), "Index must be in range");
-        using type = typename jot::detail::tuple_element_impl<I, jot::type_collection<Types...>>::type;
+        using type = typename jot::detail::tuple_element_impl<I, type_collection<Types...>>::type;
     };
 
     template< class What, class T>
-    struct tuple_has : std::false_type {};
+    struct tuple_has : false_type {};
     
     template< class What, class... Types >
-    struct tuple_has<What, jot::type_collection<Types...>> : std::bool_constant<(std::is_same_v<What, Types> || ...)> {};
+    struct tuple_has<What, type_collection<Types...>> : std::bool_constant<(std::is_same_v<What, Types> || ...)> {};
 
     template< size_t I, class T >
     using tuple_element_t = typename tuple_element<I, T>::type;
@@ -101,7 +103,7 @@ namespace jot
     struct tuple_element_or {using type = Fallback;};
 
     template< size_t I, class... Types, typename Fallback >
-    struct tuple_element_or<I, jot::type_collection<Types...>, Fallback> : 
+    struct tuple_element_or<I, type_collection<Types...>, Fallback> : 
         detail::safe_tuple_element<I, Fallback, I < sizeof...(Types), Types...> {};
 
     template< size_t I, class T, typename Fallback >
@@ -130,7 +132,7 @@ namespace jot
         static constexpr bool value = false; 
     };
 
-    template <class Class, class Tag>
+    template <class Class, class tag_type>
     struct Tag_Register : UnsetTag {};
 
     template <class T, class With>
@@ -139,16 +141,16 @@ namespace jot
         requires(tuple_has<T, With>::value);
     };
 
-    template <class T, class With = No_Tag>
+    template <class T, class With>
     concept Direct_Tagged = requires(T)
     {
-        requires(std::is_same_v<typename T::Tag, With> //Has the check directly
-                 || std::is_same_v<With, No_Tag>  //No checking required
+        requires(std::is_same_v<typename T::tag_type, With> //Has the check directly
                  || Contains_Tag<T, With> //Is type collection with type
+                 || std::derived_from<T, With> //is derived from
         );
     };
 
-    template <class T, class With = No_Tag>
+    template <class T, class With>
     concept Tagged = 
         (std::is_same_v<typename Tag_Register<T, With>::type, No_Tag> && Direct_Tagged<T, With>) || 
         (!std::is_same_v<typename Tag_Register<T, With>::type, No_Tag> && Tag_Register<T, With>::value);
@@ -174,10 +176,3 @@ namespace jot
     }
 
 }
-
-//#include <tuple>
-//namespace std
-//{
-//    template< size_t I, class... Types >
-//    struct tuple_element< I, jot::type_collection<Types...> > : jot::tuple_element<I, Types...> {};
-//}

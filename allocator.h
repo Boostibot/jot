@@ -22,59 +22,6 @@ namespace jot
         constexpr Action RESIZE = cast(Action) 2;
     }
 
-    template <typename Resource>
-    concept allocator = requires(Resource res, 
-        Allocator_Actions::Action action_type, 
-        void* old_ptr, 
-        size_t old_size, size_t new_size, 
-        size_t old_align, size_t new_align, 
-        void* custom_data)
-    {
-        true; //@NOTE: MSVC is buggy and syntax highlighting breaks
-        //{ allocate<int>(&res, new_size, new_align) } -> std::convertible_to<int*>;
-        //deallocate<void>(&res, old_ptr, old_size, old_align);
-        //{ action<void>(&res, action_type, old_ptr, old_size, new_size, old_align, new_align, custom_data) } -> std::convertible_to<Allocator_Actions::Result<void>>;
-    };
-
-    //global defaults
-    template <typename T>
-    static constexpr size_t DEF_ALIGNMENT = max(
-        alignof(std::max_align_t), 
-        alignof(std::conditional_t<are_same_v<T, void>, byte, T>)
-    );
-
-    template <typename T, allocator Alloc>
-    proc allocate(Alloc* alloc, size_t size) -> T* 
-    {
-        return allocate<T>(alloc, size, DEF_ALIGNMENT<T>);
-    }
-
-    template <typename T, allocator Alloc>
-    proc deallocate(Alloc* alloc, T* ptr, size_t size) -> void 
-    {
-        return deallocate<T>(alloc, ptr, size, DEF_ALIGNMENT<T>);
-    }
-
-    template <typename T, allocator Alloc>
-    proc action(Alloc* alloc, 
-        Allocator_Actions::Action action_type, 
-        void* old_ptr, 
-        size_t old_size, size_t new_size, 
-        size_t old_align, size_t new_align, 
-        void* custom_data = nullptr) -> Allocator_Actions::Result<T>
-    {
-        return Allocator_Actions::Result<T>{false, nullptr};
-    }
-
-    template <typename T, allocator Alloc>
-    proc action(Alloc* alloc, 
-        Allocator_Actions::Action action_type, 
-        void* old_ptr, 
-        size_t old_size, size_t new_size) -> Allocator_Actions::Result<T>
-    {
-        return action<T, Alloc>(alloc, action_type, old_ptr, old_size, new_size, DEF_ALIGNMENT<T>, DEF_ALIGNMENT<T>, nullptr);
-    }
-
     //STD allocator
     template <typename Alloc>   
     concept std_allocator = requires(Alloc alloc, size_t size)
@@ -109,6 +56,71 @@ namespace jot
         let recomputed_size = div_round_up(size * sizeof(T), sizeof(value_type));
         return alloc->deallocate(maybe_unsafe_ptr_cast<value_type>(ptr), recomputed_size);
     }
+
+    template <typename T, std_allocator Alloc>
+    proc action(Alloc* alloc, 
+        Allocator_Actions::Action action_type, 
+        void* old_ptr, 
+        size_t old_size, size_t new_size, 
+        size_t old_align, size_t new_align, 
+        void* custom_data = nullptr) -> Allocator_Actions::Result<T>
+    {
+        return Allocator_Actions::Result<T>{false, nullptr};
+    }
+
+    template <typename Resource>
+    concept allocator = requires(Resource res, 
+        Allocator_Actions::Action action_type, 
+        void* old_ptr, 
+        size_t old_size, size_t new_size, 
+        size_t old_align, size_t new_align, 
+        void* custom_data)
+    {
+        //true; //@NOTE: MSVC is buggy and syntax highlighting breaks so we dont have all checks on per default
+        { allocate<int>(&res, new_size, new_align) } -> std::convertible_to<int*>;
+        //deallocate<void>(&res, old_ptr, old_size, old_align);
+        //{ action<void>(&res, action_type, old_ptr, old_size, new_size, old_align, new_align, custom_data) } -> std::convertible_to<Allocator_Actions::Result<void>>;
+    };
+
+    //global defaults
+    template <typename T>
+    static constexpr size_t DEF_ALIGNMENT = max(
+        alignof(std::max_align_t), 
+        alignof(std::conditional_t<same<T, void>, byte, T>)
+    );
+
+    template <typename T, allocator Alloc>
+    proc allocate(Alloc* alloc, size_t size) -> T* 
+    {
+        return allocate<T>(alloc, size, DEF_ALIGNMENT<T>);
+    }
+
+    template <typename T, allocator Alloc>
+    proc deallocate(Alloc* alloc, T* ptr, size_t size) -> void 
+    {
+        return deallocate<T>(alloc, ptr, size, DEF_ALIGNMENT<T>);
+    }
+
+    template <typename T, allocator Alloc>
+    proc action(Alloc* alloc, 
+        Allocator_Actions::Action action_type, 
+        void* old_ptr, 
+        size_t old_size, size_t new_size, 
+        size_t old_align, size_t new_align, 
+        void* custom_data = nullptr) -> Allocator_Actions::Result<T>
+    {
+        return Allocator_Actions::Result<T>{false, nullptr};
+    }
+
+    template <typename T, allocator Alloc>
+    proc action(Alloc* alloc, 
+        Allocator_Actions::Action action_type, 
+        void* old_ptr, 
+        size_t old_size, size_t new_size) -> Allocator_Actions::Result<T>
+    {
+        return action<T, Alloc>(alloc, action_type, old_ptr, old_size, new_size, DEF_ALIGNMENT<T>, DEF_ALIGNMENT<T>, nullptr);
+    }
+
 
     static_assert(allocator<std::allocator<int>>);
 }
