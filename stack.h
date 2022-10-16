@@ -64,7 +64,7 @@ namespace jot
     {
         static constexpr size_t mult = mult_;
         static constexpr size_t add = add_;
-        static constexpr size_t BASE_ELEMS = base_elems_;
+        static constexpr size_t base_elems = base_elems_;
 
         static constexpr size_t run(size_t to_fit, size_t capacity, size_t size, size_t static_capacity, size_t elem_size)
         {
