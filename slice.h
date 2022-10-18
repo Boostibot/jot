@@ -59,7 +59,7 @@ namespace jot
     {
         { container.data } -> std::convertible_to<void*>;
         { container.size } -> std::convertible_to<size_t>;
-        requires(!same<decltype(container.data), void>);
+        requires(!same<decltype(container.data), void*>);
     };
 
     template<typename Container>
