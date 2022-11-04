@@ -9,5 +9,5 @@
 
 #define cast(...) (__VA_ARGS__)
 #define transmute(...) *cast(__VA_ARGS__*) cast(void*) &
-#define maybe_unused [[maybe_unused]] 		
-#define address_overlap [[no_unique_address]]
+#define address_alias [[no_unique_address]]
+

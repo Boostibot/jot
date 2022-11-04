@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <cassert>
-#include <utility>
 #include "meta.h"
 #include "slice.h"
 #include "defines.h"
@@ -43,42 +42,31 @@ namespace jot
     Array_(First, Rest...) -> Array_<First, 1 + sizeof...(Rest)>;
 
     //Adds self to slice
-    template <class T, size_t size, class Size>
-    Slice_(Array_<T, size, Size>) -> Slice_<T, Size, size>;
+    //template <class T, size_t size, class Size>
+    //Slice_(Array_<T, size, Size>) -> Slice_<T, Size, size>;
 
-    namespace detail 
+    template <typename T, size_t N>
+    func to_array(const T (&a)[N]) -> auto
     {
-        template <class T, size_t N, size_t... I>
-        constexpr Array_<std::remove_cv_t<T>, N>
-            to_array_impl(const T (&a)[N], std::index_sequence<I...>)
-        {
-            return { {a[I]...} };
-        }
-
-        template <class T, size_t N, size_t... I>
-        constexpr Array_<std::remove_cv_t<T>, N>
-            to_array_impl(T (&&a)[N], std::index_sequence<I...>)
-        {
-            return { {std::move(a[I])...} };
-        }
-
+        Array_<std::remove_cv_t<T>, N> out;
+        for(size_t i = 0; i < N; i++)
+            out[a] = a[i];
+        return out;
     }
 
-    template <class T, size_t N>
-    constexpr Array_<std::remove_cv_t<T>, N> to_array(const T (&a)[N])
+    template <typename T, size_t N>
+    func to_array(T (&&a)[N]) noexcept -> auto
     {
-        return detail::to_array_impl(a, std::make_index_sequence<N>{});
-    }
-
-    template <class T, size_t N>
-    constexpr Array_<std::remove_cv_t<T>, N> to_array(T (&&a)[N])
-    {
-        return detail::to_array_impl(std::move(a), std::make_index_sequence<N>{});
+        Array_<std::remove_cv_t<T>, N> out;
+        for(size_t i = 0; i < N; i++)
+            out[a] = std::move(a[i]);
+        return out;
     }
 }
 
 namespace std
 {
+    #define templ template <class T, size_t size, class Size>
     template <class T, size_t size, class Size>
     func begin(jot::Array_<T,size, Size>& arr) noexcept {return arr.data;}
     template <class T, size_t size, class Size>

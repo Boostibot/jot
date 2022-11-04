@@ -21,6 +21,22 @@ namespace jot
     template <auto val, class T = decltype(val)>
     using Const = std::integral_constant<T, val>;
 
+    //stops infering of arguments
+    template<typename T>
+    using No_Infer = std::type_identity<T>::type;
+    #define no_infer(...) No_Infer<__VA_ARGS__> 
+    
+    namespace example
+    {
+        template <typename T>
+        void take_two(T a, no_infer(T) b)
+        {
+            (void) a; (void) b;
+        };
+
+        //take_two(1.0, 1); //without No_Infer doesnt compile
+    }
+
     namespace detail 
     {
         template <typename AlwaysVoid, typename... Ts>
@@ -123,7 +139,7 @@ namespace jot
         static constexpr bool has = (std::is_same_v<What, Types> || ...);
     };
 
-    //Tagging
+    //Tagging -- simplify!
     struct No_Tag {};
 
     struct UnsetTag

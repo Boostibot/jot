@@ -7,7 +7,7 @@ namespace jot
 {
     
     template <typename Val, typename Container>
-    func get_array_bytefield(const Container containers[], let from_byte, let num_bytes, const Val& base = Val())
+    func get_array_bytefield(const Container containers[], size_t from_byte, size_t num_bytes, const Val& base = Val()) -> Val
     {
         assert(num_bytes <= sizeof(Val));
 
@@ -18,7 +18,7 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    proc set_array_bytefield(Container containers[], let from_byte, let num_bytes, const Val& val)
+    proc set_array_bytefield(Container containers[], size_t from_byte, size_t num_bytes, const Val& val) -> void
     {
         assert(num_bytes <= sizeof(Val));
 
@@ -27,7 +27,7 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    func set_bytefield(const Container& container, let from_byte, let num_bytes, const Val& val)
+    func set_bytefield(const Container& container, size_t from_byte, size_t num_bytes, const Val& val)
     {
         assert(num_bytes <= sizeof(Val));
         assert(from_byte + num_bytes <= sizeof(Container));
@@ -39,7 +39,7 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    func get_bytefield(const Container& container, let from_byte, let num_bytes, const Val& base = Val())
+    func get_bytefield(const Container& container, size_t from_byte, size_t num_bytes, const Val& base = Val())
     {
         assert(num_bytes <= sizeof(Val));
         assert(from_byte + num_bytes <= sizeof(Container));
@@ -51,19 +51,19 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    func get_array_bytefield(const Container containers[], let from_byte)
+    func get_array_bytefield(const Container containers[], size_t from_byte)
     {
         return get_array_bytefield<Val>(containers, from_byte, sizeof(Val));
     }
 
     template <typename Val, typename Container>
-    proc set_array_bytefield(Container containers[], let from_byte, const Val& val)
+    proc set_array_bytefield(Container containers[], size_t from_byte, const Val& val)
     {
         return set_array_bytefield(containers, from_byte, sizeof(Val), val);
     }
 
     template <typename Val, typename Container, typename Max = u64>
-    func get_bitfield(const Container& container, let from_bit, let num_bits, const Val& base = Val())
+    func get_bitfield(const Container& container, size_t from_bit, size_t num_bits, const Val& base = Val())
     {
         assert(num_bits <= bitsof(Val));
         assert(from_bit + num_bits <= bitsof(Container));
@@ -76,7 +76,7 @@ namespace jot
     }
 
     template <typename Val, typename Container, typename Max = u64>
-    func set_bitfield(const Container& container, let from_bit, let num_bits, const Val& to_value)
+    func set_bitfield(const Container& container, size_t from_bit, size_t num_bits, const Val& to_value)
     {
         assert(num_bits <= bitsof(Val));
         assert(from_bit + num_bits <= bitsof(Container));
@@ -89,7 +89,7 @@ namespace jot
     }
 
     template <typename Val, typename Container, typename Max = u64>
-    func get_array_bitfield(const Container containers[], let from_bit, let num_bits, const Val& base = Val())
+    func get_array_bitfield(const Container containers[], size_t from_bit, size_t num_bits, const Val& base = Val())
     {
         assert(num_bits <= bitsof(Val));
 
@@ -104,7 +104,7 @@ namespace jot
     }
 
     template <typename Val, typename Container, typename Max = u64>
-    proc set_array_bitfield(Container containers[], let from_bit, let num_bits, const Val& to_value)
+    proc set_array_bitfield(Container containers[], size_t from_bit, size_t num_bits, const Val& to_value)
     {
         assert(num_bits <= bitsof(Val));
 
@@ -153,7 +153,7 @@ namespace jot
         };
 
         template <typename ...Sizes>
-        static proc get_info(Sizes ...bitcounts)
+        static proc get_info(Sizes ...bitcounts) -> Info
         {
             assert(max(bitcounts...) > 0 && "At least one field has to have not 0");
             assert(max(bitcounts...) < BIT_COUNT<u64> && "All sizes must be less then 8 bytes");

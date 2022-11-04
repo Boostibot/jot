@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-//#include <bit>
 
 #include "utils.h"
 #include "slice.h"
@@ -251,7 +250,7 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    proc call_grow_function(const Stack_T& stack, typename Stack_T::Size to_fit) -> Size
+    proc call_grow_function(const Stack_T& stack, no_infer(Size) to_fit) -> Size
     {
         return cast(Size) Stack_T::grow_type::run(
             cast(size_t) to_fit, 
@@ -460,7 +459,7 @@ namespace jot
 
 
     template <STACK_TEMPL>
-    proc reserve(Stack_T* stack, typename Stack_T::Size to_fit) -> bool
+    proc reserve(Stack_T* stack, no_infer(Size) to_fit) -> bool
     {
         assert(is_invariant(*stack));
 
@@ -522,7 +521,7 @@ namespace jot
 
 
     template <STACK_TEMPL, stdr::forward_range Inserted>
-    proc splice(Stack_T* stack, typename Stack_T::Size at, typename Stack_T::Size replace_size, Inserted&& inserted) -> void
+    proc splice(Stack_T* stack, no_infer(Size) at, no_infer(Size) replace_size, Inserted&& inserted) -> void
     {       
         Stack_T& stack_ref = *stack; //for bounds checks
         assert(is_invariant(*stack));
@@ -601,7 +600,7 @@ namespace jot
     }
 
     template <STACK_TEMPL, stdr::forward_range Removed, stdr::forward_range Inserted>
-    proc splice(Stack_T* stack, typename Stack_T::Size at, Removed& removed, Inserted&& inserted) -> void
+    proc splice(Stack_T* stack, no_infer(Size) at, Removed& removed, Inserted&& inserted) -> void
     {       
         Stack_T& stack_ref = *stack; //for bounds checks
 
@@ -615,14 +614,14 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    proc splice(Stack_T* stack, typename Stack_T::Size at, typename Stack_T::Size replace_size) -> void
+    proc splice(Stack_T* stack, no_infer(Size) at, no_infer(Size) replace_size) -> void
     {
         Slice_<T, Size> empty;
         return splice(stack, at, replace_size, std::move(empty));
     }
 
     template <STACK_TEMPL>
-    proc push(Stack_T* stack, typename Stack_T::Value what) -> T*
+    proc push(Stack_T* stack, no_infer(T) what) -> T*
     {
         assert(is_invariant(*stack));
 
@@ -666,7 +665,7 @@ namespace jot
     //@TODO: add element type checks for ranges
 
     template <STACK_TEMPL>
-    proc pop(Stack_T* stack, typename Stack_T::Size count) -> void
+    proc pop(Stack_T* stack, no_infer(Size) count) -> void
     {
         splice(stack, stack->size - count, count);
     }
@@ -704,7 +703,7 @@ namespace jot
     }
 
     template <STACK_TEMPL, typename Fn>
-    proc resize(Stack_T* stack, typename Stack_T::Size to, Fn filler_fn) -> void
+    proc resize(Stack_T* stack, no_infer(Size) to, Fn filler_fn) -> void
         requires requires() { {filler_fn(0)} -> std::convertible_to<T>; }
     {
         assert(is_invariant(*stack));
@@ -722,20 +721,20 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    proc resize(Stack_T* stack, typename Stack_T::Size to, typename Stack_T::Value fillWith) -> void
+    proc resize(Stack_T* stack, no_infer(Size) to, no_infer(T) fillWith) -> void
     {
         return resize(stack, to, [&](Size){return fillWith; });
     }
 
     template <STACK_TEMPL>
-    proc resize(Stack_T* stack, typename Stack_T::Size to) -> void
+    proc resize(Stack_T* stack, no_infer(Size) to) -> void
     {
         return resize(stack, to, T());
     }
 
     #ifndef SLICE_OWN_INSERT
         template <STACK_TEMPL>
-        proc insert(Stack_T* stack, typename Stack_T::Size at, typename Stack_T::Value what) -> T*
+        proc insert(Stack_T* stack, no_infer(Size) at, no_infer(T) what) -> T*
         {
             assert(is_invariant(*stack));
             assert(0 <= at && at <= stack->size);
@@ -746,7 +745,7 @@ namespace jot
         }
 
         template <STACK_TEMPL>
-        proc remove(Stack_T* stack, typename Stack_T::Size at) -> T
+        proc remove(Stack_T* stack, no_infer(Size) at) -> T
         {
             assert(is_invariant(*stack));
             assert(0 <= at && at < stack->size);
@@ -758,7 +757,7 @@ namespace jot
         }
     #else
         template <STACK_TEMPL>
-        proc insert(Stack_T* stack, typename Stack_T::Size at, typename Stack_T::Value what) -> T*
+        proc insert(Stack_T* stack, no_infer(Size) at, no_infer(T) what) -> T*
         {
             assert(is_invariant(*stack));
             assert(0 <= at && at <= stack->size);
@@ -776,7 +775,7 @@ namespace jot
         }
 
         template <STACK_TEMPL>
-        proc remove(Stack_T* stack, typename Stack_T::Size at) -> T
+        proc remove(Stack_T* stack, no_infer(Size) at) -> T
         {
             assert(is_invariant(*stack));
             assert(0 <= at && at < stack->size);
@@ -795,7 +794,7 @@ namespace jot
     #endif // SLICE_SPLICE_INSERT
 
     template <STACK_TEMPL>
-    proc unordered_remove(Stack_T* stack, typename Stack_T::Size at) -> T
+    proc unordered_remove(Stack_T* stack, no_infer(Size) at) -> T
     {
         assert(0 <= at && at < stack->size);
         assert(0 < stack->size);
@@ -805,7 +804,7 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    proc unordered_insert(Stack_T* stack, typename Stack_T::Size at, typename Stack_T::Value what) -> T*
+    proc unordered_insert(Stack_T* stack, no_infer(Size) at, no_infer(T) what) -> T*
     {
         assert(0 <= at && at <= stack->size);
 

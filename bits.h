@@ -65,6 +65,8 @@
 
 namespace jot 
 {
+    //using Max = u64;
+
     template<size_t size_>
     using Byte_Array = Array_<byte, size_>;
 
@@ -79,26 +81,27 @@ namespace jot
     #define bitsof(...) (sizeof(__VA_ARGS__) * CHAR_BIT)
 
     template <typename T>
-    func bitcast(let& val)
+    func bitcast(let& val) -> T
     {
         return std::bit_cast<T>(val);
     }
 
-    template<typename To>
-    func to_bytes(To val)
+    template<typename From>
+    func to_bytes(From val) -> Bytes<From>
     {
-        using Rep = Byte_Array<sizeof(To)>;
-        assert(sizeof(Rep) >= sizeof(To));
+        using Rep = Bytes<From>;
+        assert(sizeof(Rep) >= sizeof(From));
         return bitcast<Rep>(val);
     }
 
     template<typename To>
-    func from_bytes(const Bytes<To>& bytes)
+    func from_bytes(const Bytes<To>& bytes) -> To
     {
         return bitcast<To>(bytes);
     }
 
-    func get_byte(let& value, let index)
+    template <typename T>
+    func get_byte(T const& value, size_t index) -> byte
     {
         mut rep = to_bytes(value);
 
@@ -106,44 +109,43 @@ namespace jot
         return rep[index];
     }
 
-    func set_byte(let& value, let index, byte to_val)
+    template <typename T>
+    func set_byte(T const& value, size_t index, byte to_val) -> T
     {
-        using Val = std::remove_cvref_t<decltype(value)>;
-
         mut rep = to_bytes(value);
 
         assert(index < rep.size && "index needs to be in bounds");
         rep[index] = to_val;
-        return bitcast<Val>(rep);
+        return bitcast<T>(rep);
     }
 
     
     template <typename T>
-    func get_byte(const T array[], let index)
+    func get_byte(const T array[], size_t index) -> byte
     {
         return get_byte(array[index / sizeof(T)], index % sizeof(T));
     }
     template <typename T>
-    func set_byte(const T array[], let index, byte to_val)
+    func set_byte(const T array[], size_t index, byte to_val) -> T
     {
         return set_byte(array[index / sizeof(T)], index % sizeof(T), to_val);
     }
     
     template <typename Max = u64>
-    func dirty_bit(let bit_offset, Max value = 1)
+    func dirty_bit(size_t bit_offset, Max value = 1) -> Max
     {
         assert(value == 0 || value == 1);
-        return cast(Max) (cast(Max)(value) << bit_offset);
+        return cast(Max)(value) << bit_offset;
     }
 
     template <typename Max = u64, typename Val = u64>
-    func bit(let bit_offset, Val value = 1)
+    func bit(size_t bit_offset, Val value = 1) -> Max
     {
-        return cast(Max) dirty_bit<Max>(bit_offset, cast(Max)(!!value));
+        return dirty_bit<Max>(bit_offset, cast(Max)(!!value));
     }
 
     template <typename T, typename Max = u64>
-    func has_bit(T integer, let bit_pos) -> bool
+    func has_bit(T integer, size_t bit_pos) -> bool
     {
         #if defined(_MSC_VER) && !defined(BITS_NO_INTRIN)
             if(!std::is_constant_evaluated())
@@ -164,49 +166,49 @@ namespace jot
     }
 
     template <typename T, typename Max = u64>
-    func get_bit(T integer, let bit_pos)
+    func get_bit(T integer, size_t bit_pos) -> Max
     {
         #if defined(_MSC_VER) && !defined(BITS_NO_INTRIN)
         if (sizeof(integer) <= sizeof(u64) && !std::is_constant_evaluated())
-            return cast(T) has_bit<Max>(integer, bit_pos);
+            return cast(Max) has_bit<T, Max>(integer, bit_pos);
         #endif
-        return cast(T) !!has_bit<Max>(integer, bit_pos);
+        return cast(Max) !!has_bit<T, Max>(integer, bit_pos);
     }
 
     template <typename T, typename Max = u64>
-    func set_bit(T integer, let bit_offset, let value)
+    func set_bit(T integer, size_t bit_offset, size_t value) -> T
     {
-        return cast(T)((integer | bit<Max>(bit_offset)) ^ bit<Max>(bit_offset, !value));
+        return cast(T)((integer | bit<Max>(bit_offset)) ^ bit<Max>(bit_offset, cast(size_t) !value));
     }
     
     template <typename T, typename Max = u64>
-    func toggle_bit(T integer, let bit_offset)
+    func toggle_bit(T integer, size_t bit_offset) -> T
     {
         return cast(T)(integer ^ bit<Max>(bit_offset));
     }
     
     template <typename Field, typename Max = u64>
-    func bitmask_higher(let from_bit)
+    func bitmask_higher(size_t from_bit) -> Field
     {
         constexpr Max zero = 0;
         return cast(Field) (~zero << from_bit);
     }
 
     template <typename Field, typename Max = u64>
-    func bitmask_lower(let to_bit)
+    func bitmask_lower(size_t to_bit) -> Field
     {
         constexpr Max zero = 0;
         return cast(Field) ~(~zero << to_bit);
     }
 
     template <typename Field, typename Max = u64>
-    func bitmask_range(let from_bit, let to_bit)
+    func bitmask_range(size_t from_bit, size_t to_bit) -> Field
     {
         return bitmask_higher<Field, Max>(from_bit) & bitmask_lower<Field, Max>(to_bit);
     }
 
     template <typename Field, typename Max = u64>
-    func bitmask(let from_bit, let num_bits)
+    func bitmask(size_t from_bit, size_t num_bits) -> Field
     {
         return bitmask_range<Field, Max>(from_bit, from_bit + num_bits);
     }
@@ -214,7 +216,7 @@ namespace jot
     namespace detail 
     {
         template<class T1, class T2>
-        func get_iter_info(size_t i, size_t to_offset, size_t from_offset)
+        func get_iter_info(size_t i, size_t to_offset, size_t from_offset) -> Array_<size_t, 4>
         {
             let ti = i + to_offset;
             let fi = i + from_offset;
@@ -229,7 +231,7 @@ namespace jot
         }
 
         template <typename T1, typename T2, typename Size>
-        proc copy_bytes_forward(T1 to[], let to_offset, const T2 from[], let from_offset, Size size)
+        proc copy_bytes_forward(T1 to[], size_t to_offset, const T2 from[], size_t from_offset, Size size)
         {
             //Little dumb algorithm that goes byte by byte for each copying the whole 
             // item at index
@@ -247,7 +249,7 @@ namespace jot
         }
 
         template <typename T1, typename T2, typename Size>
-        proc copy_bytes_backward(T1 to[], let to_offset, const T2 from[], let from_offset, Size size)
+        proc copy_bytes_backward(T1 to[], size_t to_offset, const T2 from[], size_t from_offset, Size size)
         {
             for(Size i = size; i-- > 0; )
             {
@@ -260,7 +262,7 @@ namespace jot
         }
 
         template <typename T1, typename Size>
-        proc set_bytes(T1 to[], let to_offset, byte val, Size size)
+        proc set_bytes(T1 to[], size_t to_offset, byte val, Size size)
         {
             for(Size i = 0; i < size; i++)
             {
@@ -272,7 +274,7 @@ namespace jot
         }
 
         template <typename T1, typename T2, typename Size>
-        func compare_bytes(const T1 to[], let to_offset, const T2 from[], let from_offset, Size size)
+        func compare_bytes(const T1 to[], size_t to_offset, const T2 from[], size_t from_offset, Size size)
         {
             for(Size i = 0; i < size; i++)
             {
@@ -290,7 +292,7 @@ namespace jot
         }
 
         template <typename T>
-        proc move_bytes(T to[], let to_index, let to_offset, let from_index, let from_offset, let size)
+        proc move_bytes(T to[], size_t to_index, size_t to_offset, size_t from_index, size_t from_offset, size_t size)
         {
             let from_byte_index = from_index * sizeof(T) + from_offset;
             let to_byte_index = to_index * sizeof(T) + to_offset;
@@ -304,22 +306,22 @@ namespace jot
                 return copy_bytes_forward(to + to_index, to_offset, to + from_index, from_offset, size);
         }
 
-        void memcpy(void* to, let to_offset, const void* from, let from_offset, let size)
+        void memcpy(void* to, size_t to_offset, const void* from, size_t from_offset, size_t size)
         {
             std::memcpy(cast(byte*)(to) + to_offset, cast(const byte*)from + from_offset, cast(size_t) size);
         }
 
-        void memset(void* to, let to_offset, byte val, let size)
+        void memset(void* to, size_t to_offset, byte val, size_t size)
         {
             std::memset(cast(byte*)(to) + to_offset, cast(int)val, cast(size_t) size);
         }
 
-        void memmove(void* to, let to_offset, const void* from, let from_offset, let size)
+        void memmove(void* to, size_t to_offset, const void* from, size_t from_offset, size_t size)
         {
             std::memmove(cast(byte*)(to) + to_offset, cast(const byte*)from + from_offset, cast(size_t) size);
         }
 
-        auto memcmp(const void* to, let to_offset, const void* from, let from_offset, let size)
+        auto memcmp(const void* to, size_t to_offset, const void* from, size_t from_offset, size_t size)
         {
             return std::memcmp(cast(const byte*)(to) + to_offset, cast(const byte*)from + from_offset, cast(size_t) size);
         }
@@ -329,7 +331,7 @@ namespace jot
     // this performs the exact same work during compile time and 
     // during run time becomes a single memcpy
     template <typename T1, typename T2>
-    proc copy_bytes(T1* to, let to_offset, const T2* from, let from_offset, let size)
+    proc copy_bytes(T1* to, size_t to_offset, const T2* from, size_t from_offset, size_t size) -> void
     {
         //needs to be constexpr if becasue copy bytes cannot take void ptr
         // (so yes this cant be condensed into a single if and else)
@@ -348,7 +350,7 @@ namespace jot
 
     //There is no way to make memmove with its original signature into a constexpr proc without an additional swap buffer
     template <typename T>
-    proc move_bytes(T* array, let to_index, let to_offset, let from_index, let from_offset, let size)
+    proc move_bytes(T* array, size_t to_index, size_t to_offset, size_t from_index, size_t from_offset, size_t size) -> void
     {
         if constexpr (std::is_void_v<T>)
             detail::memmove(array + to_index, to_offset, array + from_index, from_offset, size);
@@ -362,7 +364,7 @@ namespace jot
     }
 
     template <typename T1>
-    proc set_bytes(T1* to, let to_offset, byte val, let size)
+    proc set_bytes(T1* to, size_t to_offset, byte val, size_t size) -> void
     {
         if constexpr (std::is_void_v<T1>)
             detail::memset(to, to_offset, val, size);
@@ -376,7 +378,7 @@ namespace jot
     }
 
     template <typename T1, typename T2, typename Size>
-    func compare_bytes(const T1* to, let to_offset, const T2* from, let from_offset, Size size)
+    func compare_bytes(const T1* to, size_t to_offset, const T2* from, size_t from_offset, Size size) -> int
     {
         if constexpr (std::is_void_v<T1> || std::is_void_v<T2>)
             return detail::memcmp(to, to_offset, from, from_offset, size);
@@ -390,47 +392,47 @@ namespace jot
     }
 
     template <typename T1, typename T2, typename Size>
-    func are_bytes_equal(const T1* to, let to_offset, const T2* from, let from_offset, Size size)
+    func are_bytes_equal(const T1* to, size_t to_offset, const T2* from, size_t from_offset, Size size) -> bool
     {
         return compare_bytes(to, to_offset, from, from_offset, size) == 0;
     }
 
     template <typename T1, typename T2>
-    proc copy_bytes(T1* to, const T2* from, let size)
+    proc copy_bytes(T1* to, const T2* from, size_t size) -> void
     {
         return copy_bytes(to, 0, from, 0, size);
     }
     template <typename T>
-    proc move_bytes(T* array, let to_index, let from_index, let size)
+    proc move_bytes(T* array, size_t to_index, size_t from_index, size_t size) -> void
     {
         return move_bytes(array, to_index, 0, from_index, 0, size);
     }
 
     template <typename T>
-    proc set_bytes(T* to, byte val, let size)
+    proc set_bytes(T* to, byte val, size_t size) -> void
     {
         return set_bytes(to, 0, val, size);
     }
 
     template <typename T1, typename T2, typename Size>
-    func compare_bytes(const T1* to, const T2* from, Size size)
+    func compare_bytes(const T1* to, const T2* from, Size size) -> int
     {
         return compare_bytes(to, 0, from, 0, size);
     }
 
     template <typename T1, typename T2, typename Size>
-    func are_bytes_equal(const T1* to, const T2* from, Size size)
+    func are_bytes_equal(const T1* to, const T2* from, Size size) -> bool
     {
         return compare_bytes(to, from, size) == 0;
     }
 
-    proc byteswap(byte output[], byte input[], let size)
+    proc byteswap(byte output[], byte input[], size_t size) -> void
     {
         for (size_t i = 0; i < size; i++)
             output[i] = input[size - i - 1];
     }
 
-    proc byteswap(byte bytes[], let size)
+    proc byteswap(byte bytes[], size_t size) -> void
     {
         let half_size = size / 2;
         for (size_t i = 0; i < half_size; i++)
@@ -440,10 +442,8 @@ namespace jot
     namespace detail
     {
         template <typename T>
-        func manual_byteswap(T& value)
+        func manual_byteswap(T& value) -> T
         {
-            using Rep = Bytes<T>;
-
             //Uses of bitcast to enable consteval of this fn
             mut rep = to_bytes(value);
             byteswap(rep, rep.size);
@@ -454,7 +454,7 @@ namespace jot
     //wrapper for byteswap proc in c++23
     // will in most cases get compiled into bswap instruction
     template <typename T>
-    func byteswap(const T& value)
+    func byteswap(const T& value) -> T
     {
         #ifdef __cpp_lib_byteswap 
             return std::byteswap(value);

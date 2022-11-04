@@ -4,8 +4,7 @@
 #undef func
 #undef cast
 #undef pure
-#undef maybe_unused
-#undef address_overlap
+#undef address_alias
 #undef runtime_proc 
 #undef runtime_func 
 #undef transmute

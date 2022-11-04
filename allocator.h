@@ -1,8 +1,8 @@
 #pragma once
 
-#include "utils.h"
-#include <memory_resource>
-
+#include <cstdint>
+#include <concepts>
+#include <memory>
 #include "defines.h"
 
 namespace jot
@@ -16,7 +16,7 @@ namespace jot
             T* ptr = nullptr;
         };
 
-        enum class Action : u32 {};
+        enum class Action : std::uint32_t {};
 
         constexpr Action DEALLOC_ALL = cast(Action) 1;
         constexpr Action RESIZE = cast(Action) 2;
@@ -86,7 +86,7 @@ namespace jot
     template <typename T>
     static constexpr size_t DEF_ALIGNMENT = max(
         alignof(std::max_align_t), 
-        alignof(std::conditional_t<same<T, void>, byte, T>)
+        alignof(std::conditional_t<same<T, void>, std::uint8_t, T>)
     );
 
     template <typename T, allocator Alloc>
