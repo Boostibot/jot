@@ -2,6 +2,7 @@
 
 #ifndef NDEBUG
 #include <string>
+#include <typeinfo>
 #endif
 
 #include "defines.h"
@@ -76,18 +77,6 @@ namespace jot
 
     template <class T, class L = void>
     proc operator ~(Moved_Res<T, L> res) noexcept {} //consumes nodicard warning
-
-
-
-    /*template <typename T>
-    struct Opt_Ptr
-    {
-        private:
-            T* val;
-
-        public:
-            constexpr get() const noexcept {return }
-    };*/
 }
 
 #include "undefs.h"

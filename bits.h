@@ -61,11 +61,15 @@
 
 #endif
 
+#ifndef MAX_INTEGER_FIELD_TYPE
+    #define MAX_INTEGER_FIELD_TYPE jot::u64
+#endif
+
 #include "defines.h"
 
 namespace jot 
 {
-    using Max_Field = u64;
+    using Max_Field = MAX_INTEGER_FIELD_TYPE;
 
     template<size_t size_>
     using Byte_Array = Array_<byte, size_>;
