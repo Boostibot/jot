@@ -57,7 +57,7 @@ namespace jot
         return alloc->deallocate(maybe_unsafe_ptr_cast<value_type>(ptr), recomputed_size);
     }
 
-    template <typename T, std_allocator Alloc>
+    /*template <typename T, std_allocator Alloc>
     proc action(Alloc* alloc, 
         Allocator_Actions::Action action_type, 
         void* old_ptr, 
@@ -66,7 +66,7 @@ namespace jot
         void* custom_data = nullptr) -> Allocator_Actions::Result<T>
     {
         return Allocator_Actions::Result<T>{false, nullptr};
-    }
+    }*/
 
     template <typename Resource>
     concept allocator = requires(Resource res, 

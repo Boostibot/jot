@@ -24,11 +24,6 @@ namespace jot
             //@NOTE: For now zero initializing the static_data_ as well; Not sure if it makes any sense to do so
             byte static_data_[static_capacity_ * sizeof(T)] = {0};
 
-            func static_data() noexcept -> T* 
-                {return cast(T*) cast(void*) static_data_;}
-            func static_data() const noexcept -> const T* 
-                {return cast(const T*) cast(const void*) static_data_;}
-
             constexpr auto operator<=>(const Stack_Data&) const noexcept = default;
             constexpr bool operator==(const Stack_Data&) const noexcept = default;
         };
@@ -39,9 +34,6 @@ namespace jot
             T* data = nullptr;
             Size size = 0;
             Size capacity = 0;
-
-            func static_data() noexcept -> T* {return nullptr;}
-            func static_data() const noexcept -> const T* {return nullptr;}
 
             constexpr auto operator<=>(const Stack_Data&) const noexcept = default;
             constexpr bool operator==(const Stack_Data&) const noexcept = default;
@@ -91,11 +83,23 @@ namespace jot
     #define STACK_TEMPL class T, size_t scap, class Size, class Alloc, class Grow
     #define Stack_T Stack_<T, scap, Size, Alloc, Grow>
 
+    template<STACK_TEMPL>
+    func static_data(Stack_T* data) -> T*;
+
+    template<STACK_TEMPL>
+    func static_data(const Stack_T* data) -> const T*;
+
+    template <STACK_TEMPL>
+    func alloc(Stack_T const& vec) -> Alloc const& { return *cast(const Alloc*) &vec; }
+
+    template <STACK_TEMPL>
+    func alloc(Stack_T* vec) -> Alloc* { return cast(Alloc*) vec; }
+
+    template<STACK_TEMPL>
+    proc assign(Stack_T* to, Stack_T const& other) -> void;
+
     namespace detail 
     {
-        template<STACK_TEMPL>
-        proc assign(Stack_T* to, Stack_T const& other) -> void;
-
         template<STACK_TEMPL>
         proc swap(Stack_T* left, Stack_T* right) noexcept -> void;
 
@@ -109,7 +113,7 @@ namespace jot
         proc set_capacity(Stack_T* vec, Size new_capacity) -> void;
 
         template<STACK_TEMPL, typename T_>
-        proc to_owned(Stack_T* vec, Slice_<T, Size> const& other) -> void;
+        proc to_owned(Stack_T* vec, Slice_<T_, Size> const& other) -> void;
 
         template<STACK_TEMPL>
         proc copy_construct_elems(Stack_T* vec, typename Stack_T::slice_type other) -> void;
@@ -165,7 +169,7 @@ namespace jot
             : Stack_Data{alloc, data, size, capacity} 
         {
             for(Size i = 0; i < static_capacity; i++)
-                this->static_data()[i] = static_data[i];
+                static_data(this)[i] = static_data[i];
         }
 
         constexpr Stack_(Value* data, Size size, Size capacity, Alloc alloc = Alloc()) noexcept
@@ -176,9 +180,10 @@ namespace jot
 
         constexpr Stack_(const Stack_& other)
             requires (std::is_copy_constructible_v<Value> && std::is_copy_constructible_v<Alloc>) 
-            : Stack_Data{*other.alloc()}
+            : Stack_Data{alloc(other)}
         {
-            detail::to_owned(this, cast(slice_type) other);
+            let slice = cast(slice_type) other;
+            detail::to_owned(this, slice);
         }
 
         constexpr ~Stack_() noexcept
@@ -190,7 +195,7 @@ namespace jot
         constexpr Stack_& operator=(const Stack_& other)
             requires (std::is_copy_assignable_v<Value> || std::is_copy_constructible_v<Value>)
         {
-            detail::assign(this, other);
+            assign(this, other);
             return *this;
         }
 
@@ -225,10 +230,22 @@ namespace std
 namespace jot
 {
     template <STACK_TEMPL>
-    func alloc(Stack_T const& list) -> Alloc const& { return *cast(const Alloc*) &list; }
+    func static_data(Stack_T* data) -> T*
+    {
+        if constexpr(scap != 0)
+            return cast(T*) cast(void*) data->static_data_;
+        else
+            return nullptr;
+    }
 
     template <STACK_TEMPL>
-    func alloc(Stack_T* list) -> Alloc* { return cast(Alloc*) list; }
+    func static_data(Stack_T const& data) -> const T*
+    {
+        if constexpr(scap != 0)
+            return cast(T*) cast(void*) data.static_data_;
+        else
+            return nullptr;
+    }
 
     template <STACK_TEMPL>
     func is_invariant(const Stack_T& stack) -> bool
@@ -261,53 +278,52 @@ namespace jot
         );
     }
 
-    namespace detail 
+    template<STACK_TEMPL>
+    proc assign(Stack_T* to, Stack_T const& other) -> void
     {
-        template<STACK_TEMPL>
-        proc assign(Stack_T* to, Stack_T const& other) -> void
+        if(to->capacity >= other.size)
         {
-            if(to->capacity >= other.size)
+            //If the elems are copy constructible we can save potential allocations of elems
+            // by using copy assignment instead (for example with Stack_<Stack_<>...>)
+            if constexpr (std::is_copy_assignable_v<T>)
             {
-                //If the elems are copy constructible we can save potential allocations of elems
-                // by using copy assignment instead (for example with Stack_<Stack_<>...>)
-                if constexpr (std::is_copy_assignable_v<T>)
-                {
-                    //destroy extra
-                    for (Size i = other.size; i < to->size; i++)
-                        to->data[i].~T();
+                //destroy extra
+                for (Size i = other.size; i < to->size; i++)
+                    to->data[i].~T();
 
-                    //construct missing
-                    for (Size i = to->size; i < other.size; i++)
-                        std::construct_at(to->data + i, other.data[i]);
+                //construct missing
+                for (Size i = to->size; i < other.size; i++)
+                    std::construct_at(to->data + i, other.data[i]);
 
-                    //copy rest
-                    Size to_size = std::min(to->size, other.size);
-                    for (Size i = 0; i < to_size; i++)
-                        to->data[i] = other.data[i];
+                //copy rest
+                Size to_size = std::min(to->size, other.size);
+                for (Size i = 0; i < to_size; i++)
+                    to->data[i] = other.data[i];
 
-                    to->size = other.size;
-                }
-                else
-                {
-                    destroy_elems(to);
-                    copy_construct_elems(to, other);
-
-                    to->size = other.size;
-                }
+                to->size = other.size;
             }
             else
             {
                 destroy_elems(to);
-                dealloc_data(to);
-
-                alloc_data(to, other.size);
                 copy_construct_elems(to, other);
 
                 to->size = other.size;
             }
-
-
         }
+        else
+        {
+            destroy_elems(to);
+            dealloc_data(to);
+
+            alloc_data(to, other.size);
+            copy_construct_elems(to, other);
+
+            to->size = other.size;
+        }
+    }
+
+    namespace detail 
+    {
 
         template<STACK_TEMPL>
         proc swap(Stack_T* left, Stack_T* right) noexcept -> void 
@@ -317,8 +333,8 @@ namespace jot
             {
                 for (Size i = from_i; i < to_i; i++)
                 {
-                    std::construct_at(to->static_data() + i, std::move(from->static_data()[i]));
-                    from->static_data()[i].~T();
+                    std::construct_at(static_data(to) + i, std::move(static_data(from)[i]));
+                    static_data(from)[i].~T();
                 }
             };
 
@@ -327,7 +343,7 @@ namespace jot
                 transfer_static(from, to, 0, from->size);
 
                 from->data = to->data;
-                to->data = to->static_data();
+                to->data = static_data(to);
             };
 
             if (is_static_alloced(*left) && is_static_alloced(*right))
@@ -377,7 +393,7 @@ namespace jot
                 if(vec->capacity < vec->static_capacity)
                 {
                     vec->capacity = vec->static_capacity;
-                    vec->data = vec->static_data();
+                    vec->data = static_data(vec);
                 }
 
                 return;
@@ -407,7 +423,7 @@ namespace jot
 
             if(new_capacity <= vec->static_capacity)
             {
-                new_data = vec->static_data();
+                new_data = static_data(vec);
                 new_capacity = vec->static_capacity;
             }
             else
@@ -435,7 +451,7 @@ namespace jot
         }
 
         template<STACK_TEMPL, typename T_>
-        proc to_owned(Stack_T* vec, Slice_<T, Size> const& other) -> void 
+        proc to_owned(Stack_T* vec, Slice_<T_, Size> const& other) -> void 
         {
             alloc_data(vec, other.size);
             copy_construct_elems(vec, other);

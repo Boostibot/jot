@@ -7,7 +7,7 @@ namespace jot
 {
     
     template <typename Val, typename Container>
-    func get_array_bytefield(const Container containers[], size_t from_byte, size_t num_bytes, const Val& base = Val()) -> Val
+    func get_bytefield_in_array(const Container containers[], size_t from_byte, size_t num_bytes, const Val& base = Val()) -> Val
     {
         assert(num_bytes <= sizeof(Val));
 
@@ -18,7 +18,7 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    proc set_array_bytefield(Container containers[], size_t from_byte, size_t num_bytes, const Val& val) -> void
+    proc set_bytefield_in_array(Container containers[], size_t from_byte, size_t num_bytes, const Val& val) -> void
     {
         assert(num_bytes <= sizeof(Val));
 
@@ -27,7 +27,7 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    func set_bytefield(const Container& container, size_t from_byte, size_t num_bytes, const Val& val)
+    func set_bytefield(const Container& container, size_t from_byte, size_t num_bytes, const Val& val) -> Container
     {
         assert(num_bytes <= sizeof(Val));
         assert(from_byte + num_bytes <= sizeof(Container));
@@ -39,7 +39,7 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    func get_bytefield(const Container& container, size_t from_byte, size_t num_bytes, const Val& base = Val())
+    func get_bytefield(const Container& container, size_t from_byte, size_t num_bytes, const Val& base = Val()) -> Val
     {
         assert(num_bytes <= sizeof(Val));
         assert(from_byte + num_bytes <= sizeof(Container));
@@ -51,45 +51,45 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    func get_array_bytefield(const Container containers[], size_t from_byte)
+    func get_bytefield_in_array(const Container containers[], size_t from_byte) -> Val
     {
-        return get_array_bytefield<Val>(containers, from_byte, sizeof(Val));
+        return get_bytefield_in_array<Val>(containers, from_byte, sizeof(Val));
     }
 
     template <typename Val, typename Container>
-    proc set_array_bytefield(Container containers[], size_t from_byte, const Val& val)
+    proc set_bytefield_in_array(Container containers[], size_t from_byte, const Val& val) -> void
     {
-        return set_array_bytefield(containers, from_byte, sizeof(Val), val);
+        return set_bytefield_in_array(containers, from_byte, sizeof(Val), val);
     }
 
-    template <typename Val, typename Container, typename Max = u64>
-    func get_bitfield(const Container& container, size_t from_bit, size_t num_bits, const Val& base = Val())
+    template <typename Val, typename Container>
+    func get_bitfield(const Container& container, size_t from_bit, size_t num_bits, const Val& base = Val()) -> Val
     {
         assert(num_bits <= bitsof(Val));
         assert(from_bit + num_bits <= bitsof(Container));
 
-        let mask = bitmask_lower<Max, Max>(num_bits);
-        let promoted_field = cast(Max) container;
-        let promoted_base = cast(Max) base;
+        let mask = bitmask_lower<Max_Field>(num_bits);
+        let promoted_field = cast(Max_Field) container;
+        let promoted_base = cast(Max_Field) base;
 
         return cast(Val)(((promoted_field >> from_bit) & mask) | (promoted_base & ~mask));
     }
 
-    template <typename Val, typename Container, typename Max = u64>
-    func set_bitfield(const Container& container, size_t from_bit, size_t num_bits, const Val& to_value)
+    template <typename Val, typename Container>
+    func set_bitfield(const Container& container, size_t from_bit, size_t num_bits, const Val& to_value) -> Container
     {
         assert(num_bits <= bitsof(Val));
         assert(from_bit + num_bits <= bitsof(Container));
 
-        let mask = bitmask<Max, Max>(from_bit, num_bits);
-        let promoted_field = cast(Max) container;
-        let promoted_value = cast(Max) to_value;
+        let mask = bitmask<Max_Field>(from_bit, num_bits);
+        let promoted_field = cast(Max_Field) container;
+        let promoted_value = cast(Max_Field) to_value;
 
         return cast(Container)(((promoted_value << from_bit) & mask) | (promoted_field & ~mask));
     }
 
-    template <typename Val, typename Container, typename Max = u64>
-    func get_array_bitfield(const Container containers[], size_t from_bit, size_t num_bits, const Val& base = Val())
+    template <typename Val, typename Container>
+    func get_bitfield_in_array(const Container containers[], size_t from_bit, size_t num_bits, const Val& base = Val()) -> Val
     {
         assert(num_bits <= bitsof(Val));
 
@@ -98,13 +98,13 @@ namespace jot
         let total_cont_size = div_round_up(from_cont_offset + num_bits, bitsof(Container)) * sizeof(Container);
 
         //Get the containing bytes then get the containing bits and retunr them
-        let span = get_array_bytefield<Max>(containers + from_cont, 0, total_cont_size);
-        let temp = get_bitfield<Max, Max, Max>(span, from_cont_offset, num_bits, base);
+        let span = get_bytefield_in_array<Max_Field>(containers + from_cont, 0, total_cont_size);
+        let temp = get_bitfield<Max_Field, Max_Field>(span, from_cont_offset, num_bits, base);
         return cast(Val) temp;
     }
 
-    template <typename Val, typename Container, typename Max = u64>
-    proc set_array_bitfield(Container containers[], size_t from_bit, size_t num_bits, const Val& to_value)
+    template <typename Val, typename Container>
+    proc set_bitfield_in_array(Container containers[], size_t from_bit, size_t num_bits, const Val& to_value) -> void
     {
         assert(num_bits <= bitsof(Val));
 
@@ -113,16 +113,17 @@ namespace jot
         let total_cont_size = div_round_up(from_cont_offset + num_bits, bitsof(Container)) * sizeof(Container);
 
         //Get old bytes
-        let read_span = get_array_bytefield<Max>(containers + from_cont, 0, total_cont_size);
+        let read_span = get_bytefield_in_array<Max_Field>(containers + from_cont, 0, total_cont_size);
 
         //Blend new values with old bytes
-        let span = set_bitfield<Max, Max, Max>(read_span, from_cont_offset, num_bits, to_value);
+        let span = set_bitfield<Max_Field, Max_Field>(read_span, from_cont_offset, num_bits, to_value);
 
         //Put new bytes back
-        set_array_bytefield(containers + from_cont, 0, total_cont_size, span);
+        set_bytefield_in_array(containers + from_cont, 0, total_cont_size, span);
     }
 
     struct Bitfield_Tag {};
+    struct Bit_Storage_Tag {};
 
     template <class T, size_t bit_count_>
     struct Bitfield
@@ -139,10 +140,11 @@ namespace jot
     {
         static_assert(sizeof...(Fields) > 0, "At least one field must be set");
 
-        template <size_t field_count_>
+        static constexpr size_t field_count = sizeof...(Fields);
+
         struct Info 
         {
-            using SizeArray = Array_<size_t, field_count_>;
+            using SizeArray = Array_<size_t, field_count>;
             SizeArray bit_count;
             SizeArray from_bit;
             SizeArray to_bit;
@@ -153,14 +155,14 @@ namespace jot
         };
 
         template <typename ...Sizes>
-        static proc get_info(Sizes ...bitcounts) -> Info
+        static func get_info(Sizes ...bitcounts) -> Info
         {
             assert(max(bitcounts...) > 0 && "At least one field has to have not 0");
             assert(max(bitcounts...) < BIT_COUNT<u64> && "All sizes must be less then 8 bytes");
 
-            Bit_Storage::Info<sizeof...(bitcounts)> info;
+            Info info;
             info.bit_count = {bitcounts...};
-            info.field_count = sizeof...(bitcounts);
+            info.field_count = field_count;
 
             size_t current_bit = 0;
             for(size_t i = 0; i < info.field_count; i++)
@@ -175,60 +177,67 @@ namespace jot
             return info;
         }
 
+        static constexpr Info info = Bit_Storage::get_info(Fields::bit_count...);
+        static constexpr size_t bit_count = info.total_bit_count;
+        static constexpr size_t byte_size = info.total_byte_size;
+
         template <size_t index>
         using Field = jot::nth_type<index, Fields...>;
 
         template <size_t index>
         using FieldType = typename Field<index>::type;
 
-        using Max = u64;
-
-        static constexpr let info = Bit_Storage::get_info(Fields::bit_count...);
-        static constexpr size_t field_count = info.field_count;
-        static constexpr size_t bit_count = info.total_bit_count;
-        static constexpr size_t byte_size = info.total_byte_size;
-
         using Data = byte[byte_size];
+        using tag_type = Bit_Storage_Tag;
         Data data;
 
         //Is in its own struct so it can be typedefed and used exactly like the non array variants
         struct array
         {
             template <size_t field_i, typename Item = FieldType<field_i>, typename Container>
-            pure static proc get(const Container containers[], const Item& base = Item())
+            pure static proc get(const Container containers[], const Item& base = Item()) -> Item
             {
                 static_assert(field_i < info.field_count);
-                return get_array_bitfield<Item, Container, Max>(containers, info.from_bit[field_i], info.bit_count[field_i], base);
+                return get_bitfield_in_array<Item, Container>(containers, info.from_bit[field_i], info.bit_count[field_i], base);
             }
 
             template <size_t field_i, typename Item = FieldType<field_i>, typename Container>
-            static proc set(Container containers[], const Item& to_value)
+            static proc set(Container containers[], const Item& to_value) -> void
             {
                 static_assert(field_i < info.field_count);
-                return set_array_bitfield<Item, Container, Max>(containers, info.from_bit[field_i], info.bit_count[field_i], to_value);
+                return set_bitfield_in_array<Item, Container>(containers, info.from_bit[field_i], info.bit_count[field_i], to_value);
             }
         };
 
         template <size_t field_i, typename Item = FieldType<field_i>, typename Container>
-        pure static proc get(const Container container, const Item& base = Item())
+        pure static proc get(const Container container, const Item& base = Item()) -> Item
         {
             static_assert(field_i < info.field_count);
-            return get_bitfield<Item, Container, Max>(container, info.from_bit[field_i], info.bit_count[field_i], base);
+            return get_bitfield<Item, Container>(container, info.from_bit[field_i], info.bit_count[field_i], base);
         }
 
         template <size_t field_i, typename Item = FieldType<field_i>, typename Container>
-        static proc set(Container container, const Item& to_value)
+        static proc set(Container container, const Item& to_value) -> Container
         {
             static_assert(field_i < info.field_count);
-            return set_bitfield<Item, Container, Max>(container, info.from_bit[field_i], info.bit_count[field_i], to_value);
+            return set_bitfield<Item, Container>(container, info.from_bit[field_i], info.bit_count[field_i], to_value);
+        }
+
+        //Would be too hard to implement as a free function
+        template <size_t field_i>
+        func get() const -> FieldType<field_i>        
+        { 
+            return Bit_Storage::array::get<field_i, FieldType<field_i>, byte>(this->data); 
         }
 
         template <size_t field_i>
-        func get() const                             { return Bit_Storage::array::get<field_i, FieldType<field_i>, byte>(this->data); }
-
-        template <size_t field_i>
-        proc set(const FieldType<field_i>& to_value) { return Bit_Storage::array::set<field_i, FieldType<field_i>, byte>(this->data, to_value); }
+        proc set(const FieldType<field_i>& to_value) -> void
+        { 
+            return Bit_Storage::array::set<field_i, FieldType<field_i>, byte>(this->data, to_value); 
+        }
     };
+
+
 }
 
 #include "undefs.h"

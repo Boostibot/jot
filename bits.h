@@ -65,7 +65,7 @@
 
 namespace jot 
 {
-    //using Max = u64;
+    using Max_Field = u64;
 
     template<size_t size_>
     using Byte_Array = Array_<byte, size_>;
@@ -131,20 +131,20 @@ namespace jot
         return set_byte(array[index / sizeof(T)], index % sizeof(T), to_val);
     }
     
-    template <typename Max = u64>
-    func dirty_bit(size_t bit_offset, Max value = 1) -> Max
+    template <typename My_Max = Max_Field>
+    func dirty_bit(size_t bit_offset, My_Max value = 1) -> My_Max
     {
         assert(value == 0 || value == 1);
-        return cast(Max)(value) << bit_offset;
+        return cast(My_Max)(value) << bit_offset;
     }
 
-    template <typename Max = u64, typename Val = u64>
-    func bit(size_t bit_offset, Val value = 1) -> Max
+    template <typename My_Max = Max_Field, typename Val = u64>
+    func bit(size_t bit_offset, Val value = 1) -> My_Max
     {
-        return dirty_bit<Max>(bit_offset, cast(Max)(!!value));
+        return dirty_bit<My_Max>(bit_offset, cast(My_Max)(!!value));
     }
 
-    template <typename T, typename Max = u64>
+    template <typename T>
     func has_bit(T integer, size_t bit_pos) -> bool
     {
         #if defined(_MSC_VER) && !defined(BITS_NO_INTRIN)
@@ -162,55 +162,51 @@ namespace jot
                 }
             }
         #endif
-        return cast(bool)(integer & bit<Max>(bit_pos));
+        return cast(bool)(integer & bit<Max_Field>(bit_pos));
     }
 
-    template <typename T, typename Max = u64>
-    func get_bit(T integer, size_t bit_pos) -> Max
+    template <typename T>
+    func get_bit(T integer, size_t bit_pos) -> Max_Field
     {
-        #if defined(_MSC_VER) && !defined(BITS_NO_INTRIN)
-        if (sizeof(integer) <= sizeof(u64) && !std::is_constant_evaluated())
-            return cast(Max) has_bit<T, Max>(integer, bit_pos);
-        #endif
-        return cast(Max) !!has_bit<T, Max>(integer, bit_pos);
+        return cast(Max_Field) has_bit<T>(integer, bit_pos);
     }
 
-    template <typename T, typename Max = u64>
+    template <typename T>
     func set_bit(T integer, size_t bit_offset, size_t value) -> T
     {
-        return cast(T)((integer | bit<Max>(bit_offset)) ^ bit<Max>(bit_offset, cast(size_t) !value));
+        return cast(T)((integer | bit(bit_offset)) ^ bit(bit_offset, !value));
     }
     
-    template <typename T, typename Max = u64>
+    template <typename T>
     func toggle_bit(T integer, size_t bit_offset) -> T
     {
-        return cast(T)(integer ^ bit<Max>(bit_offset));
+        return cast(T)(integer ^ bit(bit_offset));
     }
     
-    template <typename Field, typename Max = u64>
+    template <typename Field>
     func bitmask_higher(size_t from_bit) -> Field
     {
-        constexpr Max zero = 0;
+        constexpr Max_Field zero = 0;
         return cast(Field) (~zero << from_bit);
     }
 
-    template <typename Field, typename Max = u64>
+    template <typename Field>
     func bitmask_lower(size_t to_bit) -> Field
     {
-        constexpr Max zero = 0;
+        constexpr Max_Field zero = 0;
         return cast(Field) ~(~zero << to_bit);
     }
 
-    template <typename Field, typename Max = u64>
+    template <typename Field>
     func bitmask_range(size_t from_bit, size_t to_bit) -> Field
     {
-        return bitmask_higher<Field, Max>(from_bit) & bitmask_lower<Field, Max>(to_bit);
+        return bitmask_higher<Field>(from_bit) & bitmask_lower<Field>(to_bit);
     }
 
-    template <typename Field, typename Max = u64>
+    template <typename Field>
     func bitmask(size_t from_bit, size_t num_bits) -> Field
     {
-        return bitmask_range<Field, Max>(from_bit, from_bit + num_bits);
+        return bitmask_range<Field>(from_bit, from_bit + num_bits);
     }
 
     namespace detail 
@@ -377,8 +373,8 @@ namespace jot
         }
     }
 
-    template <typename T1, typename T2, typename Size>
-    func compare_bytes(const T1* to, size_t to_offset, const T2* from, size_t from_offset, Size size) -> int
+    template <typename T1, typename T2>
+    func compare_bytes(const T1* to, size_t to_offset, const T2* from, size_t from_offset, size_t size) -> int
     {
         if constexpr (std::is_void_v<T1> || std::is_void_v<T2>)
             return detail::memcmp(to, to_offset, from, from_offset, size);
@@ -391,8 +387,8 @@ namespace jot
         }
     }
 
-    template <typename T1, typename T2, typename Size>
-    func are_bytes_equal(const T1* to, size_t to_offset, const T2* from, size_t from_offset, Size size) -> bool
+    template <typename T1, typename T2>
+    func are_bytes_equal(const T1* to, size_t to_offset, const T2* from, size_t from_offset, size_t size) -> bool
     {
         return compare_bytes(to, to_offset, from, from_offset, size) == 0;
     }
@@ -414,14 +410,14 @@ namespace jot
         return set_bytes(to, 0, val, size);
     }
 
-    template <typename T1, typename T2, typename Size>
-    func compare_bytes(const T1* to, const T2* from, Size size) -> int
+    template <typename T1, typename T2>
+    func compare_bytes(const T1* to, const T2* from, size_t size) -> int
     {
         return compare_bytes(to, 0, from, 0, size);
     }
 
-    template <typename T1, typename T2, typename Size>
-    func are_bytes_equal(const T1* to, const T2* from, Size size) -> bool
+    template <typename T1, typename T2>
+    func are_bytes_equal(const T1* to, const T2* from, size_t size) -> bool
     {
         return compare_bytes(to, from, size) == 0;
     }
