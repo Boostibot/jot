@@ -1,5 +1,6 @@
 #pragma once
 #include "jot/utils.h"
+#include "types.h"
 #include "jot/slice.h"
 #include "jot/defines.h"
 
