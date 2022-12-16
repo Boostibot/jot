@@ -34,4 +34,6 @@ namespace jot
 
     using isize = i64;
     using usize = u64;
+
+    struct Unit {};
 }

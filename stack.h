@@ -84,43 +84,35 @@ namespace jot
     #define STACK_TEMPL class T, ::jot::tsize scap, class Size, class Alloc, class Grow
     #define Stack_T Stack<T, scap, Size, Alloc, Grow>
 
+
+    template<STACK_TEMPL>
+    func slice(Stack_T in data) -> Slice<T>;
+
     template<STACK_TEMPL>
     func static_data(Stack_T* data) -> T*;
 
     template<STACK_TEMPL>
-    func static_data(const Stack_T* data) -> const T*;
+    func static_data(Stack_T in data) -> const T*;
 
     template <STACK_TEMPL>
-    func alloc(Stack_T const& vec) -> Alloc const& { return *cast(const Alloc*) &vec; }
+    func alloc(Stack_T in vec) -> Alloc in { return *cast(const Alloc*) &vec; }
 
     template <STACK_TEMPL>
     func alloc(Stack_T* vec) -> Alloc* { return cast(Alloc*) vec; }
 
     template<STACK_TEMPL>
-    proc assign(Stack_T* to, Stack_T const& other) -> void;
+    proc assign(Stack_T* to, Stack_T in other) -> void;
+
+    template<STACK_TEMPL>
+    proc swap(Stack_T* left, Stack_T* right) noexcept -> void;
 
     namespace detail 
     {
         template<STACK_TEMPL>
-        proc swap(Stack_T* left, Stack_T* right) noexcept -> void;
-
-        template<STACK_TEMPL>
-        proc alloc_data(Stack_T* vec, Size capacity) -> void;
-
-        template<STACK_TEMPL>
         proc dealloc_data(Stack_T* vec) -> void;
 
         template<STACK_TEMPL>
-        proc set_capacity(Stack_T* vec, Size new_capacity) -> void;
-
-        template<STACK_TEMPL, typename T_>
-        proc to_owned(Stack_T* vec, Slice<T_, Size> const& other) -> void;
-
-        template<STACK_TEMPL>
-        proc copy_construct_elems(Stack_T* vec, typename Stack_T::slice_type other) -> void;
-
-        template<STACK_TEMPL>
-        proc destroy_elems(Stack_T* vec) -> void;
+        proc destroy(Stack_T* vec) -> void;
     }
 
     static_assert(grower<Def_Grow<2, 0, 8>>);
@@ -152,15 +144,6 @@ namespace jot
         constexpr Stack(Stack&& other, Alloc alloc = Alloc()) noexcept
             : Stack_Data{alloc} { detail::swap(this, &other); }
 
-        explicit constexpr Stack(Size size, Alloc alloc = Alloc()) 
-            : Stack_Data{alloc} { detail::alloc_data(this, size); }
-
-        explicit constexpr Stack(slice_type slice, Alloc alloc = Alloc()) 
-            : Stack_Data{alloc} { detail::to_owned(this, slice); }
-
-        explicit constexpr Stack(const_slice_type slice, Alloc alloc = Alloc()) 
-            : Stack_Data{alloc} { detail::to_owned(this, slice); }
-
         constexpr Stack(
             Value* data, Size size, Size capacity, 
             Alloc alloc, const Value (&static_data)[static_capacity]
@@ -177,6 +160,16 @@ namespace jot
         constexpr Stack(Alloc alloc) noexcept
             : Stack_Data{alloc} {}
 
+        #if 0
+        explicit constexpr Stack(Size size, Alloc alloc = Alloc()) 
+            : Stack_Data{alloc} { detail::alloc_data(this, size); }
+
+        explicit constexpr Stack(slice_type slice, Alloc alloc = Alloc()) 
+            : Stack_Data{alloc} { detail::to_owned(this, slice); }
+
+        explicit constexpr Stack(const_slice_type slice, Alloc alloc = Alloc()) 
+            : Stack_Data{alloc} { detail::to_owned(this, slice); }
+
         constexpr Stack(const Stack& other)
             requires (std::is_copy_constructible_v<Value> && std::is_copy_constructible_v<Alloc>) 
             : Stack_Data{alloc(other)}
@@ -184,10 +177,11 @@ namespace jot
             let slice = cast(slice_type) other;
             detail::to_owned(this, slice);
         }
+        #endif
 
         constexpr ~Stack() noexcept
         {
-            detail::destroy_elems(this);
+            detail::destroy(this);
             detail::dealloc_data(this);
         }
 
@@ -204,15 +198,6 @@ namespace jot
             return *this;
         }
 
-        //this is pretty pointless since its impossible to create a by byte copy...
-        func operator<=>(const Stack&) const noexcept = default;
-        constexpr bool operator==(const Stack&) const noexcept = default;
-
-        constexpr operator Slice<Value, Size>() const noexcept 
-        {
-            return Slice<Value, Size>{this->data, this->size};
-        }
-
         #include "slice_op_text.h"
     };
 }
@@ -222,12 +207,17 @@ namespace std
     template <STACK_TEMPL>
     proc swap(jot::Stack_T& stack1, jot::Stack_T& stack2)
     {
-        return jot::detail::swap(&stack1, &stack2);
+        return jot::swap(&stack1, &stack2);
     }
 }
 
 namespace jot
 {
+    template<STACK_TEMPL>
+    func slice(Stack_T in stack) -> Slice<T>{
+        return Slice<T>{stack.data, stack.size};
+    }
+
     template <STACK_TEMPL>
     func static_data(Stack_T* data) -> T*
     {
@@ -238,7 +228,7 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    func static_data(Stack_T const& data) -> const T*
+    func static_data(Stack_T in data) -> const T*
     {
         if constexpr(scap != 0)
             return cast(T*) cast(void*) data.static_data_;
@@ -247,7 +237,7 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    func is_invariant(const Stack_T& stack) -> bool
+    func is_invariant(Stack_T in stack) -> bool
     {
         const bool size_inv = stack.capacity >= stack.size;
         const bool data_inv = (stack.capacity == 0) == (stack.data == nullptr);
@@ -259,14 +249,14 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    func is_static_alloced(Stack_T const& stack) noexcept
+    func is_static_alloced(Stack_T in stack) noexcept
     {
         assert(is_invariant(stack));
         return stack.capacity == stack.static_capacity && stack.has_static_storage; 
     }
 
     template <STACK_TEMPL>
-    proc call_grow_function(const Stack_T& stack, no_infer(Size) to_fit) -> Size
+    proc call_grow_function(Stack_T in stack, no_infer(Size) to_fit) -> Size
     {
         return cast(Size) Stack_T::grow_type::run(
             cast(tsize) to_fit, 
@@ -278,110 +268,66 @@ namespace jot
     }
 
     template<STACK_TEMPL>
-    proc assign(Stack_T* to, Stack_T const& other) -> void
+    proc swap(Stack_T* left, Stack_T* right) noexcept -> void 
     {
-        if(to->capacity >= other.size)
+        using Stack = Stack_T;
+        constexpr let transfer_static = [](Stack* from, Stack* to, Size from_i, Size to_i)
         {
-            //If the elems are copy constructible we can save potential allocations of elems
-            // by using copy assignment instead (for example with Stack<Stack<>...>)
-            if constexpr (std::is_copy_assignable_v<T>)
+            for (Size i = from_i; i < to_i; i++)
             {
-                //destroy extra
-                for (Size i = other.size; i < to->size; i++)
-                    to->data[i].~T();
+                std::construct_at(static_data(to) + i, std::move(static_data(from)[i]));
+                static_data(from)[i].~T();
+            }
+        };
 
-                //construct missing
-                for (Size i = to->size; i < other.size; i++)
-                    std::construct_at(to->data + i, other.data[i]);
+        constexpr let transfer_half_static = [=](Stack* from, Stack* to)
+        {
+            transfer_static(from, to, 0, from->size);
 
-                //copy rest
-                Size to_size = std::min(to->size, other.size);
-                for (Size i = 0; i < to_size; i++)
-                    to->data[i] = other.data[i];
+            from->data = to->data;
+            to->data = static_data(to);
+        };
 
-                to->size = other.size;
+        if (is_static_alloced(*left) && is_static_alloced(*right))
+        {
+            Size to_size = 0;
+            if (left->size < right->size)
+            {
+                to_size = left->size;
+                transfer_static(right, left, left->size, right->size);
             }
             else
             {
-                destroy_elems(to);
-                copy_construct_elems(to, other);
+                to_size = right->size;
+                transfer_static(left, right, right->size, left->size);
+            }
 
-                to->size = other.size;
+            for (Size i = 0; i < to_size; i++)
+            {
+                T& left_item = (*left)[i];
+                T& right_item = (*right)[i];
+                swap(&left_item, &right_item);
             }
         }
+        else if (is_static_alloced(*left))
+            transfer_half_static(left, right);
+        else if (is_static_alloced(*right))
+            transfer_half_static(right, left);
         else
-        {
-            destroy_elems(to);
-            dealloc_data(to);
+            swap(&left->data, &right->data);
 
-            alloc_data(to, other.size);
-            copy_construct_elems(to, other);
+        swap(&left->size, &right->size);
+        swap(&left->capacity, &right->capacity);
 
-            to->size = other.size;
-        }
+        if constexpr(left->has_stateful_alloc)
+            swap(alloc(left), alloc(right));
     }
+
 
     namespace detail 
     {
-
         template<STACK_TEMPL>
-        proc swap(Stack_T* left, Stack_T* right) noexcept -> void 
-        {
-            using Stack = Stack_T;
-            constexpr let transfer_static = [](Stack* from, Stack* to, Size from_i, Size to_i)
-            {
-                for (Size i = from_i; i < to_i; i++)
-                {
-                    std::construct_at(static_data(to) + i, std::move(static_data(from)[i]));
-                    static_data(from)[i].~T();
-                }
-            };
-
-            constexpr let transfer_half_static = [=](Stack* from, Stack* to)
-            {
-                transfer_static(from, to, 0, from->size);
-
-                from->data = to->data;
-                to->data = static_data(to);
-            };
-
-            if (is_static_alloced(*left) && is_static_alloced(*right))
-            {
-                Size to_size = 0;
-                if (left->size < right->size)
-                {
-                    to_size = left->size;
-                    transfer_static(right, left, left->size, right->size);
-                }
-                else
-                {
-                    to_size = right->size;
-                    transfer_static(left, right, right->size, left->size);
-                }
-
-                for (Size i = 0; i < to_size; i++)
-                {
-                    T& left_item = (*left)[i];
-                    T& right_item = (*right)[i];
-                    std::swap(left_item, right_item);
-                }
-            }
-            else if (is_static_alloced(*left))
-                transfer_half_static(left, right);
-            else if (is_static_alloced(*right))
-                transfer_half_static(right, left);
-            else
-                std::swap(left->data, right->data);
-
-            std::swap(left->size, right->size);
-            std::swap(left->capacity, right->capacity);
-
-            if constexpr(left->has_stateful_alloc)
-                std::swap(*alloc(left), *alloc(right));
-        }
-
-        template<STACK_TEMPL>
-        proc alloc_data(Stack_T* vec, Size capacity) -> void 
+        proc alloc_data(Stack_T* vec, Size capacity) -> Alloc_State 
         {
             if(capacity <= vec->static_capacity)
             {
@@ -398,27 +344,29 @@ namespace jot
                 return;
             }
 
-            tsize new_capacity = call_grow_function(*vec, capacity);
+            mut new_capacity = call_grow_function(*vec, capacity);
             mut new_info = make_def_alloc_info<T>(new_capacity);
-            mut my_alloc = alloc(vec);
-            let res = comptime_allocate<T>(my_alloc, new_info);
-            assert(res.state == Alloc_State::OK);
+            mut my_alloc = Comptime_Allocator_Adaptor<Alloc, T>(alloc(vec));
+            let res = my_alloc.allocate(new_info);
+            if(res.state != Alloc_State::OK)
+                return res.state;
 
             vec->data = res.slice.data;
             vec->capacity = new_capacity;
         }
 
         template<STACK_TEMPL>
-        proc dealloc_data(Stack_T* vec) -> void 
+        proc dealloc_data(Stack_T* vec) -> bool 
         {
             if(vec->capacity > vec->static_capacity)
             {
                 mut old_info = make_def_alloc_info<T>(vec->capacity);
-                mut my_alloc = alloc(vec);
+                mut my_alloc = Comptime_Allocator_Adaptor<Alloc, T>(alloc(vec));
                 mut my_slice = Slice<T>{vec->data, vec->capacity};
-                let res = comptime_deallocate<T>(my_alloc, my_slice, old_info);
-                assert(res);
+                return my_alloc.deallocate(my_slice, old_info);
             }
+
+            return true;
         }
 
         //can be used for arbitrary growing/shrinking of data
@@ -427,7 +375,7 @@ namespace jot
         // Destroys elements when shrinking but does not construct new ones when growing 
         //  (because doesnt know how to)
         template<STACK_TEMPL>
-        proc set_capacity(Stack_T* vec, Size new_capacity) -> void 
+        proc set_capacity(Stack_T* vec, Size new_capacity) -> Alloc_State 
         {
             T* new_data = nullptr;
 
@@ -441,9 +389,12 @@ namespace jot
                 let my_slice = Slice{vec->data, vec->capacity};
                 let new_info = make_def_alloc_info<T>(new_capacity);
                 let prev_info = make_def_alloc_info<T>(vec->capacity);
-                let resize_res = comptime_action<T, Alloc>(
+
+                mut my_alloc = Comptime_Allocator_Adaptor<T, Alloc>(alloc(vec));
+
+                let resize_res = my_alloc.action(
                     Alloc_Actions::RESIZE, 
-                    alloc(vec), nullptr, 
+                    nullptr, 
                     my_slice, 
                     new_info, prev_info, 
                     nullptr);
@@ -455,44 +406,97 @@ namespace jot
                 }
                 else
                 {
-                     let res = comptime_allocate<T>(alloc(vec), new_info);
-                     assert(res.state == Alloc_State::OK);
+                     let res = my_alloc.allocate(new_info);
+                     if(res.state != Alloc_State::OK)
+                        return res.state;
+
                      new_data = res.slice.data;
                 }
             }
 
             let copy_to = std::min(vec->size, new_capacity);
-            for (Size i = 0; i < copy_to; i++)
-                std::construct_at(new_data + i, std::move(vec->data[i]));
+            Slice<T, Size> new_filled_buff = {new_data, copy_to};
+            Slice<T, Size> old_filled_buff = {vec->data, copy_to};
+            move_construct(&new_filled_buff, old_filled_buff);
 
-            destroy_elems(vec);
+            //for (Size i = 0; i < copy_to; i++)
+                //std::construct_at(new_data + i, std::move(vec->data[i]));
+
+            Slice<T, Size> whole_old_buff = slice(*vec);
+            destroy(&whole_old_buff);
             dealloc_data(vec);
 
             vec->data = new_data;
             vec->capacity = new_capacity;
+
+            Alloc_State::OK;
+        }
+
+        template<STACK_TEMPL>
+        proc by_byte_assign(Stack_T* to, Stack_T in from) -> void
+        {
+            to->data = from.data;
+            to->size = from.size;
+            to->capacity = from.capacity;
+            *alloc(to) = alloc(from);
         }
 
         template<STACK_TEMPL, typename T_>
-        proc to_owned(Stack_T* vec, Slice<T_, Size> const& other) -> void 
+        proc to_owned(Stack_T* vec, Slice<T_, Size> in other) -> void 
         {
             alloc_data(vec, other.size);
-            copy_construct_elems(vec, other);
+            copy_construct(vec, other);
             vec->size = other.size;
         }
+    }
 
-        template<STACK_TEMPL>
-        proc copy_construct_elems(Stack_T* vec, typename Stack_T::slice_type other) -> void 
+
+    template<STACK_TEMPL>
+    proc assign(Stack_T* to, Stack_T in other, Assign_Proc<T> set_fn = assign<T>) -> Alloc_State
+    {
+        if(to->capacity < other.size)
         {
-            for (Size i = 0; i < other.size; i++)
-                std::construct_at(vec->data + i, other.data[i]);
+            let res = detail::set_capacity(to, other.size);
+            if(res != Alloc_State::OK)
+                return res;
+
+            //@TODO
+            copy_construct(to, other);
+            to->size = other.size;
+            return res;
         }
 
-        template<STACK_TEMPL>
-        proc destroy_elems(Stack_T* vec) -> void 
+        //If the elems are copy constructible we can save potential allocations of elems
+        // by using copy assignment instead (for example with Stack<Stack<>...>)
+        if constexpr (std::is_copy_assignable_v<T>)
         {
-            for (Size i = 0; i < vec->size; i++)
-                vec->data[i].~T();
+            //destroy extra
+            for (Size i = other.size; i < to->size; i++)
+                to->data[i].~T();
+
+            //construct missing
+            for (Size i = to->size; i < other.size; i++)
+                std::construct_at(to->data + i, other.data[i]);
+
+            //copy rest
+            Size to_size = std::min(to->size, other.size);
+            for (Size i = 0; i < to_size; i++)
+            {
+                let res = set_fn(&to->data[i], other.data[i]);
+                assert(res == Alloc_State::OK && "TEMP!");
+            }
+
+            to->size = other.size;
         }
+        else
+        {
+            destroy(to);
+            copy_construct(to, other);
+
+            to->size = other.size;
+        }
+      
+        return Alloc_State::OK;
     }
 
 
@@ -521,23 +525,23 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    proc clear(Stack_T* stack)
+    proc clear(Stack_T* stack) -> void
     {
         assert(is_invariant(*stack));
-        detail::destroy_elems(stack);
+        detail::destroy(stack);
         stack.size = 0;
         assert(is_invariant(*stack));
     }
 
     template <STACK_TEMPL>
-    func empty(Stack_T const& stack) noexcept
+    func empty(Stack_T in stack) noexcept -> bool
     {
         assert(is_invariant(stack));
         return stack.size == 0;
     }
 
     template <STACK_TEMPL>
-    func is_empty(Stack_T const& stack) noexcept
+    func is_empty(Stack_T in stack) noexcept -> bool
     {
         assert(is_invariant(stack));
         return stack.size == 0;
@@ -702,7 +706,7 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    proc back(Stack_T const& stack) -> T const&
+    proc back(Stack_T in stack) -> T in
     {
         assert(is_invariant(stack));
         assert(stack.size > 0);
@@ -718,7 +722,7 @@ namespace jot
     }
 
     template <STACK_TEMPL>
-    proc front(Stack_T const& stack) -> T const&
+    proc front(Stack_T in stack) -> T in
     {
         assert(is_invariant(stack));
         assert(stack.size > 0);

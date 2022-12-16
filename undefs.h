@@ -8,3 +8,5 @@
 #undef runtime_proc 
 #undef runtime_func 
 #undef transmute
+#undef in
+#undef no_alias
