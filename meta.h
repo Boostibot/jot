@@ -43,6 +43,26 @@ namespace jot
     template<class T>
     struct Id { using type = T; };
 
+    #if 0
+    namespace detail
+    {
+        template<class T>
+        struct Void_Escaper
+        {
+            using type = T;
+        };
+
+        template<>
+        struct Void_Escaper<void>
+        {
+            using type = Unit;
+        };
+    }
+
+    template<class T>
+    using Escape_Void = detail::Void_Escaper<T>::type;
+    #endif
+
     //stops infering of arguments
     template<typename T>
     using No_Infer = Id<T>::type;
@@ -59,18 +79,29 @@ namespace jot
         //take_two(1.0, 1); //without No_Infer doesnt compile
     }
 
+    template<class T>
+    concept regular_type = 
+        std::is_nothrow_default_constructible_v<T> && 
+        std::is_nothrow_destructible_v<T> &&
+        std::is_nothrow_move_constructible_v<T> && 
+        std::is_nothrow_move_assignable_v<T>;
+
+    template<class T>
+    concept innert_type = regular_type<T> &&
+        std::is_nothrow_copy_assignable_v<T> &&
+        std::is_nothrow_copy_constructible_v<T>;
+
     //A lightweight compile time only tuple used for storing types
     template<class... Types >
     struct type_collection;
 
     namespace detail 
     {
-        template<int I, class T>
-        struct tuple_element_impl;
+        //template<int I, class T>
+        //struct tuple_element_impl;
 
         template<int I, class Head, class... Tail >
-        struct tuple_element_impl<I, type_collection<Head, Tail...>>
-            : tuple_element_impl<I-1, type_collection<Tail...>> { };
+        struct tuple_element_impl : tuple_element_impl<I-1, type_collection<Tail...>> { };
 
         template<class Head, class... Tail >
         struct tuple_element_impl<0, type_collection<Head, Tail...>> {
@@ -115,4 +146,6 @@ namespace jot
     {
         return std::is_constant_evaluated();
     }
+
+
 }

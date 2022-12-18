@@ -10,3 +10,4 @@
 #undef transmute
 #undef in
 #undef no_alias
+#undef moved

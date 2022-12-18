@@ -6,6 +6,8 @@
 #include "meta.h"
 #include "slice.h"
 #include "array.h"
+#include "option.h"
+#include "assign.h"
 #include "defines.h"
 
 namespace jot 
@@ -31,7 +33,7 @@ namespace jot
     }
 
     template<typename T>
-    func div_round_up(T value, no_infer(T) to_multiple_of) noexcept -> auto {
+    func div_round_up(T in value, no_infer(T) in to_multiple_of) noexcept -> T {
         return (value + to_multiple_of - 1) / to_multiple_of;
     }
 
@@ -63,186 +65,14 @@ namespace jot
         return (before.data + before.size > after.data) && (after.data > before.data);
     }
 
-    template <typename T>
-    struct Maybe
-    {
-        static constexpr bool has_ptr = std::is_pointer_v<T>;
-
-        struct Ptr_Data {
-            T value = T();
-
-            constexpr Ptr_Data(bool has, T value = T())  noexcept
-                : value(value) { cast(void) has; }
-        };
-
-        struct Regular_Data {
-            bool has = false;
-            T value = T();
-        };
-
-        static_assert(
-            std::is_default_constructible_v<T> && 
-            std::is_move_constructible_v<T> && 
-            std::is_move_assignable_v<T> && "must be a regular type");
-
-        using Data = std::conditional_t<has_ptr, Ptr_Data, Regular_Data>;
-        Data payload;
-
-        constexpr Maybe() noexcept
-            : payload{false} {}
-
-        constexpr Maybe(T value) noexcept
-            : payload{true, move(value)} 
-        {}
-    };
-
-    template <typename T>
-    Maybe(T) -> Maybe<T>;
-
-    func has(bool flag) noexcept -> bool {
-        return flag;
-    }
-
-    template <typename T>
-    func has(Maybe<T> in optional) noexcept -> bool 
-    {
-        if constexpr (Maybe<T>::has_ptr)
-            return optional.payload.value == nullptr;
-        else
-            return optional.payload.has;
-    }
-
-    template <typename T>
-    func unwrap(Maybe<T> in optional) noexcept -> T in
-    {
-        assert(has(optional));
-        return optional.payload.value;
-    }
-
-    template <typename T>
-    func unwrap(Maybe<T>* optional) noexcept -> T*
-    {
-        assert(has(optional));
-        return &optional.payload.value;
-    }
-
-    template <typename T>
-    proc swap(T* left, T* right) noexcept
-    {
-        T temp = move(*left);
-        *left = move(*right);
-        *right = move(temp);
-    }
-
     enum class Iter_Direction
     {
         FORWARD,
         BACKWARD
     };
 
-    template <typename T>
-    using Assign_Proc = void(*)(T*, T in);
-    
-    struct Default_Assign {};
-
     template<typename T>
-    struct Assign : Default_Assign
-    {
-        static proc perform(T* to, T in from, bool* ok) noexcept -> Unit
-        {
-            *to = from;
-            *ok = true;
-            return {};
-        }
-    };
-
-    template<typename T>
-    constexpr bool has_bit_by_bit_assign = std::is_base_of_v<Default_Assign, Assign<T>>
-        && std::is_trivially_copyable_v<T>
-        && std::is_default_constructible_v<T>;
-    
-    template <typename T>
-    struct Assign_Result
-    {
-        using Error_Void = decltype(Assign<T>::perform(nullptr, T(), nullptr));
-        using Error = std::conditional_t<same<Error_Void, void>, Unit, Error_Void>;
-
-        bool ok = true;
-        Error error = Error();
-    };
-    
-    template <typename T>
-    func has(Assign_Result<T> in res) noexcept -> bool {
-        return res.ok;
-    }
-
-    template <typename T>
-    func unwrap_error(Assign_Result<T> in res) noexcept -> Assign_Result<T>::Error in {
-        assert(has(res) == false);
-        return res.error;
-    }
-
-    template <typename T>
-    func unwrap_error(Assign_Result<T>* res) noexcept -> Assign_Result<T>::Error* {
-        assert(has(*res) == false);
-        return &res.error;
-    }
-
-    template<typename Value, typename State>
-    struct Result
-    {
-        Value value;
-        State state;
-    };
-
-    template <typename Value, typename State>
-    func has(Result<Value, State> in res) -> bool {
-        return has(res.state);
-    }
-
-    template <typename Value, typename State>
-    func unwrap(Result<Value, State> in res) -> Value in {
-        assert(has(res));
-        return res.error;
-    }
-
-    template <typename Value, typename State>
-    func unwrap(Result<Value, State>* res) -> Value* {
-        assert(has(*res));
-        return &res.error;
-    }
-
-    template <typename Value, typename State>
-    func unwrap_error(Result<Value, State> in res) -> State in {
-        assert(has(res) == false);
-        return res.error;
-    }
-
-    template <typename Value, typename State>
-    func unwrap_error(Result<Value, State>* res) -> State* {
-        assert(has(*res) == false);
-        return &res.error;
-    }
-
-    template<typename T>
-    func assign(T* to, no_infer(T) in from) -> Assign_Result<T>
-    {
-        bool ok = true;
-        Assign_Result<T> res = {true, Assign<T>::perform(to, from, &ok)};
-        res.ok = ok;
-        return res;
-    }
-
-    template<typename T>
-    func copy(T in other) -> Result<T, Assign_Result<T>> 
-    {
-        Result<T, Assign_Result<T>> res;
-        res.state = assign(&res.value, other);
-        return res;
-    }
-
-    template<typename T>
-    proc move_construct_items(Slice<T>* to, Slice<T> from) -> void 
+    proc move_construct_items(Slice<T>* to, Slice<const T> from) noexcept -> void 
     {
         assert(to->size == from.size);
         assert(are_aliasing<T>(*to, from) == false);
@@ -251,18 +81,51 @@ namespace jot
         const T* no_alias from_data = from.data;
 
         for (tsize i = 0; i < from.size; i++)
-            std::construct_at(to_data + i, move(from_data[i]));
+            std::construct_at(to_data + i, move(&from_data[i]));
     }
 
     template<typename T>
-    proc destroy_items(Slice<T>* to) -> void 
+    proc move_assign_items(Slice<T>* to, Slice<const T> from) noexcept -> void 
+    {
+        assert(to->size == from.size);
+        assert(are_aliasing<T>(*to, from) == false);
+
+        T* no_alias to_data = to->data;
+        const T* no_alias from_data = from.data;
+
+        for (tsize i = 0; i < from.size; i++)
+            to_data[i] = move(&from_data[i]);
+    }
+
+    template<typename T>
+    proc swap_items_no_alias(Slice<T>* to, Slice<T>* from) noexcept -> void
+    {
+        assert(to->size == from.size);
+        assert(are_aliasing<T>(*to, from) == false);
+
+        T* no_alias to_data = to->data;
+        const T* no_alias from_data = from.data;
+
+        for (tsize i = 0; i < from.size; i++)
+            swap(to_data + i, from_data + i);
+    }
+
+    template<typename T>
+    proc destroy_items(Slice<T>* to) noexcept -> void 
     {
         for (tsize i = 0; i < to->size; i++)
             to->data[i].~T();
     }
 
+    template <typename T>
+    struct Slice_Assign_Error
+    {
+        Assign_Error<T> error = {};
+        IRange succesfully_completed = {0, 0};
+    };
+
     template<typename T>
-    [[nodiscard]] proc assign_construct_items(Slice<T>* to, Slice<T> from) -> Assign_Result<T> 
+    [[nodiscard]] proc assign_construct_items(Slice<T>* to, Slice<T> from) noexcept -> Error_Option<Slice_Assign_Error<T>> 
     {
         assert(to->size == from.size);;
         assert(are_aliasing<T>(*to, from) == false);
@@ -273,23 +136,27 @@ namespace jot
         for (tsize i = 0; i < from.size; i++)
         {
             std::construct_at(to_data + i);
-            let res = assign(to_data, from_data);
-            if(has(res) == false)
-                return res;
+            let state = assign(to_data, from_data);
+            if(state == Error())
+                return Error{
+                    Slice_Assign_Error<T>{
+                        error(move(&state)), {0, i}
+                    }
+                };
         }
 
-        return {};
+        return Value();
     }
     
     template<typename T>
-    [[nodiscard]] proc assign_items(Slice<T>* to, Slice<const T> from, Iter_Direction direction) -> Result<Slice<T>, Assign_Result<T>> 
+    [[nodiscard]] proc assign_items(Slice<T>* to, Slice<const T> from, Iter_Direction direction) noexcept -> Error_Option<Slice_Assign_Error<T>> 
     {
         assert(to->size == from.size);
 
         if(has_bit_by_bit_assign<T> && is_const_eval() == false)
         {
             memmove(to->data, from.data, from.size * sizeof(T));
-            return {*to, {}};
+            return Value();
         }
         
         if(direction == Iter_Direction::FORWARD)
@@ -297,8 +164,12 @@ namespace jot
             for (tsize i = 0; i < from.size; i++)
             {
                 let state = assign(to->data + i, from.data[i]);
-                if(state.ok == false)
-                    return {trim(*to, i), state};
+                if(state == Error())
+                    return Error{
+                        Slice_Assign_Error<T>{
+                            error(move(&state)), {0, i}
+                        }
+                    };
             }
         }
         else
@@ -306,16 +177,20 @@ namespace jot
             for (tsize i = from.size; i-- > 0; )
             {
                 let state = assign(to->data + i, from.data[i]);
-                if(state.ok == false)
-                    return {trim(*to, i), state};
+                if(state == Error())
+                    return Error{
+                        Slice_Assign_Error<T>{
+                            error(move(&state)), {i, from.size}
+                        }
+                    };
             }
         }
 
-        return {*to, {}};
+        return Value();
     }
 
     template<typename T>
-    [[nodiscard]] proc assign_items_no_alias(Slice<T>* to, Slice<const T> from) -> Result<Slice<T>, Assign_Result<T>> 
+    [[nodiscard]] proc assign_items_no_alias(Slice<T>* to, Slice<const T> from) noexcept -> Error_Option<Slice_Assign_Error<T>> 
     {
         assert(to->size == from.size);
         assert(are_aliasing<T>(*to, from) == false);
@@ -323,7 +198,7 @@ namespace jot
         if(has_bit_by_bit_assign<T> && is_const_eval() == false)
         {
             memcpy(to->data, from.data, from.size * sizeof(T));
-            return {*to, {}};
+            return Value();
         }
 
         T* no_alias to_data = to->data;
@@ -332,12 +207,18 @@ namespace jot
         for (tsize i = 0; i < from.size; i++)
         {
             let state = assign(to_data + i, from_data[i]);
-            if(state.ok == false)
-                return {trim(*to, i), state};
+            
+            if(state == Error())
+                return Error{
+                    Slice_Assign_Error<T>{
+                        error(move(&state)), {0, i}
+                    }
+                };
         }
 
-        return {*to, {}};
+        return Value();
     }
+
 
 }
 

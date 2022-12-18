@@ -12,11 +12,12 @@ namespace jot
     //Should be compatible with any algorhitms requiring begin(), end(), size() proc as they 
     //   still extist but only as non members which removes the named collsions (defined generically inside span.h)
     //Also includes slicing syntax in the form arr(5, END - 1)
-    template<typename T, tsize size_, typename Size = tsize>
+    template<typename T, tsize size_>
     struct Array
     {
-        static constexpr Size size = cast(Size) size_;
-        static constexpr Size capacity = size;
+        using Size = tsize;
+        static constexpr tsize size = size_;
+        static constexpr tsize capacity = size;
         T data[size > 0 ? size : 1];
 
         pure constexpr bool operator==(const Array&) const noexcept requires(size != 0) = default;
@@ -35,10 +36,6 @@ namespace jot
     //deduction guide
     template <class First, class... Rest>
     Array(First, Rest...) -> Array<First, 1 + sizeof...(Rest)>;
-
-    //Adds self to slice
-    //template <class T, tsize size, class Size>
-    //Slice_(Array<T, size, Size>) -> Slice_<T, Size, size>;
 
     namespace detail 
     {
@@ -59,14 +56,12 @@ namespace jot
     }
 
     template <class T, tsize N>
-    func to_array(const T (&a)[N]) -> Array<std::remove_cv_t<T>, N>
-    {
+    func to_array(const T (&a)[N]) -> Array<std::remove_cv_t<T>, N> {
         return detail::to_array_impl(a, std::make_index_sequence<N>{});
     }
 
     template <class T, tsize N>
-    func to_array(T (&&a)[N]) -> Array<std::remove_cv_t<T>, N>
-    {
+    func to_array(T (&&a)[N]) -> Array<std::remove_cv_t<T>, N> {
         return detail::to_array_impl(std::move(a), std::make_index_sequence<N>{});
     }
 
@@ -77,6 +72,16 @@ namespace jot
         { Container::size } -> ::std::convertible_to<tsize>;
         requires(!same<decltype(container.data), void*>);
     };
+
+    template <class T, tsize N>
+    func slice(Array<T, N>* array) -> Slice<T> {
+        return Slice<T>{array->data, N};
+    }
+
+    template <class T, tsize N, typename Size>
+    func slice(Array<T, N> in array) -> Slice<const T> {
+        return Slice<const T>{array->data, N};
+    }
 }
 
 namespace std

@@ -72,8 +72,6 @@ namespace std
 
 namespace jot
 {
-    using ::std::move;
-    using ::std::forward;
     using ::std::begin;
     using ::std::end;
     using ::std::size;
@@ -101,19 +99,21 @@ namespace jot
         constexpr Slice(const char* strl) requires same<T, const char> 
             : data(strl), size(strlen(strl)) {}
 
-        constexpr operator Slice<const T>() const noexcept { return Slice<const T>{this->data, this->size}; }
+        constexpr operator Slice<const T, Size>() const noexcept { return Slice<const T, Size>{this->data, this->size}; }
         constexpr bool operator ==(Slice const&) const noexcept = default;
         constexpr bool operator !=(Slice const&) const noexcept = default;
 
         #include "slice_op_text.h"
     };
 
-    template<typename T>
-    Slice(T*, tsize) -> Slice<T, tsize>;
+    template<typename T, typename S>
+    Slice(T*, S) -> Slice<T, tsize>;
 
-    Slice(const char*) -> Slice<const char>;
+    using String = Slice<const char>;
 
-    func slice(cstring str) -> Slice<const char> {
+    Slice(const char*) -> String;
+
+    func slice(cstring str) -> String {
         return {str, strlen(str)};
     }
 
@@ -159,10 +159,13 @@ namespace jot
         return slice.size * sizeof(T);
     }
 
-    template<typename To, typename From>
-    runtime_func cast_slice(Slice<From> slice) -> Slice<To> 
+    template<typename To_T, typename To_Size, typename From_T, typename From_Size>
+    func cast_slice(Slice<From_T, From_Size> slice) -> Slice<To_T, To_Size> 
     {
-        return Slice<To>{cast(To*) cast(void*) slice.data, byte_size(slice) / cast(tsize) sizeof(To)};
+        if constexpr (std::is_convertible_v<From_T*, To_T*>)
+            return {cast(To_T*) slice.data, cast(To_Size) slice.size};
+        else
+            return {cast(To_T*) cast(void*) slice.data, cast(To_Size) (byte_size(slice) / cast(tsize) sizeof(To_T))};
     }
 }
 

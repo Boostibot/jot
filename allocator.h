@@ -17,6 +17,10 @@ namespace jot
         UNINIT,
     };
 
+    func has(Alloc_State state) noexcept -> bool {
+        return state == Alloc_State::OK;
+    }
+
     template <typename T>
     struct Generic_Alloc_Result
     {
@@ -32,11 +36,6 @@ namespace jot
         tsize align;
     };
 
-    //@TODO: Owned slice - basis for vectors
-    //@TODO: Failing allocs for stack
-    //@TODO: less shity format
-    
-
     enum class Alloc_Action : u32 {};
     namespace Alloc_Actions
     {
@@ -51,11 +50,11 @@ namespace jot
     template <typename Alloc>
     concept allocator = requires(Alloc_Action action_type, 
         Alloc* alloc, 
-        Maybe<Alloc*> other_alloc, 
+        Option<Alloc*> other_alloc, 
         Slice<u8> prev, 
         Alloc_Info new_, 
         Alloc_Info old_, 
-        Maybe<void*> custom_data)
+        Option<void*> custom_data)
     {
         { alloc->allocate(new_) } -> std::convertible_to<Alloc_Result>;
         { alloc->deallocate(prev, old_) } -> std::convertible_to<bool>;
@@ -78,24 +77,22 @@ namespace jot
         virtual proc do_parent_resource() const noexcept -> Allocator_Resource* = 0; 
         virtual proc do_action(
             Alloc_Action action_type, 
-            Maybe<Allocator_Resource*> other_alloc, 
+            Option<Allocator_Resource*> other_alloc, 
             Slice<u8> prev, 
             Alloc_Info new_, 
             Alloc_Info old_, 
-            Maybe<void*> custom_data) noexcept -> Alloc_Result
+            Option<void*> custom_data) noexcept -> Alloc_Result
         {
             return {Alloc_State::UNSUPPORTED_ACTION};
         }
     };
 
     template<typename T>
-    func make_def_alloc_info(tsize element_size) -> Alloc_Info
-    {
-        return Alloc_Info{element_size * cast(tsize) sizeof(T), DEF_ALIGNMENT<T>};
+    func make_alloc_info(tsize element_size, tsize align = DEF_ALIGNMENT<T>) -> Alloc_Info {
+        return Alloc_Info{element_size * cast(tsize) sizeof(T), align};
     }
 
-    func is_power_of_two(tsize num) noexcept -> bool
-    {
+    func is_power_of_two(tsize num) noexcept -> bool {
         usize n = cast(usize) num;
         return (n>0 && ((n & (n-1)) == 0));
     }
@@ -179,15 +176,15 @@ namespace jot
         }
 
         func action(Alloc_Action action_type,
-            Maybe<Poly_Allocator*> other_alloc, 
+            Option<Poly_Allocator*> other_alloc, 
             Slice<u8> prev, 
             Alloc_Info new_, 
             Alloc_Info old_, 
-            Maybe<void*> custom_data) noexcept -> Alloc_Result
+            Option<void*> custom_data) noexcept -> Alloc_Result
         {
             assert(this->resource != nullptr);
 
-            Maybe<Allocator_Resource*> other_resource = has(other_alloc) ? unwrap(other_alloc)->resource : nullptr;
+            Option<Allocator_Resource*> other_resource = has(other_alloc) ? value(other_alloc)->resource : nullptr;
             return this->resource->do_action(action_type, other_resource, prev, new_, old_, custom_data);
         }
     };
@@ -209,11 +206,11 @@ namespace jot
         }
 
         func action(Alloc_Action action_type,
-            Maybe<Failing_Allocator*> other_alloc, 
+            Option<Failing_Allocator*> other_alloc, 
             Slice<u8> prev, 
             Alloc_Info new_, 
             Alloc_Info old_, 
-            Maybe<void*> custom_data) noexcept -> Alloc_Result
+            Option<void*> custom_data) noexcept -> Alloc_Result
         {
             return {Alloc_State::UNSUPPORTED_ACTION};;
         }
@@ -232,10 +229,10 @@ namespace jot
     }
 
     template <typename T, typename Allocator>
-    struct Comptime_Allocator_Adaptor
+    struct Comptime_Allocator
     {
         Allocator* alloc;
-        constexpr Comptime_Allocator_Adaptor(Allocator* alloc)
+        constexpr Comptime_Allocator(Allocator* alloc)
             : alloc(alloc) {}
         
         func allocate(Alloc_Info info) noexcept -> Alloc_Result { 
@@ -278,11 +275,11 @@ namespace jot
         }
 
         func action(Alloc_Action action_type,
-            Maybe<Allocator*> other_alloc, 
+            Option<Allocator*> other_alloc, 
             Slice<u8> prev, 
             Alloc_Info new_, 
             Alloc_Info old_, 
-            Maybe<void*> custom_data) noexcept -> Alloc_Result
+            Option<void*> custom_data) noexcept -> Alloc_Result
         {
             if(is_const_eval())
                 return {Alloc_State::UNSUPPORTED_ACTION};
@@ -401,11 +398,11 @@ namespace jot
 
         func do_action(
             Alloc_Action action_type, 
-            Maybe<Allocator_Resource*> other_alloc, 
+            Option<Allocator_Resource*> other_alloc, 
             Slice<u8> prev, 
             Alloc_Info new_, 
             Alloc_Info old_, 
-            Maybe<void*> custom_data) noexcept -> Alloc_Result override
+            Option<void*> custom_data) noexcept -> Alloc_Result override
         {
             using namespace Alloc_Actions;
             if(action_type == DEALLOCATE_ALL)
