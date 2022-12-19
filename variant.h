@@ -12,7 +12,7 @@ namespace jot
         std::is_trivially_destructible_v<T>;
 
     template<tsize byte_size_>
-    struct Variant
+    struct alignas(16) Variant
     {
         constexpr tsize byte_size = byte_size_;
         type_id which = type_id_of(void);
@@ -54,6 +54,7 @@ namespace jot
     template<typename First, typename... Ts>
     func make_variant(First in data) noexcept -> Variant_Of<First, Ts...>
     {
+        static_assert(alignof(First) < 16 && alignof(Ts) < 16 && ...);
         static_assert(variant_compatible<First> && variant_compatible<Ts>...);
 
         Variant_Of<First, Ts...> variant;
@@ -101,7 +102,11 @@ namespace jot
         return std::bit_cast<Which>(out_bytes);
     }
 
-
+    template<typename Which, tsize byte_size>
+    runtime_func get(Variant<byte_size>* variant) noexcept -> Which* {
+        assert(has<Which>(Variant));
+        return cast(Which*) cast(void*) variant->bytes;
+    }
 
 }
 

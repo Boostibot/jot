@@ -205,12 +205,45 @@ namespace jot
 
     #undef templ_func
     #define templ_func template <hasable T> func
+    #define templ_proc template <hasable T> proc
 
     templ_func operator==(T in left, jot::Value<Unit>) noexcept -> bool { return has(left); }
     templ_func operator!=(T in left, jot::Value<Unit>) noexcept -> bool { return has(left) == false; }
     templ_func operator==(T in left, jot::Error<Unit>) noexcept -> bool { return has(left) == false; }
     templ_func operator!=(T in left, jot::Error<Unit>) noexcept -> bool { return has(left); }
 
+    templ_proc force(T in value) -> void {
+        if(has(value) == false)
+            throw value;
+    }
+
+    templ_proc force_error(T in value) -> void
+    {
+        if(has(value))
+            throw value;
+    }
+
+    /*
+    struct Force {};
+
+    templ_proc operator << (Force, T in value) -> void
+    {
+        if(has(value) == false)
+            throw value;
+    }
+
+    templ_proc operator >> (T in value, Force) -> void
+    {
+        if(has(value) == false)
+            throw value;
+    }
+
+    static constexpr Force force = Force{};
+    */
     #undef templ_func
+    #undef templ_proc
+
+
+
 }
 #include "undefs.h"

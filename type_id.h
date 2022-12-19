@@ -45,6 +45,17 @@ namespace meta
         return String{whole_name_str + prefix_size, name_size};
     }
 
+    /*
+    constexpr int strlen(const char* string)
+    {
+        int size = 0;
+        while(string[size] != '\0')
+            size ++;
+
+        return size;
+    }
+    */
+
     template<int string_size>
     struct Static_String
     {

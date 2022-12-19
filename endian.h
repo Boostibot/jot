@@ -28,7 +28,7 @@ namespace jot
         Bytes<u32> rep = {1, 2, 3, 4};
         static_assert(rep.size == 4, "!!!");
 
-        u32 val = bitcast<u32>(rep);
+        u32 val = bit_cast<u32>(rep);
         switch (val)
         {
             break; case 0x01020304: return Endian::Big;

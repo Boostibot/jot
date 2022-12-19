@@ -159,7 +159,7 @@ namespace jot
         return slice.size * sizeof(T);
     }
 
-    template<typename To_T, typename To_Size, typename From_T, typename From_Size>
+    template<typename To_T, typename To_Size = tsize, typename From_T = int, typename From_Size = tsize>
     func cast_slice(Slice<From_T, From_Size> slice) -> Slice<To_T, To_Size> 
     {
         if constexpr (std::is_convertible_v<From_T*, To_T*>)
@@ -167,6 +167,35 @@ namespace jot
         else
             return {cast(To_T*) cast(void*) slice.data, cast(To_Size) (byte_size(slice) / cast(tsize) sizeof(To_T))};
     }
+
+    template<typename T>
+    func are_aliasing(Slice<const T> left, Slice<const T> right) noexcept -> bool
+    { 
+        uintptr_t left_pos = cast(uintptr_t) left.data;
+        uintptr_t right_pos = cast(uintptr_t) right.data;
+        if(right_pos < left_pos)
+        {
+            //[ right ]      [ left ]
+            //[ ?? right size ?? ]
+
+            uintptr_t diff = left_pos - right_pos;
+            return diff < cast(uintptr_t) right.size;
+        }
+        else
+        {
+            //[ left ]      [ right ]
+            //[ ?? left size ?? ]
+            uintptr_t diff = right_pos - left_pos;
+            return diff < cast(uintptr_t) left.size;
+        }
+    }
+
+    template<typename T>
+    func are_one_way_aliasing(Slice<const T> before, Slice<const T> after) noexcept -> bool
+    { 
+        return (before.data + before.size > after.data) && (after.data > before.data);
+    }
+
 }
 
 

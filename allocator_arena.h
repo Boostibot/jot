@@ -1,285 +1,227 @@
 #pragma once
 
 #include "allocator.h"
-//#include "allocator_resource.h"
-#include "block_list.h"
+#include "stack.h"
 #include "defines.h"
 
 namespace jot 
 {
-
-    struct Arena_Resource;
-
-    runtime_proc allocate(Arena_Resource* resource, size_t size, size_t align) -> void*;
-    runtime_proc deallocate(Arena_Resource* resource, void* ptr, size_t old_size, size_t align) -> void;
-    runtime_proc resize(Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool;
-    runtime_proc deallocate_all(Arena_Resource* resource) -> void;
-    runtime_proc action(
-        Arena_Resource* resource, 
-        Allocator_Actions::Action action_type, 
-        void* old_ptr, 
-        size_t old_size, size_t new_size, 
-        size_t old_align, size_t new_align, 
-        void* custom_data = nullptr) -> Allocator_Actions::Result<void>;
-
-    //func align_size(size_t current_pos, )
-
-    struct Arena_Resource : Allocator_Resource
+    struct Unbound_Arena_Resource : Allocator_Resource
     {
-        using Block_List = Block_List_<byte, size_t, Allocator>;
-        using Header = Block_List::Header;
+        using Block = Stack<u8>;
+        
+        Slice<u8> active_block = {dummy_storage + 8, 0}; 
+        tsize active_block_used = 0;
+        u8* last_allocation = nullptr;
+        u8* last_unaligned = nullptr;
+        Stack<Block, 8> blocks;
 
-        Allocator_Resource* upstream = new_delete_resource();
-        Block_List blocks = Block_List{upstream};
-        Block_List free_blocks = Block_List{upstream};
-        size_t filled_to = 0;
-        size_t chunk_size = 2097152; //2MiB
-        byte* last_allocation = nullptr;
+        tsize used_blocks = 0;
+        Allocator_Resource* parent = DEFAULT_RESOURCE;
+        tsize chunk_size = 2097152; //2MiB
+        //so that we dont ever return nullptr even when we dont have any memory
+        // and big enough so that when someone (me) references out of it it wont change this struct
+        u8 dummy_storage[16] = {0}; 
 
-        Arena_Resource() = default;
-        Arena_Resource(size_t chunk_size) 
+        tsize ideal_total_used = 0; //the real size of all allocations combined (not including alignemnt and block rounding)
+        tsize current_total_used = 0; //the real size of all allocations combined 
+        tsize max_used = 0;
+        tsize max_ideal_used = 0;
+        tsize max_used_blocks = 0;
+        tsize max_single_alloc = 0; //including alignment
+
+        Unbound_Arena_Resource() = default;
+        Unbound_Arena_Resource(size_t chunk_size, Allocator_Resource* parent = DEFAULT_RESOURCE) 
+            : blocks(Poly_Allocator{parent}), parent(parent), chunk_size(chunk_size)
+        {}
+
+        Slice<u8>
+        available_slice() const 
         {
-            this->chunk_size = chunk_size;
+            return slice(active_block, active_block_used);
         }
 
-        runtime_proc do_allocate(size_t bytes, size_t alignment) -> void* override
+        virtual Alloc_Result 
+        do_allocate(Alloc_Info info) noexcept
         {
-            return jot::allocate(this, bytes, alignment);
-        }
-        runtime_proc do_deallocate(void* old_ptr, size_t bytes, size_t alignment) -> void override
-        {
-            return jot::deallocate(this, old_ptr, bytes, alignment);
-        }
-        runtime_proc do_action(
-            Allocator_Actions::Action action_type, 
-            void* old_ptr, 
-            size_t old_size, size_t new_size, 
-            size_t old_align, size_t new_align, 
-            void* custom_data = nullptr) -> Result override
-        {
-            return action(this, action_type, old_ptr, old_size, new_size, old_align, new_align, custom_data);
-        }
+            assert(blocks.size >= used_blocks);
+            assert(is_power_of_two(info.align));
 
-        runtime_proc do_upstream_resource() const noexcept -> Allocator_Resource* override
-        {
-            return upstream;
-        }
+            Slice<u8> available = available_slice();
+            Slice<u8> aligned = align_forward(available, info.align);
 
-        runtime_proc do_is_equal(std::pmr::memory_resource const& other) const noexcept -> bool override
-        {
-            return cast(std::pmr::memory_resource*)(this) == &other;
-        }
-    };
+            //unhappy path guard
+            if(aligned.size < info.byte_size)
+                return add_block_and_allocate(info);
 
+            Slice<u8> alloced = trim(aligned, info.byte_size);
+            last_allocation = alloced.data;
+            last_unaligned = available.data;
 
-    func align_forward(uintptr_t ptr_num, size_t align_to) -> uintptr_t
-    {
-        return div_round_up(ptr_num, align_to) * align_to;
-    }
+            tsize total_alloced_bytes = alloced.data + alloced.size - available.data;
+            active_block_used += total_alloced_bytes;
+            
+            #ifndef SKIP_ALLOCATOR_STATS
+            ideal_total_used += info.byte_size;
+            current_total_used += total_alloced_bytes;
+            max_used = max(max_used, current_total_used);
+            max_ideal_used = max(max_ideal_used, current_total_used);
+            max_single_alloc = max(max_single_alloc, total_alloced_bytes);
+            #endif
 
-    runtime_func align_forward(void* ptr, size_t align_to) -> void*
-    {
-        return cast(void*)(align_forward(cast(uintptr_t) ptr, align_to));
-    }
-
-    runtime_proc allocate(Arena_Resource* resource, size_t byte_size, size_t align) -> void* 
-    {
-        assert(is_power_of_two(align));
-
-        using Alloc = Arena_Resource;
-        using Block_List = Alloc::Block_List;
-        using Header = Alloc::Header;
-
-        byte* block_from = nullptr;
-        byte* block_to = nullptr;
-        byte* filled_to_ptr = nullptr;
-        byte* allocated_from = nullptr;
-        byte* allocated_to = block_to + 1;
-
-        let calc_all_ptrs = [&](Header* last_block) 
-        {
-            block_from = data(last_block);
-            block_to = block_from + last_block->size;
-            filled_to_ptr = block_from + resource->filled_to;
-            allocated_from = cast(byte*) align_forward(filled_to_ptr, align);
-            allocated_to = allocated_from + byte_size;
-        };
-
-        if(!is_empty(resource->blocks))
-            calc_all_ptrs(resource->blocks.last);
-
-        //will trigger even if all variables unitialized
-        if(allocated_to > block_to)
-        {
-            size_t chunk_size = resource->chunk_size;
-            size_t chunk_count = div_round_up(byte_size + align, chunk_size);
-            size_t total_alloced = chunk_count * chunk_size;
-
-            Header* found = nullptr;
-            for(mut& block : resource->free_blocks)
-            {
-                if(block.size >= total_alloced)
-                {
-                    found = &block;
-                    break;
-                }
-            }
-
-            if(found == nullptr)
-            {
-                let filler = [](size_t){return 0;};            
-                push_back(&resource->blocks, make_block<Header, Allocator>(resource->upstream, total_alloced, filler)); 
-            }
-            else
-            {
-                Block_List popped = pop_block(&resource->free_blocks, found);
-                push_back(&resource->blocks, move(popped));
-            }
-
-            calc_all_ptrs(resource->blocks.last);
+            return Alloc_Result{Alloc_State::OK, alloced};
         }
 
-        assert(filled_to_ptr >= block_from);
-        assert(allocated_from >= filled_to_ptr);
-        assert(block_to >= allocated_to);
-
-        resource->last_allocation = allocated_from;
-        resource->filled_to = allocated_to - block_from;
-
-        assert(resource->filled_to > 0);
-        return resource->last_allocation;
-    }
-
-    runtime_proc deallocate(Arena_Resource* resource, void* ptr, size_t old_size, size_t align) -> void
-    {
-        assert(is_power_of_two(align));
-        cast(void) resize(resource, ptr, old_size, 0);
-    }
-
-    runtime_proc resize(Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool 
-    {
-        byte* byte_ptr = cast(byte*) ptr;
-        if(resource->last_allocation != byte_ptr)
-            return false;
-
-        mut* last_block = resource->blocks.last;
-        mut* block_data = data(resource->blocks.last);
-
-        let prev_offset = cast(size_t) (byte_ptr - block_data);
-
-        if(prev_offset + new_size < last_block->size)
+        Alloc_Result
+        add_block_and_allocate(Alloc_Info info) noexcept
         {
-            resource->filled_to = prev_offset + new_size;
-            return true;
-        }
-        return false;
-    }
+            assert(is_invarinat());
+            current_total_used += available_slice().size; //add the rounded off size
+            tsize required_chunk_size = max(info.byte_size, chunk_size);
+            Block created(Poly_Allocator{parent});
 
-    runtime_proc deallocate_all(Arena_Resource* resource) -> void
-    {
-        push_back(&resource->free_blocks, move(resource->blocks));
-        resource->filled_to = 0;
-        resource->last_allocation = nullptr;
-    }
+            auto big_alloc_res = resize_for_overwrite(&created, required_chunk_size);
+            if(big_alloc_res == Error())
+                return Alloc_Result{big_alloc_res};
 
-    runtime_proc action(
-        Arena_Resource* resource, 
-        Allocator_Actions::Action action_type, 
-        void* old_ptr, 
-        size_t old_size, size_t new_size, 
-        size_t old_align, size_t new_align, 
-        void* custom_data) -> Allocator_Actions::Result<void>
-    {
-        using namespace Allocator_Actions;
-        using Result = Allocator_Actions::Result<void>;
-        switch(action_type)
-        {
-            case DEALLOC_ALL: {
-                deallocate_all(resource); 
-                return Result{true, nullptr};
-            }
-            case RESIZE: {
-                bool ok = resize(resource, old_ptr, old_size, new_size);
-                return Result{true, ok ? old_ptr : nullptr};
-            }
-        }
-        return Result{false, nullptr};
-    }
+            auto insert_res = unordered_insert(&blocks, used_blocks, move(&created));
+            if(insert_res == Error())
+                return Alloc_Result{insert_res};
 
-    struct Flat_Arena_Resource : Allocator_Resource
-    {
-        void* data;
-        size_t size;
-        size_t filled_to = 0;
-        void* last_alloc = nullptr;
+            active_block = slice(&blocks[used_blocks]);
+            used_blocks ++;
+            active_block_used = 0;
+            last_allocation = nullptr;
+            last_unaligned = nullptr;
 
-        using Result = Allocator_Actions::Result<void>;
+            max_used_blocks = max(used_blocks, max_used_blocks);
+            assert(is_invarinat());
 
-        Flat_Arena_Resource() = delete; 
-        Flat_Arena_Resource(void* data, size_t size)
-            : data(data), size(size) {}
-
-        runtime_proc do_allocate(size_t bytes, size_t alignment) -> void* override
-        {
-            size_t space = this->size - this->filled_to;
-            void* ptr = cast(byte*) this->data + this->size;
-
-            //this is such a horribly designed function...
-            if(std::align(alignment, bytes, ptr, space) == nullptr)
-                throw std::bad_alloc();
-
-            this->last_alloc = ptr;
-            return ptr;
-        }
-        runtime_proc do_deallocate(void* old_ptr, size_t bytes, size_t alignment) -> void override
-        {
-            cast(void) resize(old_ptr, bytes, 0);
+            return do_allocate(info);
         }
 
-        runtime_proc resize(void* ptr, size_t old_size, size_t new_size) -> bool
+        bool 
+        was_last_alloced_slice(Slice<u8> old_slice) const noexcept
         {
-            if(ptr != this->last_alloc)
+            if(old_slice.data != last_allocation)
                 return false;
 
-            size_t start_index = cast(uintptr_t)this->data - cast(uintptr_t)ptr;
-            if(start_index + new_size > this->size)
+            Slice<u8> available = available_slice();
+            if(old_slice.data + old_slice.size != available.data)
                 return false;
             
-            this->size = start_index + new_size;
+            assert(are_aliasing<u8>(active_block, old_slice));
             return true;
         }
 
-        runtime_proc do_action(
-            Allocator_Actions::Action action_type, 
-            void* old_ptr, 
-            size_t old_size, size_t new_size, 
-            size_t old_align, size_t new_align, 
-            void* custom_data = nullptr) -> Result override
+        bool 
+        is_invarinat() const noexcept
         {
-            using namespace Allocator_Actions;
-            switch(action_type)
+            bool last_alloc_inv = cast(uintptr_t) last_unaligned <= cast(uintptr_t) last_allocation;
+            bool nullptr_inv = true;
+            if(last_unaligned == nullptr || last_allocation == nullptr)
+                nullptr_inv = last_unaligned == last_allocation;
+
+            bool chunk_size_inv = chunk_size > 0;
+            bool active_block_inv = active_block.data != nullptr && active_block_used <= active_block.size;
+            bool used_blocks_inv = used_blocks <= blocks.size;
+            bool parent_inv = parent != nullptr;
+            bool stats_inv = ideal_total_used >= 0 
+                && current_total_used >= 0
+                && max_used >= 0
+                && max_ideal_used >= 0
+                && max_used_blocks >= 0
+                && max_single_alloc >= 0;
+
+            bool total_inv = last_alloc_inv && nullptr_inv && chunk_size_inv && active_block_inv && used_blocks_inv && parent_inv && stats_inv;
+            return total_inv;
+        }
+
+        virtual bool
+        do_deallocate(Slice<u8> old_slice, Alloc_Info old_info) noexcept
+        {
+            assert(old_slice.size == old_info.byte_size && "data must be consistent");
+
+            if(was_last_alloced_slice(old_slice) == false)
+                return true;
+
+            //maybe just use the last_allocation instead of last_unaligned cause
+            // chances are you are going to align it back anyway
+            tsize total_dealloced_bytes = cast(ptrdiff_t) last_unaligned - cast(ptrdiff_t) last_allocation;
+            active_block_used -= total_dealloced_bytes;
+            last_allocation = nullptr;
+            last_unaligned = nullptr;
+            
+            #ifndef SKIP_ALLOCATOR_STATS
+            ideal_total_used -= old_slice.size;
+            current_total_used -= total_dealloced_bytes;
+            #endif
+
+            assert(ideal_total_used >= 0);
+            assert(current_total_used >= 0);
+            assert(active_block_used >= 0);
+
+            return true;
+        }
+
+        virtual bool 
+        do_is_alloc_equal(Allocator_Resource const& other) const noexcept {
+            return &other == this;
+        }; 
+
+        virtual Allocator_Resource* 
+        do_parent_resource() const noexcept { 
+            return parent; 
+        }
+
+        void
+        deallocate_all() noexcept
+        {
+            active_block = {dummy_storage + 8, 0}; 
+            active_block_used = 0;
+            last_allocation = nullptr;
+            last_unaligned = nullptr;
+            used_blocks = 0;
+        }
+        
+        Alloc_Result
+        resize_allocation(Slice<u8> prev, Alloc_Info new_, Alloc_Info old_) noexcept
+        {
+            if(new_.byte_size < old_.byte_size)
+                return {Alloc_State::OK, {prev.data, new_.byte_size}};
+                
+            if(was_last_alloced_slice(prev) == false)
+                return {Alloc_State::ERROR};
+
+            Slice<u8> available = available_slice();
+            tsize new_filled_to = cast(ptrdiff_t) last_allocation - cast(ptrdiff_t) active_block.data + new_.byte_size;
+            if(new_.align != old_.align || new_.byte_size < 0 || new_filled_to > active_block.size)
+                return {Alloc_State::ERROR};
+
+            active_block_used = new_filled_to;
+            return {Alloc_State::OK, {prev.data, new_.byte_size}};
+        }
+
+        virtual Alloc_Result 
+        do_action(
+            Alloc_Action action_type, 
+            Option<Allocator_Resource*> other_alloc, 
+            Slice<u8> prev, 
+            Alloc_Info new_, 
+            Alloc_Info old_, 
+            Option<void*> custom_data) noexcept
+        {
+            using namespace Alloc_Actions;
+            if(action_type == RESIZE)
+                return resize_allocation(prev, new_, old_);
+
+            if(action_type == DEALLOCATE_ALL)
             {
-                case DEALLOC_ALL: {
-                    filled_to = 0;
-                    last_alloc = nullptr;
-                }
-                case RESIZE: {
-                    bool ok = resize(old_ptr, old_size, new_size);
-                    return Result{true, ok ? old_ptr : nullptr};
-                }
+                deallocate_all();
+                return Alloc_Result{Alloc_State::OK};
             }
-            return Result{false, nullptr};
-        }
 
-        runtime_proc do_upstream_resource() const noexcept -> Allocator_Resource* override
-        {
-            return nullptr;
-        }
-
-        runtime_proc do_is_equal(std::pmr::memory_resource const& other) const noexcept -> bool override
-        {
-            //@TODO: use dynamic cast and compare data ptrs
-            return cast(std::pmr::memory_resource*)(this) == &other;
+            return Alloc_Result{Alloc_State::UNSUPPORTED_ACTION};
         }
     };
 }

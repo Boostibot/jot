@@ -20,10 +20,10 @@ namespace jot
         static constexpr tsize capacity = size;
         T data[size > 0 ? size : 1];
 
-        pure constexpr bool operator==(const Array&) const noexcept requires(size != 0) = default;
+        nodisc constexpr bool operator==(const Array&) const noexcept requires(size != 0) = default;
         func operator<=>(const Array&) const noexcept requires(size != 0) = default;
 
-        pure constexpr bool operator==(const Array&) const noexcept requires(size == 0) { return true; };
+        nodisc constexpr bool operator==(const Array&) const noexcept requires(size == 0) { return true; };
         func operator<=>(const Array&) const noexcept requires(size == 0) { return 0; };
 
         constexpr operator T*() noexcept             { return this->data; }

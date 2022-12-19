@@ -235,7 +235,7 @@ namespace jot
         constexpr Comptime_Allocator(Allocator* alloc)
             : alloc(alloc) {}
         
-        func allocate(Alloc_Info info) noexcept -> Alloc_Result { 
+        func allocate(Alloc_Info info) noexcept -> Generic_Alloc_Result<T> { 
             if(is_const_eval())
             {
                 std::allocator<T> comp_alloc;
@@ -248,12 +248,12 @@ namespace jot
             }
             else
             {
-                let res = allocate(alloc, info);
+                let res = alloc->allocate(info);
                 return cast_alloc_result<T>(res);
             }
         }
 
-        func deallocate(Slice<u8> old_res, Alloc_Info old_info) noexcept -> bool {
+        func deallocate(Slice<T> old_res, Alloc_Info old_info) noexcept -> bool {
             if(is_const_eval())
             {
                 std::allocator<T> comp_alloc;
@@ -263,7 +263,7 @@ namespace jot
             else
             {
                 let cast_old_res = cast_slice<u8>(old_res);
-                return deallocate(alloc, cast_old_res, old_info);
+                return alloc->deallocate(cast_old_res, old_info);
             }
         }
 
@@ -271,22 +271,22 @@ namespace jot
             if(is_const_eval())
                 return true;
             else
-                return is_alloc_equal(alloc, other);
+                return alloc->is_alloc_equal(other);
         }
 
         func action(Alloc_Action action_type,
             Option<Allocator*> other_alloc, 
-            Slice<u8> prev, 
+            Slice<T> prev, 
             Alloc_Info new_, 
             Alloc_Info old_, 
-            Option<void*> custom_data) noexcept -> Alloc_Result
+            Option<void*> custom_data) noexcept -> Generic_Alloc_Result<T>
         {
             if(is_const_eval())
                 return {Alloc_State::UNSUPPORTED_ACTION};
             else
             {
                 let cast_prev = cast_slice<u8>(prev);
-                let res = action(action_type, alloc, other_alloc, cast_prev, new_, old_, custom_data);
+                let res = alloc->action(action_type, other_alloc, cast_prev, new_, old_, custom_data);
                 return cast_alloc_result<T>(res);
             }
         }
@@ -329,7 +329,7 @@ namespace jot
     {
         uintptr_t ptr_num = cast(uintptr_t) space.data;
         uintptr_t aligned_num = align_forward(ptr_num, align_to);
-        uintptr_t offset = max(aligned_num - ptr_num, space.size);
+        uintptr_t offset = min(aligned_num - ptr_num, space.size);
 
         return slice(space, offset);
     }
@@ -340,6 +340,7 @@ namespace jot
         tsize filled_to = 0;
         tsize last_alloc = 0;
         tsize max_used = 0;
+        tsize max_single_alloc = 0;
 
         func available_slice() const -> Slice<u8> {
             return slice(buffer, filled_to);
@@ -357,10 +358,6 @@ namespace jot
             assert(is_power_of_two(info.align));
             assert(filled_to >= 0 && last_alloc >= 0);
             Slice<u8> available = available_slice();
-
-            if(info.byte_size == 0)
-                return Alloc_Result{Alloc_State::OK, trim(available, 0)};
-            
             Slice<u8> aligned = align_forward(available, info.align);
 
             if(aligned.size < info.byte_size)
@@ -368,8 +365,15 @@ namespace jot
 
             Slice<u8> alloced = trim(aligned, info.byte_size);
             last_alloc = filled_to;
-            filled_to = alloced.data + alloced.size - buffer.data;
-            
+             
+            tsize total_alloced_bytes = alloced.data + alloced.size - available.data;
+            filled_to += total_alloced_bytes;
+
+            #ifndef SKIP_ALLOCATOR_STATS
+            max_used = max(filled_to, max_used);
+            max_single_alloc = max(total_alloced_bytes, max_single_alloc);
+            #endif
+
             return Alloc_Result{Alloc_State::OK, alloced};
         }
 
@@ -405,13 +409,6 @@ namespace jot
             Option<void*> custom_data) noexcept -> Alloc_Result override
         {
             using namespace Alloc_Actions;
-            if(action_type == DEALLOCATE_ALL)
-            {
-                filled_to = 0;
-                last_alloc = 0;
-                return Alloc_Result{Alloc_State::OK, {}};
-            }
-
             if(action_type == RESIZE)
             {
                 Slice<u8> last_slice = last_alloced_slice();
@@ -426,6 +423,13 @@ namespace jot
 
                 filled_to = new_filled_to;
                 return Alloc_Result{Alloc_State::OK, last_alloced_slice()};
+            }
+
+            if(action_type == DEALLOCATE_ALL)
+            {
+                filled_to = 0;
+                last_alloc = 0;
+                return Alloc_Result{Alloc_State::OK, {}};
             }
 
             return Alloc_Result{Alloc_State::UNSUPPORTED_ACTION};

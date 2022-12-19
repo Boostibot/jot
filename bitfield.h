@@ -5,9 +5,10 @@
 
 namespace jot
 {
-    
+    #define bitsof(...) (sizeof(__VA_ARGS__) * CHAR_BIT)
+
     template <typename Val, typename Container>
-    func get_bytefield_in_array(const Container containers[], size_t from_byte, size_t num_bytes, const Val& base = Val()) -> Val
+    func get_bytefield_in_array(const Container containers[], size_t from_byte, size_t num_bytes, Val in base = Val()) noexcept -> Val
     {
         assert(num_bytes <= sizeof(Val));
 
@@ -18,7 +19,7 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    proc set_bytefield_in_array(Container containers[], size_t from_byte, size_t num_bytes, const Val& val) -> void
+    proc set_bytefield_in_array(Container containers[], size_t from_byte, size_t num_bytes, Val in val) noexcept -> void
     {
         assert(num_bytes <= sizeof(Val));
 
@@ -27,7 +28,7 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    func set_bytefield(const Container& container, size_t from_byte, size_t num_bytes, const Val& val) -> Container
+    func set_bytefield(Container in container, size_t from_byte, size_t num_bytes, Val in val) noexcept -> Container
     {
         assert(num_bytes <= sizeof(Val));
         assert(from_byte + num_bytes <= sizeof(Container));
@@ -39,7 +40,7 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    func get_bytefield(const Container& container, size_t from_byte, size_t num_bytes, const Val& base = Val()) -> Val
+    func get_bytefield(Container in container, size_t from_byte, size_t num_bytes, Val in base = Val()) noexcept -> Val
     {
         assert(num_bytes <= sizeof(Val));
         assert(from_byte + num_bytes <= sizeof(Container));
@@ -51,24 +52,24 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    func get_bytefield_in_array(const Container containers[], size_t from_byte) -> Val
+    func get_bytefield_in_array(const Container containers[], size_t from_byte) noexcept -> Val
     {
         return get_bytefield_in_array<Val>(containers, from_byte, sizeof(Val));
     }
 
     template <typename Val, typename Container>
-    proc set_bytefield_in_array(Container containers[], size_t from_byte, const Val& val) -> void
+    proc set_bytefield_in_array(Container containers[], size_t from_byte, Val in val) noexcept -> void
     {
         return set_bytefield_in_array(containers, from_byte, sizeof(Val), val);
     }
 
     template <typename Val, typename Container>
-    func get_bitfield(const Container& container, size_t from_bit, size_t num_bits, const Val& base = Val()) -> Val
+    func get_bitfield(Container in container, size_t from_bit, size_t num_bits, Val in base = Val()) noexcept -> Val
     {
         assert(num_bits <= bitsof(Val));
         assert(from_bit + num_bits <= bitsof(Container));
 
-        let mask = bitmask_lower<Max_Field>(num_bits);
+        let mask = low_mask<Max_Field>(num_bits);
         let promoted_field = cast(Max_Field) container;
         let promoted_base = cast(Max_Field) base;
 
@@ -76,12 +77,12 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    func set_bitfield(const Container& container, size_t from_bit, size_t num_bits, const Val& to_value) -> Container
+    func set_bitfield(Container in container, size_t from_bit, size_t num_bits, Val in to_value) noexcept -> Container
     {
         assert(num_bits <= bitsof(Val));
         assert(from_bit + num_bits <= bitsof(Container));
 
-        let mask = bitmask<Max_Field>(from_bit, num_bits);
+        let mask = range_mask<Max_Field>(from_bit, from_bit + num_bits);
         let promoted_field = cast(Max_Field) container;
         let promoted_value = cast(Max_Field) to_value;
 
@@ -89,7 +90,7 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    func get_bitfield_in_array(const Container containers[], size_t from_bit, size_t num_bits, const Val& base = Val()) -> Val
+    func get_bitfield_in_array(const Container containers[], size_t from_bit, size_t num_bits, Val in base = Val()) noexcept -> Val
     {
         assert(num_bits <= bitsof(Val));
 
@@ -104,7 +105,7 @@ namespace jot
     }
 
     template <typename Val, typename Container>
-    proc set_bitfield_in_array(Container containers[], size_t from_bit, size_t num_bits, const Val& to_value) -> void
+    proc set_bitfield_in_array(Container containers[], size_t from_bit, size_t num_bits, Val in to_value) noexcept -> void
     {
         assert(num_bits <= bitsof(Val));
 
@@ -126,18 +127,18 @@ namespace jot
     struct Bit_Storage_Tag {};
 
     template <class T, size_t bit_count_>
-    struct Bitfield
+    struct Bitfield : Bitfield_Tag
     {
-        using tag_type = Bitfield_Tag;
         using type = T;
         static constexpr size_t bit_count = bit_count_;
     };
 
     //Class to facilitate the use of bitfields - declare a Bit_Storage as a list of Bitfields
     // and then simply get/set them using the appropriate types
-    template <class... Fields> requires (Tagged<Fields, Bitfield_Tag> && ...)
-    struct Bit_Storage
+    template <class... Fields> 
+    struct Bit_Storage : Bit_Storage_Tag
     {
+        static_assert(std::is_base_of_v<Bitfield_Tag, Fields> && ..., "fields must be bitfields!");
         static_assert(sizeof...(Fields) > 0, "At least one field must be set");
 
         static constexpr size_t field_count = sizeof...(Fields);
@@ -188,21 +189,20 @@ namespace jot
         using FieldType = typename Field<index>::type;
 
         using Data = byte[byte_size];
-        using tag_type = Bit_Storage_Tag;
         Data data;
 
         //Is in its own struct so it can be typedefed and used exactly like the non array variants
         struct array
         {
             template <size_t field_i, typename Item = FieldType<field_i>, typename Container>
-            pure static proc get(const Container containers[], const Item& base = Item()) -> Item
+            pure static proc get(const Container containers[], Item in base = Item()) noexcept -> Item
             {
                 static_assert(field_i < info.field_count);
                 return get_bitfield_in_array<Item, Container>(containers, info.from_bit[field_i], info.bit_count[field_i], base);
             }
 
             template <size_t field_i, typename Item = FieldType<field_i>, typename Container>
-            static proc set(Container containers[], const Item& to_value) -> void
+            static proc set(Container containers[], Item in to_value) noexcept -> void
             {
                 static_assert(field_i < info.field_count);
                 return set_bitfield_in_array<Item, Container>(containers, info.from_bit[field_i], info.bit_count[field_i], to_value);
@@ -210,14 +210,14 @@ namespace jot
         };
 
         template <size_t field_i, typename Item = FieldType<field_i>, typename Container>
-        pure static proc get(const Container container, const Item& base = Item()) -> Item
+        static func get(Container in container, Item in base = Item()) noexcept -> Item
         {
             static_assert(field_i < info.field_count);
             return get_bitfield<Item, Container>(container, info.from_bit[field_i], info.bit_count[field_i], base);
         }
 
         template <size_t field_i, typename Item = FieldType<field_i>, typename Container>
-        static proc set(Container container, const Item& to_value) -> Container
+        static func set(Container in container, Item in to_value) noexcept -> Container
         {
             static_assert(field_i < info.field_count);
             return set_bitfield<Item, Container>(container, info.from_bit[field_i], info.bit_count[field_i], to_value);
@@ -225,19 +225,19 @@ namespace jot
 
         //Would be too hard to implement as a free function
         template <size_t field_i>
-        func get() const -> FieldType<field_i>        
+        func get() noexcept const -> FieldType<field_i>        
         { 
             return Bit_Storage::array::get<field_i, FieldType<field_i>, byte>(this->data); 
         }
 
         template <size_t field_i>
-        proc set(const FieldType<field_i>& to_value) -> void
+        proc set(const FieldType<field_i>& to_value) noexcept -> void
         { 
             return Bit_Storage::array::set<field_i, FieldType<field_i>, byte>(this->data, to_value); 
         }
     };
 
-
+    #undef bitsof
 }
 
 #include "undefs.h"
