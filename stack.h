@@ -167,7 +167,7 @@ namespace jot
         if constexpr(stack.has_static_storage == false)
             return false;
         else
-            return stack.capacity == stack.static_cap; 
+            return stack.capacity == stack.static_capacity; 
     }
 
     template <STACK_TEMPL>
@@ -470,7 +470,7 @@ namespace jot
     template<STACK_TEMPL>
     constexpr Stack_T& Stack_T::operator=(Stack_T moved other) noexcept 
     {
-        swap(this, *other);
+        swap(this, &other);
         return *this;
     }
 

@@ -6,6 +6,11 @@
 
 namespace jot 
 {
+    //2097152; //2MiB
+    #ifndef ALLOCATOR_ARENA_DEF_SIZE
+        #define ALLOCATOR_ARENA_DEF_SIZE 4096
+    #endif
+
     struct Unbound_Arena_Resource : Allocator_Resource
     {
         using Block = Stack<u8>;
@@ -18,7 +23,7 @@ namespace jot
 
         tsize used_blocks = 0;
         Allocator_Resource* parent = DEFAULT_RESOURCE;
-        tsize chunk_size = 2097152; //2MiB
+        tsize chunk_size = ALLOCATOR_ARENA_DEF_SIZE;
         //so that we dont ever return nullptr even when we dont have any memory
         // and big enough so that when someone (me) references out of it it wont change this struct
         u8 dummy_storage[16] = {0}; 
@@ -31,7 +36,7 @@ namespace jot
         tsize max_single_alloc = 0; //including alignment
 
         Unbound_Arena_Resource() = default;
-        Unbound_Arena_Resource(size_t chunk_size, Allocator_Resource* parent = DEFAULT_RESOURCE) 
+        Unbound_Arena_Resource(Allocator_Resource* parent, size_t chunk_size = ALLOCATOR_ARENA_DEF_SIZE) 
             : blocks(Poly_Allocator{parent}), parent(parent), chunk_size(chunk_size)
         {}
 

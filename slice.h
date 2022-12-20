@@ -64,6 +64,7 @@ namespace std
     func cend(const jot::direct_container auto& arr) noexcept {return arr.data + arr.size;}
 
     func size(const jot::direct_container auto& arr) noexcept {return arr.size;}
+    func data(const jot::direct_container auto& arr) noexcept {return arr.data;}
 
     template <typename T>
     func size(const jot::Range<T>& range) noexcept -> T {return range.from - range.to;}
