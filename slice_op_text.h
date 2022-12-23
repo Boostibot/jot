@@ -2,7 +2,7 @@
 // DONT INCLUDE IT ON ITS OWN!
 
 using value_type      = T;
-using size_type       = Size;
+using size_type       = isize;
 using difference_type = ptrdiff_t;
 using pointer         = T*;
 using const_pointer   = const T*;
@@ -16,27 +16,27 @@ using const_iterator = const T*;
 using reverse_iterator       = std::reverse_iterator<iterator>;
 using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-func begin() noexcept -> iterator {
+constexpr func begin() noexcept -> iterator {
     return this->data;
 }
 
-func begin() const noexcept -> const_iterator {
+constexpr func begin() const noexcept -> const_iterator {
     return this->data;
 }
 
-func end() noexcept -> iterator{
+constexpr func end() noexcept -> iterator{
     return this->data + this->size;
 }
 
-func end() const noexcept -> const_iterator {
+constexpr func end() const noexcept -> const_iterator {
     return this->data + this->size;
 }
 
-func operator[](Size index) const noexcept -> T const& { 
+constexpr func operator[](isize index) const noexcept -> T const& { 
     assert(0 <= index && index < this->size && "index out of range"); 
     return this->data[index]; 
 }
-func operator[](Size index) noexcept -> T& { 
+constexpr func operator[](isize index) noexcept -> T& { 
     assert(0 <= index && index < this->size && "index out of range"); 
     return this->data[index]; 
 }

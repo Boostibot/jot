@@ -2,17 +2,12 @@
 
 #include <cassert>
 
-#include "types.h"
-#include "meta.h"
-#include "slice.h"
-#include "array.h"
-#include "option.h"
-#include "assign.h"
+#include "traits.h"
 #include "defines.h"
 
 namespace jot 
 {
-    #define templ_func template<typename T> func
+    #define templ_func template<typename T> constexpr func
 
     templ_func max(T in first) noexcept -> T in {   
         return first;

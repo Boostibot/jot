@@ -1,151 +1,138 @@
 #pragma once
-
-#include <type_traits>
-#include <concepts>
-
-namespace jot 
+namespace meta
 {
-    using std::integral;
-    using std::floating_point;
-
-    template <auto val, class T = decltype(val)>
-    struct Const
-    {
-        using type = T;
-        static constexpr T value  = val;
-    };
-
-    using True = Const<true, bool>;
-    using False = Const<false, bool>;
-
-    template<class T, class U>
-    struct Is_Same : Const<false, bool> {};
-
-    template<class T>
-    struct Is_Same<T, T> : Const<true, bool> {};
-
-    template <class T, class... Ts>
-    concept same = (Is_Same<T, Ts>::value && ...); 
-
-    template <class T, class... Ts>
-    concept is_present = (Is_Same<T, Ts>::value || ...); 
-
-    template<class T>
-    concept non_void = (same<T, void> == false);
-
-    static_assert(Is_Same<char, char>::value);
-    static_assert(same<char, void> == false);
-    static_assert(non_void<char>);
-
-    template<class T>
-    struct Consume {};
-
-    template<class T>
-    struct Id { using type = T; };
-
-    #if 0
-    namespace detail
-    {
-        template<class T>
-        struct Void_Escaper
-        {
-            using type = T;
-        };
-
-        template<>
-        struct Void_Escaper<void>
-        {
-            using type = Unit;
-        };
-    }
-
-    template<class T>
-    using Escape_Void = detail::Void_Escaper<T>::type;
+    #if defined(__clang__)
+        #define __FUNCTION_NAME__ __PRETTY_FUNCTION__
+    #elif defined(__GNUC__)
+        #define __FUNCTION_NAME__ __PRETTY_FUNCTION__
+    #elif defined(_MSC_VER)
+        #define __FUNCTION_NAME__ __FUNCSIG__
+    #else
+        #error "Unsupported compiler"
     #endif
 
-    //stops infering of arguments
-    template<typename T>
-    using No_Infer = Id<T>::type;
-    #define no_infer(...) No_Infer<__VA_ARGS__> 
-
-    namespace example
+    struct String
     {
-        template <typename T>
-        void take_two(T a, no_infer(T) b)
+        const char* data;
+        int from;
+        int to;
+    };
+
+    template<int string_size>
+    struct Static_String
+    {
+        char string[string_size + 1] = {0};
+
+        constexpr Static_String(const char* data, int from = 0, int to = string_size) noexcept 
         {
-            (void) a; (void) b;
-        };
-
-        //take_two(1.0, 1); //without No_Infer doesnt compile
-    }
-
-    template<class T>
-    concept regular_type = 
-        std::is_nothrow_default_constructible_v<T> && 
-        std::is_nothrow_destructible_v<T> &&
-        std::is_nothrow_move_constructible_v<T> && 
-        std::is_nothrow_move_assignable_v<T>;
-
-    template<class T>
-    concept innert_type = regular_type<T> &&
-        std::is_nothrow_copy_assignable_v<T> &&
-        std::is_nothrow_copy_constructible_v<T>;
-
-    //A lightweight compile time only tuple used for storing types
-    template<class... Types >
-    struct type_collection;
-
-    namespace detail 
-    {
-        //template<int I, class T>
-        //struct tuple_element_impl;
-
-        template<int I, class Head, class... Tail >
-        struct tuple_element_impl : tuple_element_impl<I-1, type_collection<Tail...>> { };
-
-        template<class Head, class... Tail >
-        struct tuple_element_impl<0, type_collection<Head, Tail...>> {
-            using type = Head;
-        };
-    }
-
-    template<int I, class T>
-    struct tuple_element;
-
-    template<int I, class... Types >
-    struct tuple_element<I, type_collection<Types...>>
-    {
-        static_assert(I < sizeof...(Types), "index must be in range");
-        using type = typename detail::tuple_element_impl<I, type_collection<Types...>>::type;
+            for(int i = from; i < to && data[i]; i++)
+                string[i - from] = data[i];
+        }
     };
 
-    template< class What, class T>
-    struct tuple_has : False {};
-
-    template< class What, class... Types >
-    struct tuple_has<What, type_collection<Types...>> : Const<is_present<What, Types...>, bool> {};
-
-    template<int I, class T>
-    using tuple_element_t = typename tuple_element<I, T>::type;
-
-    template<int I, class... Types>
-    using nth_type = typename tuple_element<I, type_collection<Types...>>::type;
-
-    template<class... Types >
-    struct type_collection 
+    template<typename T>
+    constexpr String function_name_string() 
     {
-        template<int I>
-        using get = nth_type<I, Types...>;
-        static constexpr int size = sizeof...(Types);
+        const char* whole_name_str = __FUNCTION_NAME__;
+        int function_size = 0;
+        while(whole_name_str[function_size] != '\0')
+            function_size ++;
 
-        template <class What>
-        static constexpr bool has = is_present<What, Types...>;
-    };
-
-    constexpr auto is_const_eval() noexcept -> bool 
-    {
-        return std::is_constant_evaluated();
+        return String{whole_name_str, 0, function_size};
     }
 
+    template<typename T>
+    constexpr String type_name_string() 
+    {
+        String function_name = function_name_string<T>();
+        
+        #if defined(__clang__)
+            //clang: meta::String meta::function_name_string() [T = int]
+            char prefix[] = "meta::String meta::function_name_string() [T = ";
+            char postfix[] = "]";
+        #elif defined(__GNUC__)
+            //gcc: constexpr meta::String meta::function_name_string() [with T = int]
+            char prefix[] = "constexpr meta::String meta::function_name_string() [with T = ";
+            char postfix[] = "]";
+        #elif defined(_MSC_VER)
+            //msvc: struct meta::String __cdecl meta::function_name_string<int>(void)
+            char prefix[] = "struct meta::String __cdecl meta::function_name_string<";
+            char postfix[] = ">(void)";
+        #endif
 
+        int prefix_size = sizeof(prefix) - 1;
+        int postfix_size = sizeof(postfix) - 1;
+
+        return String{function_name.data, function_name.from + prefix_size, function_name.to - postfix_size};
+    }
+
+    //type_name examples:
+    //MSVC:
+    //int
+    //class std::basic_iostream<char,struct std::char_traits<char> >
+    //struct meta::String
+
+    //GCC:
+    //int
+    //std::basic_iostream<char>
+    //String
+
+    //CLANG
+    //int
+    //std::basic_iostream<char>
+    //meta::String
+
+    //we need to create static constexpr variable to return pointer to - 
+    // - static constexpr locals are not alloved in standard c++ so we need to create 
+    // a helper struct that will hold our string
+
+    template<typename Dummy_Struct, int dummy_struct_name_size>
+    constexpr String namespace_name_string() noexcept
+    {
+        String type_name = type_name_string<Dummy_Struct>();
+
+        char additional_postfix[] = "::";
+
+        #if defined(__clang__)  
+            char prefix[] = "";
+        #elif defined(__GNUC__) 
+            char prefix[] = "";
+        #elif defined(_MSC_VER) 
+            char prefix[] = "struct ";
+        #endif
+
+        int additional_postfix_size = sizeof(additional_postfix) - 1;
+        int prefix_size = sizeof(prefix) - 1;
+        int postfix_size = dummy_struct_name_size + additional_postfix_size;
+
+        String namespace_name = {type_name.data, type_name.from + prefix_size, type_name.to - postfix_size};
+        return namespace_name;
+    }
+
+    template<String str>
+    struct Static_Holder
+    {
+        static constexpr const Static_String<str.to - str.from> static_str = {str.data, str.from, str.to};
+    };
+
+    template<String str>
+    constexpr const char* to_const_char() noexcept 
+    {
+        using Holder = Static_Holder<str>;
+        return Holder::static_str.string;
+    }
+
+    template<typename T>
+    constexpr const char* type_name() noexcept 
+    {
+        constexpr String name_str = type_name_string<T>();
+        return to_const_char<name_str>();
+    }
+
+    template<typename Dummy_Struct, int dummy_struct_name_size>
+    constexpr const char* namespace_name() noexcept
+    {
+        constexpr String name_str = namespace_name_string<Dummy_Struct, dummy_struct_name_size>();
+        return to_const_char<name_str>();
+    }
 }

@@ -26,12 +26,6 @@ namespace jot
     using byte = u8;
     using cstring = const char*;
 
-    #ifdef DEFAULT_SIZE_TYPE
-    using tsize = DEFAULT_SIZE_TYPE;
-    #else
-    using tsize = i64;
-    #endif // DEFAULT_SIZE_TYPE
-
     using isize = i64;
     using usize = u64;
 

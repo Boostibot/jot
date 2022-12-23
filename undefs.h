@@ -5,8 +5,9 @@
 #undef func
 #undef cast
 #undef address_alias
-#undef runtime_proc 
-#undef runtime_func 
 #undef in
 #undef no_alias
 #undef moved
+
+#undef move
+#undef forward

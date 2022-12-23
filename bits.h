@@ -69,21 +69,27 @@
 
 namespace jot 
 {
+
+    #undef func
+    #undef proc
+    #define func constexpr nodisc auto
+    #define proc constexpr nodisc auto
+
     using Max_Field = MAX_INTEGER_FIELD_TYPE;
 
-    template<tsize size_>
+    template<isize size_>
     using Byte_Array = Array<u8, size_>;
 
     template<typename T>
     using Bytes = Byte_Array<sizeof(T)>;
 
-    constexpr static tsize BYTE_BITS = CHAR_BIT;
+    constexpr static isize BYTE_BITS = CHAR_BIT;
 
     template <typename T>
-    constexpr static tsize BIT_COUNT = sizeof(T) * BYTE_BITS;
+    constexpr static isize BIT_COUNT = sizeof(T) * BYTE_BITS;
 
     template <typename T>
-    constexpr static tsize HALF_BIT_COUNT = sizeof(T) * BYTE_BITS / 2;
+    constexpr static isize HALF_BIT_COUNT = sizeof(T) * BYTE_BITS / 2;
 
     using std::bit_cast;
 
@@ -104,14 +110,14 @@ namespace jot
     #define templ_func template <typename T> func
     
 
-    templ_func get_byte(T in value, tsize index) noexcept -> u8 {
+    templ_func get_byte(T in value, isize index) noexcept -> u8 {
         mut rep = to_bytes(value);
 
         assert(index < rep.size && "index needs to be in bounds");
         return rep[index];
     }
 
-    templ_func set_byte(T in value, tsize index, u8 to_val) noexcept -> T {
+    templ_func set_byte(T in value, isize index, u8 to_val) noexcept -> T {
         mut rep = to_bytes(value);
 
         assert(index < rep.size && "index needs to be in bounds");
@@ -120,17 +126,17 @@ namespace jot
     }
 
     template <typename T = Max_Field>
-    func dirty_bit(tsize bit_offset, T value = 1) noexcept -> T {
+    func dirty_bit(isize bit_offset, T value = 1) noexcept -> T {
         assert(value == 0 || value == 1);
         return cast(T)(value) << bit_offset;
     }
 
     template <typename T = Max_Field, typename Val = u64>
-    func bit(tsize bit_offset, Val value = 1) noexcept -> T {
+    func bit(isize bit_offset, Val value = 1) noexcept -> T {
         return dirty_bit<T>(bit_offset, cast(T)(!!value));
     }
 
-    templ_func has_bit(T integer, tsize bit_pos) noexcept -> bool
+    templ_func has_bit(T integer, isize bit_pos) noexcept -> bool
     {
         #if defined(_MSC_VER) && !defined(BITS_NO_INTRIN)
         if(!std::is_constant_evaluated())
@@ -150,11 +156,11 @@ namespace jot
         return cast(bool)(integer & bit<Max_Field>(bit_pos));
     }
 
-    templ_func get_bit(T integer, tsize bit_pos) noexcept -> Max_Field {
+    templ_func get_bit(T integer, isize bit_pos) noexcept -> Max_Field {
         return cast(Max_Field) has_bit<T>(integer, bit_pos);
     }
 
-    templ_func set_bit(T integer, tsize bit_offset, tsize value) noexcept -> T {
+    templ_func set_bit(T integer, isize bit_offset, isize value) noexcept -> T {
         return cast(T)((integer | bit(bit_offset)) ^ bit(bit_offset, !value));
     }
 
@@ -167,7 +173,7 @@ namespace jot
         return cast(T) ~high_mask<T>(index);
     }
 
-    templ_func range_mask(tsize from_bit, tsize to_bit) noexcept -> T {
+    templ_func range_mask(isize from_bit, isize to_bit) noexcept -> T {
         return cast(T) (high_mask<T>(from_bit) & low_mask<T>(to_bit));
     }
 
@@ -181,7 +187,7 @@ namespace jot
         return cast(T) (value & mask);
     };  
 
-    templ_func range_bits(T value, tsize from_bit, tsize to_bit) noexcept -> T {
+    templ_func range_bits(T value, isize from_bit, isize to_bit) noexcept -> T {
         return cast(T) (value & range_mask<T>(from_bit, to_bit));
     }
 
@@ -200,16 +206,16 @@ namespace jot
     {
         struct Iter_Info
         {
-            tsize to_index;
-            tsize from_index;
+            isize to_index;
+            isize from_index;
 
-            tsize to_byte_index;
-            tsize from_byte_index;
+            isize to_byte_index;
+            isize from_byte_index;
 
-            constexpr Iter_Info(tsize i, tsize to_offset, tsize from_offset, tsize size1, tsize size2) noexcept 
+            constexpr Iter_Info(isize i, isize to_offset, isize from_offset, isize size1, isize size2) noexcept 
             {
-                const tsize ti = i + to_offset;
-                const tsize fi = i + from_offset;
+                const isize ti = i + to_offset;
+                const isize fi = i + from_offset;
 
                 to_index = ti / size1;
                 from_index = fi / size2;
@@ -220,7 +226,7 @@ namespace jot
         };
 
         template <typename T1, typename T2, typename Size>
-        proc copy_bytes_forward(T1 to[], tsize to_offset, const T2 from[], tsize from_offset, Size size) noexcept
+        proc copy_bytes_forward(T1 to[], isize to_offset, const T2 from[], isize from_offset, Size size) noexcept
         {
             //Little dumb algorithm that goes u8 by u8 for each copying the whole 
             // item at index
@@ -237,7 +243,7 @@ namespace jot
         }
 
         template <typename T1, typename T2, typename Size>
-        proc copy_bytes_backward(T1 to[], tsize to_offset, const T2 from[], tsize from_offset, Size size) noexcept
+        proc copy_bytes_backward(T1 to[], isize to_offset, const T2 from[], isize from_offset, Size size) noexcept
         {
             for(Size i = size; i-- > 0; )
             {
@@ -249,7 +255,7 @@ namespace jot
         }
 
         template <typename T1, typename Size>
-        proc set_bytes(T1 to[], tsize to_offset, u8 val, Size size) noexcept
+        proc set_bytes(T1 to[], isize to_offset, u8 val, Size size) noexcept
         {
             for(Size i = 0; i < size; i++)
             {
@@ -259,7 +265,7 @@ namespace jot
         }
 
         template <typename T1, typename T2, typename Size>
-        func compare_bytes(const T1 to[], tsize to_offset, const T2 from[], tsize from_offset, Size size) noexcept
+        func compare_bytes(const T1 to[], isize to_offset, const T2 from[], isize from_offset, Size size) noexcept
         {
             for(Size i = 0; i < size; i++)
             {
@@ -276,7 +282,7 @@ namespace jot
         }
 
         template <typename T>
-        proc move_bytes(T to[], tsize to_index, tsize to_offset, tsize from_index, tsize from_offset, tsize size) noexcept
+        proc move_bytes(T to[], isize to_index, isize to_offset, isize from_index, isize from_offset, isize size) noexcept
         {
             let from_byte_index = from_index * sizeof(T) + from_offset;
             let to_byte_index = to_index * sizeof(T) + to_offset;
@@ -290,24 +296,24 @@ namespace jot
                 return copy_bytes_forward(to + to_index, to_offset, to + from_index, from_offset, size);
         }
 
-        void memcpy(void* to, tsize to_offset, const void* from, tsize from_offset, tsize size) noexcept
+        void memcpy(void* to, isize to_offset, const void* from, isize from_offset, isize size) noexcept
         {
-            std::memcpy(cast(u8*)(to) + to_offset, cast(const u8*)from + from_offset, cast(tsize) size);
+            std::memcpy(cast(u8*)(to) + to_offset, cast(const u8*)from + from_offset, cast(isize) size);
         }
 
-        void memset(void* to, tsize to_offset, u8 val, tsize size) noexcept
+        void memset(void* to, isize to_offset, u8 val, isize size) noexcept
         {
-            std::memset(cast(u8*)(to) + to_offset, cast(int)val, cast(tsize) size);
+            std::memset(cast(u8*)(to) + to_offset, cast(int)val, cast(isize) size);
         }
 
-        void memmove(void* to, tsize to_offset, const void* from, tsize from_offset, tsize size) noexcept
+        void memmove(void* to, isize to_offset, const void* from, isize from_offset, isize size) noexcept
         {
-            std::memmove(cast(u8*)(to) + to_offset, cast(const u8*)from + from_offset, cast(tsize) size);
+            std::memmove(cast(u8*)(to) + to_offset, cast(const u8*)from + from_offset, cast(isize) size);
         }
 
-        auto memcmp(const void* to, tsize to_offset, const void* from, tsize from_offset, tsize size) noexcept
+        auto memcmp(const void* to, isize to_offset, const void* from, isize from_offset, isize size) noexcept
         {
-            return std::memcmp(cast(const u8*)(to) + to_offset, cast(const u8*)from + from_offset, cast(tsize) size);
+            return std::memcmp(cast(const u8*)(to) + to_offset, cast(const u8*)from + from_offset, cast(isize) size);
         }
     }
 
@@ -315,7 +321,7 @@ namespace jot
     // this performs the exact same work during compile time and 
     // during run time becomes a single memcpy
     template <typename T1, typename T2>
-    proc copy_bytes(T1* to, tsize to_offset, const T2* from, tsize from_offset, tsize size) noexcept -> void
+    proc copy_bytes(T1* to, isize to_offset, const T2* from, isize from_offset, isize size) noexcept -> void
     {
         //needs to be constexpr if becasue copy bytes cannot take void ptr
         // (so yes this cant be condensed into a single if and else)
@@ -334,7 +340,7 @@ namespace jot
 
     //There is no way to make memmove with its original signature into a constexpr proc without an additional swap buffer
     template <typename T>
-    proc move_bytes(T* array, tsize to_index, tsize to_offset, tsize from_index, tsize from_offset, tsize size) noexcept -> void
+    proc move_bytes(T* array, isize to_index, isize to_offset, isize from_index, isize from_offset, isize size) noexcept -> void
     {
         if constexpr (std::is_void_v<T>)
             detail::memmove(array + to_index, to_offset, array + from_index, from_offset, size);
@@ -348,7 +354,7 @@ namespace jot
     }
 
     template <typename T1>
-    proc set_bytes(T1* to, tsize to_offset, u8 val, tsize size) noexcept -> void
+    proc set_bytes(T1* to, isize to_offset, u8 val, isize size) noexcept -> void
     {
         if constexpr (std::is_void_v<T1>)
             detail::memset(to, to_offset, val, size);
@@ -362,7 +368,7 @@ namespace jot
     }
 
     template <typename T1, typename T2>
-    func compare_bytes(const T1* to, tsize to_offset, const T2* from, tsize from_offset, tsize size) noexcept -> int
+    func compare_bytes(const T1* to, isize to_offset, const T2* from, isize from_offset, isize size) noexcept -> int
     {
         if constexpr (std::is_void_v<T1> || std::is_void_v<T2>)
             return detail::memcmp(to, to_offset, from, from_offset, size);
@@ -376,50 +382,50 @@ namespace jot
     }
 
     template <typename T1, typename T2>
-    func are_bytes_equal(const T1* to, tsize to_offset, const T2* from, tsize from_offset, tsize size) noexcept -> bool
+    func are_bytes_equal(const T1* to, isize to_offset, const T2* from, isize from_offset, isize size) noexcept -> bool
     {
         return compare_bytes(to, to_offset, from, from_offset, size) == 0;
     }
 
     template <typename T1, typename T2>
-    proc copy_bytes(T1* to, const T2* from, tsize size) noexcept -> void
+    proc copy_bytes(T1* to, const T2* from, isize size) noexcept -> void
     {
         return copy_bytes(to, 0, from, 0, size);
     }
     template <typename T>
-    proc move_bytes(T* array, tsize to_index, tsize from_index, tsize size) noexcept -> void
+    proc move_bytes(T* array, isize to_index, isize from_index, isize size) noexcept -> void
     {
         return move_bytes(array, to_index, 0, from_index, 0, size);
     }
 
     template <typename T>
-    proc set_bytes(T* to, u8 val, tsize size) noexcept -> void
+    proc set_bytes(T* to, u8 val, isize size) noexcept -> void
     {
         return set_bytes(to, 0, val, size);
     }
 
     template <typename T1, typename T2>
-    func compare_bytes(const T1* to, const T2* from, tsize size) noexcept -> int
+    func compare_bytes(const T1* to, const T2* from, isize size) noexcept -> int
     {
         return compare_bytes(to, 0, from, 0, size);
     }
 
     template <typename T1, typename T2>
-    func are_bytes_equal(const T1* to, const T2* from, tsize size) noexcept -> bool
+    func are_bytes_equal(const T1* to, const T2* from, isize size) noexcept -> bool
     {
         return compare_bytes(to, from, size) == 0;
     }
 
-    proc byteswap(u8 output[], u8 input[], tsize size) noexcept -> void
+    proc byteswap(u8 output[], u8 input[], isize size) noexcept -> void
     {
-        for (tsize i = 0; i < size; i++)
+        for (isize i = 0; i < size; i++)
             output[i] = input[size - i - 1];
     }
 
-    proc byteswap(u8 bytes[], tsize size) noexcept -> void
+    proc byteswap(u8 bytes[], isize size) noexcept -> void
     {
         let half_size = size / 2;
-        for (tsize i = 0; i < half_size; i++)
+        for (isize i = 0; i < half_size; i++)
             std::swap(bytes[i], bytes[size - i - 1]);
     }
 
