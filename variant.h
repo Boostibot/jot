@@ -2,6 +2,9 @@
 
 #include "utils.h"
 #include "type_id.h"
+#include "types.h"
+#include "slice.h"
+#include "bits.h"
 #include "defines.h"
 namespace jot
 {
@@ -10,35 +13,38 @@ namespace jot
         regular_type<T> &&
         std::is_trivially_copyable_v<T> && 
         std::is_trivially_destructible_v<T>;
-
-    template<tsize byte_size_>
-    struct alignas(16) Variant
+    
+    //Type erased POD variant using type_id as tag
+    // Can store any type that fits inside its data and align
+    template<isize byte_size_, isize align_>
+    struct alignas(align_) Variant
     {
-        constexpr tsize byte_size = byte_size_;
+        static constexpr isize byte_size = byte_size_;
+        static constexpr isize align = align_;
+
         type_id which = type_id_of(void);
         u8 bytes[byte_size];
 
         constexpr Variant() noexcept = default;
 
-        typename<typename T>
+        template<typename T>
         constexpr Variant(T value) noexcept
         {
-            static_assert(variant_compatible<T>);
-            static_assert(sizeof(T) <= byte_size);
+            static_assert(variant_compatible<T>, "must be variant comaptible");
+            static_assert(sizeof(T) <= byte_size && alignof(T) <= align, "must fit");
 
-            which = type_id_of(First);
+            which = type_id_of(T);
             std::construct_at(bytes, value);
-
         }
     };
 
     template<typename... Ts>
-    func max_size(Ts... sizes) noexcept -> tsize
+    constexpr func max_size(Ts... sizes) noexcept -> isize
     {
-        tsize count = sizeof...(Ts);
-        tsize sizes[] = {cast(tsize) sizes};
-        tsize max = 0;
-        for(tsize i = 0; i < count; i++)
+        isize count = sizeof...(Ts);
+        isize sizes[] = {cast(isize) sizes};
+        isize max = 0;
+        for(isize i = 0; i < count; i++)
             if(max < sizes[i])
                 max = sizes[i];
 
@@ -46,16 +52,19 @@ namespace jot
     }
 
     template<typename... Ts>
-    using Variant_Of = Variant<max_size(sizeof(Ts)...)>;
+    using Variant_Of = Variant<
+        max_size(sizeof(Ts)...), 
+        max_size(alignof(Ts)...)>;
 
-    template<tsize prev_size, typename... Added>
-    using Expanded_Variant = Variant<max_size(prev_size, sizeof(Added)...)>;
+    template<isize prev_size, isize prev_align, typename... Added>
+    using Expanded_Variant = Variant<
+        max_size(prev_size, sizeof(Added)...), 
+        max_size(prev_align, alignof(Added)...)>;
 
     template<typename First, typename... Ts>
-    func make_variant(First in data) noexcept -> Variant_Of<First, Ts...>
+    constexpr func make_variant(First in data) noexcept -> Variant_Of<First, Ts...>
     {
-        static_assert(alignof(First) < 16 && alignof(Ts) < 16 && ...);
-        static_assert(variant_compatible<First> && variant_compatible<Ts>...);
+        static_assert(variant_compatible<First> && (variant_compatible<Ts> && ...), "all types must be variant compatible");
 
         Variant_Of<First, Ts...> variant;
         variant.which = type_id_of(First);
@@ -64,46 +73,48 @@ namespace jot
         return variant;
     }
 
-    template<typename Added, tsize prev_size>
-    func expand_variant(Variant<prev_size> in variant) -> Expanded_Variant<prev_size, Added>
+    template<typename Added, isize prev_size, isize prev_align>
+    constexpr func expand_variant(Variant<prev_size, prev_align> in variant) -> Expanded_Variant<prev_size, prev_align, Added>
     {
-        Expanded_Variant<prev_size, Added> out;
+        static_assert(variant_compatible<Added>, "must be variant compatible");
+
+        Expanded_Variant<prev_size, prev_align, Added> out;
         out.which = variant.which;
-        for(tsize i = 0; i < prev_size; i++)
+        for(isize i = 0; i < prev_size; i++)
             out.bytes[i] = variant.bytes[i];
 
         return out;
     }
 
-    template<tsize byte_size>
-    func slice(Variant<byte_size>* variant) -> Slice<u8> {
+    template<isize byte_size, isize align>
+    constexpr func slice(Variant<byte_size, align>* variant) -> Slice<u8> {
         return Slice<u8>{variant->bytes, variant->byte_size};
     }
 
-    template<tsize byte_size>
-    func slice(Variant<byte_size> in variant) -> Slice<const u8> {
+    template<isize byte_size, isize align>
+    constexpr func slice(Variant<byte_size, align> in variant) -> Slice<const u8> {
         return Slice<const u8>{variant->bytes, variant->byte_size};
     }
 
-    template<typename Which, tsize byte_size>
-    func has(Variant<byte_size> in variant) noexcept -> bool {
+    template<typename Which, isize byte_size, isize align>
+    constexpr func has(Variant<byte_size, align> in variant) noexcept -> bool {
         return variant.which = type_id_of(Which);
     }
 
-    template<typename Which, tsize byte_size>
-    func get(Variant<byte_size> variant) noexcept -> Which {
+    template<typename Which, isize byte_size, isize align>
+    constexpr func get(Variant<byte_size, align> variant) noexcept -> Which {
         assert(has<Which>(Variant));
 
-        constexpr tsize size = sizeof(T);
+        constexpr isize size = sizeof(Which);
         Array<u8, size> out_bytes;
-        for(tsize i = 0; i < size; i++)
+        for(isize i = 0; i < size; i++)
             out_bytes[i] = variant.bytes[i];
 
-        return std::bit_cast<Which>(out_bytes);
+        return bit_cast<Which>(out_bytes);
     }
 
-    template<typename Which, tsize byte_size>
-    runtime_func get(Variant<byte_size>* variant) noexcept -> Which* {
+    template<typename Which, isize byte_size, isize align>
+    func get(Variant<byte_size, align>* variant) noexcept -> Which* {
         assert(has<Which>(Variant));
         return cast(Which*) cast(void*) variant->bytes;
     }

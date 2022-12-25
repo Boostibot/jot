@@ -26,8 +26,8 @@ namespace jot
     using byte = u8;
     using cstring = const char*;
 
-    using isize = i64;
-    using usize = u64;
+    using isize = ptrdiff_t;
+    using usize = size_t;
 
     struct Unit {};
 }

@@ -1,33 +1,26 @@
 #pragma once
 
+#include "types.h"
 #include "bits.h"
+#include "slice.h"
 #include "defines.h"
 
 namespace jot 
 {
-    using Endian_Base = u8;
-
-    namespace detail
+    enum class Endian
     {
-        enum Endian_Type : Endian_Base
-        {
-            Little = 0,
-            Big = 1,
-            BigWord = 2,
-            Pdp = BigWord,
-            LittleWord = 3,
-            Honeywell = LittleWord,
-            Unknown = 255
-        };
-    }
-    
-    using Endian = detail::Endian_Type;
+        Little = 0,
+        Big = 1,
+        BigWord = 2,
+        Pdp = BigWord,
+        LittleWord = 3,
+        Honeywell = LittleWord,
+        Unknown = 255
+    };
 
-    func get_local_endian() -> Endian
+    constexpr func get_local_endian() -> Endian
     {
         Bytes<u32> rep = {1, 2, 3, 4};
-        static_assert(rep.size == 4, "!!!");
-
         u32 val = bit_cast<u32>(rep);
         switch (val)
         {
@@ -42,80 +35,56 @@ namespace jot
 
     constexpr Endian LOCAL_ENDIAN = get_local_endian();
 
-    func lower_bytes_offset(size_t size, size_t field_size, Endian endian = LOCAL_ENDIAN) -> size_t
+    constexpr func offset_from_low_bytes(isize offset, isize field_size, Endian endian = LOCAL_ENDIAN) -> isize
     {
         if(endian == Endian::Little)
             return 0;
         else
-            return field_size - size;
+            return field_size - offset;
     }
 
-    func higher_bytes_offset(size_t size, size_t field_size, Endian endian = LOCAL_ENDIAN) -> size_t
+    template <typename Int>
+    constexpr func from_endian(Slice<const u8> input, Endian endian, Endian local_endian = LOCAL_ENDIAN) -> Int
     {
-        return lower_bytes_offset(size, field_size, endian) + field_size - size; 
-    }
+        assert(false && "test me!");
 
-    proc place_endian(size_t size, size_t field_size, Endian endian, mut&& same_lambda, mut&& opposite_lambda, Endian local_endian = LOCAL_ENDIAN) -> auto
-    {
-        if(endian == Endian::Little)
+        Bytes<Int> rep = {0};
+        isize offset = offset_from_low_bytes(size, rep.size, endian);
+        if(endian == local_endian)
         {
-            if(local_endian == Endian::Little)
-                return same_lambda(0);
-            else
-                return opposite_lambda(0);
+            copy_bytes(rep + offset, input.data, input.size);
+            return bitcast<Int>(rep);
         }
         else
         {
-            if(local_endian == Endian::Little)
-                return opposite_lambda(field_size - size);
-            else
-                return same_lambda(field_size - size);
+            copy_bytes(rep + offset, input.data, input.size);
+            return byteswap(bitcast<Int>(rep));
         }
     }
 
-    template <typename IntegerT>
-    func from_endian(let* input_bytes, size_t size, Endian endian, Endian local_endian = LOCAL_ENDIAN) -> IntegerT
+    template <typename Int>
+    constexpr proc to_endian(Int in integer, Slice<u8> output, Endian endian, Endian local_endian = LOCAL_ENDIAN) -> void
     {
-        Bytes<IntegerT> rep = {0};
+        assert(false && "test me!");
 
-        return place_endian(size, rep.size, endian, 
-            [&](let offset){
-                copy_bytes(rep + offset, input_bytes, size);
-                return bitcast<IntegerT>(rep);
-            },
-            [&](let offset){
-                copy_bytes(rep + offset, input_bytes, size);
-                return byteswap(bitcast<IntegerT>(rep));
-            }, local_endian
-        );
+        using Rep = Bytes<Int>;
+        Rep rep = {0};
+        isize offset = offset_from_low_bytes(size, rep.size, endian);
+
+        if(endian == local_endian)
+        {
+            rep = bitcast<Rep>(integer);
+            copy_bytes(output.data + offset, rep.data, output.size);
+        }
+        else
+        {
+            rep = bitcast<Rep>(byteswap(integer));
+            copy_bytes(output.data + offset, rep.data, output.size);
+        }
     }
 
-    template <typename IntegerT>
-    proc from_endian_to(IntegerT& integer, let* input_bytes, size_t size, Endian endian, Endian local_endian = LOCAL_ENDIAN) -> void
-    {
-        integer = from_endian<IntegerT>(input_bytes, size, endian, local_endian);
-    }
-
-    template <typename IntegerT>
-    proc to_endian(const IntegerT& integer, mut* output_bytes, size_t size, Endian endian, Endian local_endian = LOCAL_ENDIAN) -> void
-    {
-        using Rep = Bytes<IntegerT>;
-        Rep rep;
-
-        return place_endian(size, rep.size, endian, 
-            [&](let offset){
-                rep = bitcast<Rep>(integer);
-                copy_bytes(output_bytes + offset, rep.data, size);
-            },
-            [&](let offset){
-                rep = bitcast<Rep>(byteswap(integer));
-                copy_bytes(output_bytes + offset, rep.data, size);
-            }, local_endian
-        );
-    }
-
-    template <typename IntegerT>
-    func to_endian(const IntegerT& integer, Endian to_endian, Endian from_endian = LOCAL_ENDIAN) -> IntegerT
+    template <typename Int>
+    constexpr func change_endian(Int in integer, Endian to_endian, Endian from_endian = LOCAL_ENDIAN) -> Int
     {
         if(to_endian == from_endian)
             return integer;

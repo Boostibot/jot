@@ -2,6 +2,14 @@
 #include "standards.h"
 #include "defines.h"
 
+#ifdef ERROR
+    #undef ERROR
+#endif // ERROR
+
+#ifdef OK
+    #undef OK
+#endif // OK
+
 namespace jot
 {
     enum Ok_Type {OK};

@@ -5,6 +5,14 @@
 #include "traits.h"
 #include "defines.h"
 
+#ifdef max
+#undef max
+#endif // max
+
+#ifdef min
+#undef min
+#endif // max
+
 namespace jot 
 {
     #define templ_func template<typename T> constexpr func
@@ -31,6 +39,5 @@ namespace jot
 
     #undef templ_func
 }
-
 
 #include "undefs.h"

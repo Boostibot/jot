@@ -19,7 +19,7 @@ namespace jot
         Allocator* allocator = allocator_globals::DEFAULT;
 
         Stack() noexcept = default;
-        Stack(Allocator allocator) noexcept
+        Stack(Allocator* allocator) noexcept
             : allocator{allocator} {}
 
         Stack(Stack moved other) noexcept;
@@ -98,7 +98,7 @@ namespace jot
 
         templ_proc alloc_data(Stack<T>* stack, isize new_capacity) -> Allocator_State_Type 
         {
-            Allocator_Result res = stack->allocator->allocate(new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
+            Allocation_Result res = stack->allocator->allocate(new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
             if(res.state != Allocator_State::OK)
                 return res.state;
 
@@ -106,15 +106,13 @@ namespace jot
             stack->capacity = new_capacity;
         }
 
-        templ_proc dealloc_data(Stack<T>* stack) -> Allocator_State_Type 
+        templ_proc dealloc_data(Stack<T>* stack) -> void 
         {
             if(stack->data != nullptr)
             {
                 Slice<u8> old_slice = cast_slice<u8>(capacity_slice(stack));
-                return stack->allocator->deallocate(old_slice, DEF_ALIGNMENT<T>);
+                stack->allocator->deallocate(old_slice, DEF_ALIGNMENT<T>);
             }
-
-            return Allocator_State::OK;
         }
 
         //can be used for arbitrary growing/shrinking of data
@@ -128,7 +126,7 @@ namespace jot
             T* no_alias old_data = stack->data;
 
             Slice<u8> old_slice = cast_slice<u8>(capacity_slice(stack));
-            Allocator_Result resize_res = stack->allocator->resize(old_slice, new_capacity * sizeof(T));
+            Allocation_Result resize_res = stack->allocator->resize(old_slice, new_capacity * sizeof(T));
             if(resize_res.state == Allocator_State::OK)
             {
                 let cast_res = cast_slice<T>(resize_res.items);
@@ -140,7 +138,7 @@ namespace jot
                 return Allocator_State::OK;
             }
 
-            Allocator_Result allocation_res = stack->allocator->allocate(new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
+            Allocation_Result allocation_res = stack->allocator->allocate(new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
             if(allocation_res.state != Allocator_State::OK)
                 return allocation_res.state;
 
@@ -152,7 +150,7 @@ namespace jot
             isize copy_to = min(stack->size, new_capacity);
             if constexpr(memcpyable<T>)
             {
-                memcpy(new_data, old_data, copy_to * sizeof(T));
+                std::memcpy(new_data, old_data, copy_to * sizeof(T));
             }
             else
             {
@@ -161,8 +159,7 @@ namespace jot
             }
 
             destroy_items(stack, 0, stack->size);
-            Allocator_State_Type dealloc_state = dealloc_data(stack);
-            assert(dealloc_state == OK);
+            dealloc_data(stack);
 
             stack->data = new_data;
             stack->capacity = new_capacity;
@@ -230,8 +227,7 @@ namespace jot
         if(data != nullptr)
         {
             detail::destroy_items(this, 0, this->size);
-            mut state = detail::dealloc_data(this);
-            assert(state == OK);
+            detail::dealloc_data(this);
         }
     }
     

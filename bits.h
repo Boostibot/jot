@@ -416,13 +416,13 @@ namespace jot
         return compare_bytes(to, from, size) == 0;
     }
 
-    proc byteswap(u8 output[], u8 input[], isize size) noexcept -> void
+    inline proc byteswap(u8 output[], u8 input[], isize size) noexcept -> void
     {
         for (isize i = 0; i < size; i++)
             output[i] = input[size - i - 1];
     }
 
-    proc byteswap(u8 bytes[], isize size) noexcept -> void
+    inline proc byteswap(u8 bytes[], isize size) noexcept -> void
     {
         let half_size = size / 2;
         for (isize i = 0; i < half_size; i++)
