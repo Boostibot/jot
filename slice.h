@@ -104,11 +104,8 @@ namespace jot
     template<typename T>
     Slice(T*, isize) -> Slice<T>;
 
-    using String = Slice<const char>;
-
-    Slice(const char*) -> String;
-
-    constexpr func slice(cstring str) -> String {
+    Slice(const char*) -> Slice<const char>;
+    constexpr func slice(cstring str) -> Slice<const char> {
         return {str, strlen(str)};
     }
 
