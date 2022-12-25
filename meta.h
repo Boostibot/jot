@@ -1,194 +1,138 @@
 #pragma once
-
-#include <type_traits>
-#include <concepts>
-
-namespace jot 
+namespace meta
 {
-    using std::integral_constant;
-    using std::true_type;
-    using std::false_type;
-    using std::integral;
-    using std::floating_point;
+    #if defined(__clang__)
+        #define __FUNCTION_NAME__ __PRETTY_FUNCTION__
+    #elif defined(__GNUC__)
+        #define __FUNCTION_NAME__ __PRETTY_FUNCTION__
+    #elif defined(_MSC_VER)
+        #define __FUNCTION_NAME__ __FUNCSIG__
+    #else
+        #error "Unsupported compiler"
+    #endif
 
+    struct String
+    {
+        const char* data;
+        int from;
+        int to;
+    };
 
-    template<class T>
-    concept non_void = (std::is_same_v<T, void> == false);
+    template<int string_size>
+    struct Static_String
+    {
+        char string[string_size + 1] = {0};
 
-    template<class T>
-    struct dummy {};
+        constexpr Static_String(const char* data, int from = 0, int to = string_size) noexcept 
+        {
+            for(int i = from; i < to && data[i]; i++)
+                string[i - from] = data[i];
+        }
+    };
 
-    template <auto val, class T = decltype(val)>
-    using Const = std::integral_constant<T, val>;
-
-    //stops infering of arguments
     template<typename T>
-    using No_Infer = std::type_identity<T>::type;
-    #define no_infer(...) No_Infer<__VA_ARGS__> 
-    
-    namespace example
+    constexpr String function_name_string() 
     {
-        template <typename T>
-        void take_two(T a, no_infer(T) b)
-        {
-            (void) a; (void) b;
-        };
+        const char* whole_name_str = __FUNCTION_NAME__;
+        int function_size = 0;
+        while(whole_name_str[function_size] != '\0')
+            function_size ++;
 
-        //take_two(1.0, 1); //without No_Infer doesnt compile
+        return String{whole_name_str, 0, function_size};
     }
 
-    namespace detail 
+    template<typename T>
+    constexpr String type_name_string() 
     {
-        template <typename AlwaysVoid, typename... Ts>
-        struct has_common_type_impl : false_type {};
+        String function_name = function_name_string<T>();
+        
+        #if defined(__clang__)
+            //clang: meta::String meta::function_name_string() [T = int]
+            char prefix[] = "meta::String meta::function_name_string() [T = ";
+            char postfix[] = "]";
+        #elif defined(__GNUC__)
+            //gcc: constexpr meta::String meta::function_name_string() [with T = int]
+            char prefix[] = "constexpr meta::String meta::function_name_string() [with T = ";
+            char postfix[] = "]";
+        #elif defined(_MSC_VER)
+            //msvc: struct meta::String __cdecl meta::function_name_string<int>(void)
+            char prefix[] = "struct meta::String __cdecl meta::function_name_string<";
+            char postfix[] = ">(void)";
+        #endif
 
-        template <typename... Ts>
-        struct has_common_type_impl<std::void_t<std::common_type_t<Ts...>>, Ts...> : true_type {};
+        int prefix_size = sizeof(prefix) - 1;
+        int postfix_size = sizeof(postfix) - 1;
+
+        return String{function_name.data, function_name.from + prefix_size, function_name.to - postfix_size};
     }
 
-    template <typename... Ts>
-    using has_common_type = typename detail::has_common_type_impl<void, Ts...>::type; 
+    //type_name examples:
+    //MSVC:
+    //int
+    //class std::basic_iostream<char,struct std::char_traits<char> >
+    //struct meta::String
 
-    template <typename... Ts>
-    static constexpr bool has_common_type_v = has_common_type<Ts...>::value; 
+    //GCC:
+    //int
+    //std::basic_iostream<char>
+    //String
 
-    template <typename... Ts>
-    struct common_type 
+    //CLANG
+    //int
+    //std::basic_iostream<char>
+    //meta::String
+
+    //we need to create static constexpr variable to return pointer to - 
+    // - static constexpr locals are not alloved in standard c++ so we need to create 
+    // a helper struct that will hold our string
+
+    template<typename Dummy_Struct, int dummy_struct_name_size>
+    constexpr String namespace_name_string() noexcept
     {
-        constexpr static bool value = has_common_type<Ts...>::value;
-        using type = typename std::conditional<value, std::common_type<Ts...>, std::type_identity<void>>::type::type;
+        String type_name = type_name_string<Dummy_Struct>();
+
+        char additional_postfix[] = "::";
+
+        #if defined(__clang__)  
+            char prefix[] = "";
+        #elif defined(__GNUC__) 
+            char prefix[] = "";
+        #elif defined(_MSC_VER) 
+            char prefix[] = "struct ";
+        #endif
+
+        int additional_postfix_size = sizeof(additional_postfix) - 1;
+        int prefix_size = sizeof(prefix) - 1;
+        int postfix_size = dummy_struct_name_size + additional_postfix_size;
+
+        String namespace_name = {type_name.data, type_name.from + prefix_size, type_name.to - postfix_size};
+        return namespace_name;
+    }
+
+    template<String str>
+    struct Static_Holder
+    {
+        static constexpr const Static_String<str.to - str.from> static_str = {str.data, str.from, str.to};
     };
 
-    template <class T, class... Ts>
-    concept same = (std::is_same_v<T, Ts> && ...); 
-
-    //A lightweight compile time only tuple used for storing types
-    template<class... Types >
-    struct type_collection;
-
-    namespace detail 
+    template<String str>
+    constexpr const char* to_const_char() noexcept 
     {
-        template<size_t I, class T >
-        struct tuple_element_impl;
-
-        template<size_t I, class Head, class... Tail >
-        struct tuple_element_impl<I, type_collection<Head, Tail...>>
-            : tuple_element_impl<I-1, type_collection<Tail...>> { };
-
-        template<class Head, class... Tail >
-        struct tuple_element_impl<0, type_collection<Head, Tail...>> {
-            using type = Head;
-        };
+        using Holder = Static_Holder<str>;
+        return Holder::static_str.string;
     }
 
-    template<size_t I, class T >
-    struct tuple_element;
-
-    template< size_t I, class... Types >
-    struct tuple_element<I, type_collection<Types...>>
+    template<typename T>
+    constexpr const char* type_name() noexcept 
     {
-        static_assert(I < sizeof...(Types), "Index must be in range");
-        using type = typename jot::detail::tuple_element_impl<I, type_collection<Types...>>::type;
-    };
-
-    template< class What, class T>
-    struct tuple_has : false_type {};
-    
-    template< class What, class... Types >
-    struct tuple_has<What, type_collection<Types...>> : std::bool_constant<(std::is_same_v<What, Types> || ...)> {};
-
-    template< size_t I, class T >
-    using tuple_element_t = typename tuple_element<I, T>::type;
-
-    namespace detail 
-    {
-        template<size_t I, typename Fallback, bool safe, typename... Types>
-        struct safe_tuple_element 
-        {
-            using type = tuple_element_t<I, type_collection<Types...>>;
-        };
-
-        template<size_t I, typename Fallback, typename... Types>
-        struct safe_tuple_element<I, Fallback, false, Types...>
-        {
-            using type = Fallback;
-        };
+        constexpr String name_str = type_name_string<T>();
+        return to_const_char<name_str>();
     }
 
-    template<size_t I, class T, typename Fallback>
-    struct tuple_element_or {using type = Fallback;};
-
-    template< size_t I, class... Types, typename Fallback >
-    struct tuple_element_or<I, type_collection<Types...>, Fallback> : 
-        detail::safe_tuple_element<I, Fallback, I < sizeof...(Types), Types...> {};
-
-    template< size_t I, class T, typename Fallback >
-    using tuple_element_or_t = typename tuple_element_or<I, T, Fallback>::type;
-
-    template<size_t I, class... Types>
-    using nth_type = typename tuple_element<I, type_collection<Types...>>::type;
-
-    template<class... Types >
-    struct type_collection 
+    template<typename Dummy_Struct, int dummy_struct_name_size>
+    constexpr const char* namespace_name() noexcept
     {
-        template<size_t I>
-        using get = nth_type<I, Types...>;
-        static constexpr size_t size = sizeof...(Types);
-
-        template <class What>
-        static constexpr bool has = (std::is_same_v<What, Types> || ...);
-    };
-
-    //Tagging -- simplify!
-    struct No_Tag {};
-
-    struct UnsetTag
-    {
-        using type = No_Tag;
-        static constexpr bool value = false; 
-    };
-
-    template <class Class, class tag_type>
-    struct Tag_Register : UnsetTag {};
-
-    template <class T, class With>
-    concept Contains_Tag = requires(T)
-    {
-        requires(tuple_has<T, With>::value);
-    };
-
-    template <class T, class With>
-    concept Direct_Tagged = requires(T)
-    {
-        requires(std::is_same_v<typename T::tag_type, With> //Has the check directly
-                 || Contains_Tag<T, With> //Is type collection with type
-                 || std::derived_from<T, With> //is derived from
-        );
-    };
-
-    template <class T, class With>
-    concept Tagged = 
-        (std::is_same_v<typename Tag_Register<T, With>::type, No_Tag> && Direct_Tagged<T, With>) || 
-        (!std::is_same_v<typename Tag_Register<T, With>::type, No_Tag> && Tag_Register<T, With>::value);
-
-
-    //If provided arguments is array decays it into ptr else forwards it
-    template<typename T, size_t N>
-    constexpr auto array_decay(T (&x)[N]) -> T*
-    {
-        return x;
+        constexpr String name_str = namespace_name_string<Dummy_Struct, dummy_struct_name_size>();
+        return to_const_char<name_str>();
     }
-
-    template <class _Ty>
-    constexpr _Ty&& array_decay(std::remove_reference_t<_Ty>& _Arg) noexcept 
-    { // forward an lvalue as either an lvalue or an rvalue
-        return static_cast<_Ty&&>(_Arg);
-    }
-
-    template <class _Ty>
-    constexpr _Ty&& array_decay(std::remove_reference_t<_Ty>&& _Arg) noexcept 
-    { // forward an rvalue as an rvalue
-        return static_cast<_Ty&&>(_Arg);
-    }
-
 }

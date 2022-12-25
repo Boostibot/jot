@@ -5,32 +5,29 @@
 
 namespace jot 
 {
-    using u8 = std::uint8_t;
-    using u16 = std::uint16_t;
-    using u32 = std::uint32_t;
-    using u64 = std::uint64_t;
+    using u8 = uint8_t;
+    using u16 = uint16_t;
+    using u32 = uint32_t;
+    using u64 = uint64_t;
 
-    using i8 = std::int8_t;
-    using i16 = std::int16_t;
-    using i32 = std::int32_t;
-    using i64 = std::int64_t;
+    using i8 = int8_t;
+    using i16 = int16_t;
+    using i32 = int32_t;
+    using i64 = int64_t;
 
     using b8 = bool;
-    using b16 = std::uint16_t;
-    using b32 = std::uint32_t;
-    using b64 = std::uint64_t;
+    using b16 = uint16_t;
+    using b32 = uint32_t;
+    using b64 = uint64_t;
 
     using f32 = float;
     using f64 = double;
 
     using byte = u8;
-    using std::size_t;
     using cstring = const char*;
 
-    #ifdef DEFAULT_SIZE_TYPE
-    using Def_Size = DEFAULT_SIZE_TYPE;
-    #else
-    using Def_Size = size_t;
-    #endif // DEFAULT_SIZE_TYPE
+    using isize = ptrdiff_t;
+    using usize = size_t;
 
+    struct Unit {};
 }

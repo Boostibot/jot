@@ -2,67 +2,42 @@
 
 #include <cassert>
 
-#include "types.h"
-#include "meta.h"
-#include "slice.h"
-#include "array.h"
-
+#include "traits.h"
 #include "defines.h"
+
+#ifdef max
+#undef max
+#endif // max
+
+#ifdef min
+#undef min
+#endif // max
 
 namespace jot 
 {
-    template<typename T>
-    func max() -> T
-    {   
-        return T();
-    }
+    #define templ_func template<typename T> constexpr func
 
-    template<typename T>
-    func min() -> T
-    {   
-        return T();
-    }
-
-    template<typename T>
-    func max(T first) -> T
-    {   
+    templ_func max(T in first) noexcept -> T in {   
         return first;
     }
 
-    template<typename T>
-    func min(T first) -> T
-    {   
+    templ_func min(T in first) noexcept -> T in {   
         return first;
     }
 
-    template<typename T, typename ...Ts>
-        requires (std::convertible_to<Ts, T> && ...)
-    func max(T first, Ts... values) -> T
-    {
-        let rest_max = max(values...);
-        if(rest_max > first)
-            return cast(T) rest_max;
-        else
-            return cast(T) first;
+    templ_func max(T in a, no_infer(T) in b) noexcept -> T in {
+        return a > b ? a : b;
     }
 
-    template<typename T, typename ...Ts>
-        requires (std::convertible_to<Ts, T> && ...)
-    func min(T first, Ts... values...) -> T
-    {
-        let rest_max = max(values...);
-        if(rest_max < first)
-            return cast(T) rest_max;
-        else
-            return cast(T) first;
+    templ_func min(T in a, no_infer(T) in b) noexcept -> T in {
+        return a < b ? a : b;
     }
 
-    template<typename T>
-    func div_round_up(T value, no_infer(T) to_multiple_of) -> auto
-    {
+    templ_func div_round_up(T in value, no_infer(T) in to_multiple_of) noexcept -> T {
         return (value + to_multiple_of - 1) / to_multiple_of;
     }
-}
 
+    #undef templ_func
+}
 
 #include "undefs.h"

@@ -1,837 +1,605 @@
 #pragma once
 
-#include <memory>
-
 #include "utils.h"
+#include "types.h"
 #include "slice.h"
 #include "allocator.h"
 #include "defines.h"
 
 namespace jot
 {
-    namespace detail
+    static_assert(hasable<Allocator_State_Type>, "!");
+
+    template <typename T>
+    struct Stack
     {   
-        template<non_void T, integral Size, allocator Alloc, size_t static_capacity_>
-        struct Stack_Data : Alloc
-        {
-            T* data = nullptr;
-            Size size = 0;
-            Size capacity = 0;
+        T* data = nullptr;
+        isize size = 0;
+        isize capacity = 0;
+        Allocator* allocator = allocator_globals::DEFAULT;
 
-            //has to be bytes or else will default construct all elements 
-            // (even if we provide explicit default constructor and leave the array uninit)
-            //@NOTE: This also prevents Stack_Data with non zero static_capacity_ from being used by constexpr functions
-            //@NOTE: For now zero initializing the static_data_ as well; Not sure if it makes any sense to do so
-            byte static_data_[static_capacity_ * sizeof(T)] = {0};
+        Stack() noexcept = default;
+        Stack(Allocator* allocator) noexcept
+            : allocator{allocator} {}
 
-            constexpr auto operator<=>(const Stack_Data&) const noexcept = default;
-            constexpr bool operator==(const Stack_Data&) const noexcept = default;
-        };
+        Stack(Stack moved other) noexcept;
 
-        template<non_void T, integral Size, allocator Alloc>
-        struct Stack_Data<T, Size, Alloc, 0> : Alloc
-        {
-            T* data = nullptr;
-            Size size = 0;
-            Size capacity = 0;
+        Stack(T* data, isize size, isize capacity, Allocator* allocator) noexcept
+            : data{data}, size{size}, capacity{capacity}, allocator{allocator} {}
 
-            constexpr auto operator<=>(const Stack_Data&) const noexcept = default;
-            constexpr bool operator==(const Stack_Data&) const noexcept = default;
-        };
-    }
+        ~Stack() noexcept;
+        Stack& operator=(Stack moved other) noexcept;
 
-
-    template <typename Grow>
-    concept grower = requires(size_t to_fit, size_t capacity, size_t size, size_t static_capacity, size_t elem_size)
-    {
-        { Grow::run(to_fit, capacity, size, static_capacity, elem_size) } -> std::convertible_to<size_t>;
-    };
-
-    template<size_t mult_, size_t add_, size_t base_elems_>
-    struct Def_Grow
-    {
-        static constexpr size_t mult = mult_;
-        static constexpr size_t add = add_;
-        static constexpr size_t base_elems = base_elems_;
-
-        static constexpr size_t run(size_t to_fit, size_t capacity, size_t size, size_t static_capacity, size_t elem_size)
-        {
-            cast(void) size;
-            cast(void) static_capacity;
-            cast(void) elem_size;
-
-            size_t realloc_to = capacity 
-                ? capacity * mult + add 
-                : base_elems;
-
-            while(realloc_to < to_fit)
-                realloc_to = realloc_to * mult + add;
-
-            return realloc_to;
-        }
-    };
-
-    template <
-        non_void T, 
-        size_t static_capacity_, 
-        integral Size_, 
-        allocator Alloc_, 
-        grower Grow
-    >
-    struct Stack_;
-
-    #define STACK_TEMPL class T, size_t scap, class Size, class Alloc, class Grow
-    #define Stack_T Stack_<T, scap, Size, Alloc, Grow>
-
-    template<STACK_TEMPL>
-    func static_data(Stack_T* data) -> T*;
-
-    template<STACK_TEMPL>
-    func static_data(const Stack_T* data) -> const T*;
-
-    template <STACK_TEMPL>
-    func alloc(Stack_T const& vec) -> Alloc const& { return *cast(const Alloc*) &vec; }
-
-    template <STACK_TEMPL>
-    func alloc(Stack_T* vec) -> Alloc* { return cast(Alloc*) vec; }
-
-    template<STACK_TEMPL>
-    proc assign(Stack_T* to, Stack_T const& other) -> void;
-
-    namespace detail 
-    {
-        template<STACK_TEMPL>
-        proc swap(Stack_T* left, Stack_T* right) noexcept -> void;
-
-        template<STACK_TEMPL>
-        proc alloc_data(Stack_T* vec, Size capacity) -> void;
-
-        template<STACK_TEMPL>
-        proc dealloc_data(Stack_T* vec) -> void;
-
-        template<STACK_TEMPL>
-        proc set_capacity(Stack_T* vec, Size new_capacity) -> void;
-
-        template<STACK_TEMPL, typename T_>
-        proc to_owned(Stack_T* vec, Slice_<T_, Size> const& other) -> void;
-
-        template<STACK_TEMPL>
-        proc copy_construct_elems(Stack_T* vec, typename Stack_T::slice_type other) -> void;
-
-        template<STACK_TEMPL>
-        proc destroy_elems(Stack_T* vec) -> void;
-    }
-
-    static_assert(grower<Def_Grow<2, 0, 8>>);
-
-    template <
-        non_void T, 
-        size_t static_capacity_ = 0, 
-        integral Size_ = Def_Size, 
-        allocator Alloc_ = Def_Alloc<T>, 
-        grower Grow = Def_Grow<2, 0, 8>
-    >
-    struct Stack_ : detail::Stack_Data<T, Size_, Alloc_, static_capacity_>
-    {   
-        using Value = T;
-        using Size = Size_;
-        using Alloc = Alloc_;
-
-        using allocator_type   = Alloc;
-        using slice_type       = Slice_<Value, Size>;
-        using const_slice_type = Slice_<const Value, Size>;
-        using grow_type        = Grow;
-        using Stack_Data       = detail::Stack_Data<Value, Size, Alloc, static_capacity_>;
-
-        using tag_type = std::conditional_t<static_capacity_ != 0, Static_Container_Tag, void>;
-
-        constexpr static Size static_capacity = cast(Size) static_capacity_; 
-        constexpr static bool has_static_storage = static_capacity != 0;
-        constexpr static bool has_stateful_alloc = !std::is_empty_v<Alloc>;
-
-        constexpr Stack_() = default;
-        constexpr Stack_(Stack_&& other, Alloc alloc = Alloc()) noexcept
-            : Stack_Data{alloc} { detail::swap(this, &other); }
-
-        explicit constexpr Stack_(Size size, Alloc alloc = Alloc()) 
-            : Stack_Data{alloc} { detail::alloc_data(this, size); }
-
-        explicit constexpr Stack_(slice_type slice, Alloc alloc = Alloc()) 
-            : Stack_Data{alloc} { detail::to_owned(this, slice); }
-
-        explicit constexpr Stack_(const_slice_type slice, Alloc alloc = Alloc()) 
-            : Stack_Data{alloc} { detail::to_owned(this, slice); }
-
-        constexpr Stack_(
-            Value* data, Size size, Size capacity, 
-            Alloc alloc, const Value (&static_data)[static_capacity]
-        ) noexcept requires (has_static_storage)
-            : Stack_Data{alloc, data, size, capacity} 
-        {
-            for(Size i = 0; i < static_capacity; i++)
-                static_data(this)[i] = static_data[i];
-        }
-
-        constexpr Stack_(Value* data, Size size, Size capacity, Alloc alloc = Alloc()) noexcept
-            : Stack_Data{alloc, data, size, capacity} {}
-
-        constexpr Stack_(Alloc alloc) noexcept
-            : Stack_Data{alloc} {}
-
-        constexpr Stack_(const Stack_& other)
-            requires (std::is_copy_constructible_v<Value> && std::is_copy_constructible_v<Alloc>) 
-            : Stack_Data{alloc(other)}
-        {
-            let slice = cast(slice_type) other;
-            detail::to_owned(this, slice);
-        }
-
-        constexpr ~Stack_() noexcept
-        {
-            detail::destroy_elems(this);
-            detail::dealloc_data(this);
-        }
-
-        constexpr Stack_& operator=(const Stack_& other)
-            requires (std::is_copy_assignable_v<Value> || std::is_copy_constructible_v<Value>)
-        {
-            assign(this, other);
-            return *this;
-        }
-
-        constexpr Stack_& operator=(Stack_&& other) noexcept
-        {
-            detail::swap(this, &other);
-            return *this;
-        }
-
-        //this is pretty pointless since its impossible to create a by byte copy...
-        func operator<=>(const Stack_&) const noexcept = default;
-        constexpr bool operator==(const Stack_&) const noexcept = default;
-
-        constexpr operator Slice_<Value, Size>() const noexcept 
-        {
-            return Slice_<Value, Size>{this->data, this->size};
-        }
+        Stack(Stack in other) noexcept = delete;
+        Stack& operator=(Stack in other) noexcept = delete;
 
         #include "slice_op_text.h"
     };
-}
 
-namespace std 
-{
-    template <STACK_TEMPL>
-    proc swap(jot::Stack_T& stack1, jot::Stack_T& stack2)
-    {
-        return jot::detail::swap(&stack1, &stack2);
-    }
-}
+    #define templ_func template<class T> func
+    #define templ_proc template<class T> proc
 
-namespace jot
-{
-    template <STACK_TEMPL>
-    func static_data(Stack_T* data) -> T*
-    {
-        if constexpr(scap != 0)
-            return cast(T*) cast(void*) data->static_data_;
-        else
-            return nullptr;
+    templ_func slice(Stack<T> in stack) noexcept -> Slice<const T>{
+        return Slice<const T>{stack.data, stack.size};
     }
 
-    template <STACK_TEMPL>
-    func static_data(Stack_T const& data) -> const T*
-    {
-        if constexpr(scap != 0)
-            return cast(T*) cast(void*) data.static_data_;
-        else
-            return nullptr;
+    templ_func slice(Stack<T>* stack) noexcept -> Slice<T>{
+        return Slice<T>{stack->data, stack->size};
     }
 
-    template <STACK_TEMPL>
-    func is_invariant(const Stack_T& stack) -> bool
+    templ_func capacity_slice(Stack<T> in stack) noexcept -> Slice<const T>{
+        return Slice<const T>{stack.data, stack.capacity};
+    }
+
+    templ_func capacity_slice(Stack<T>* stack) noexcept -> Slice<T>{
+        return Slice<T>{stack->data, stack->capacity};
+    }
+
+    templ_func allocator(Stack<T> in stack) noexcept -> const Allocator* { 
+        return &stack.allocator; 
+    }
+
+    templ_func allocator(Stack<T>* stack) noexcept -> Allocator* { 
+        return &stack.allocator; 
+    }
+
+    templ_func is_invariant(Stack<T> in stack) noexcept -> bool
     {
         const bool size_inv = stack.capacity >= stack.size;
         const bool data_inv = (stack.capacity == 0) == (stack.data == nullptr);
-        const bool capa_inv = stack.capacity != 0 
-            ? stack.capacity >= stack.static_capacity
-            : true;
+        const bool capa_inv = stack.capacity >= 0; 
 
         return size_inv && capa_inv && data_inv;
     }
 
-    template <STACK_TEMPL>
-    func is_static_alloced(Stack_T const& stack) noexcept
+    templ_func calculate_growth(Stack<T> in stack, isize to_fit) -> isize
     {
-        assert(is_invariant(stack));
-        return stack.capacity == stack.static_capacity && stack.has_static_storage; 
+        isize size = stack.size;
+        while(size < to_fit)
+            size = size * 3 / 2 + 8; //for small sizes grows fatser than classic factor of 2 for big slower
+
+        return size;
     }
 
-    template <STACK_TEMPL>
-    proc call_grow_function(const Stack_T& stack, no_infer(Size) to_fit) -> Size
-    {
-        return cast(Size) Stack_T::grow_type::run(
-            cast(size_t) to_fit, 
-            cast(size_t) stack.capacity, 
-            cast(size_t) stack.size, 
-            cast(size_t) stack.static_capacity,
-            sizeof(T)
-        );
-    }
-
-    template<STACK_TEMPL>
-    proc assign(Stack_T* to, Stack_T const& other) -> void
-    {
-        if(to->capacity >= other.size)
-        {
-            //If the elems are copy constructible we can save potential allocations of elems
-            // by using copy assignment instead (for example with Stack_<Stack_<>...>)
-            if constexpr (std::is_copy_assignable_v<T>)
-            {
-                //destroy extra
-                for (Size i = other.size; i < to->size; i++)
-                    to->data[i].~T();
-
-                //construct missing
-                for (Size i = to->size; i < other.size; i++)
-                    std::construct_at(to->data + i, other.data[i]);
-
-                //copy rest
-                Size to_size = std::min(to->size, other.size);
-                for (Size i = 0; i < to_size; i++)
-                    to->data[i] = other.data[i];
-
-                to->size = other.size;
-            }
-            else
-            {
-                destroy_elems(to);
-                copy_construct_elems(to, other);
-
-                to->size = other.size;
-            }
-        }
-        else
-        {
-            destroy_elems(to);
-            dealloc_data(to);
-
-            alloc_data(to, other.size);
-            copy_construct_elems(to, other);
-
-            to->size = other.size;
-        }
-    }
+    template <typename T>
+    concept memcpyable = std::is_scalar_v<T> || std::is_trivially_copy_constructible_v<T>;
+    
+    template <typename T>
+    concept memsetable = std::is_scalar_v<T>;
 
     namespace detail 
     {
-
-        template<STACK_TEMPL>
-        proc swap(Stack_T* left, Stack_T* right) noexcept -> void 
+        templ_proc destroy_items(Stack<T>* stack, isize from, isize to)
         {
-            using Stack = Stack_T;
-            constexpr let transfer_static = [](Stack* from, Stack* to, Size from_i, Size to_i)
+            if constexpr(std::is_trivially_destructible_v<T> == false)
+                for(isize i = from; i < to; i++)
+                    stack->data[i].~T();
+        }
+
+        templ_proc alloc_data(Stack<T>* stack, isize new_capacity) -> Allocator_State_Type 
+        {
+            Allocation_Result res = stack->allocator->allocate(new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
+            if(res.state != Allocator_State::OK)
+                return res.state;
+
+            stack->data = res.items.data;
+            stack->capacity = new_capacity;
+        }
+
+        templ_proc dealloc_data(Stack<T>* stack) -> void 
+        {
+            if(stack->data != nullptr)
             {
-                for (Size i = from_i; i < to_i; i++)
-                {
-                    std::construct_at(static_data(to) + i, std::move(static_data(from)[i]));
-                    static_data(from)[i].~T();
-                }
-            };
-
-            constexpr let transfer_half_static = [=](Stack* from, Stack* to)
-            {
-                transfer_static(from, to, 0, from->size);
-
-                from->data = to->data;
-                to->data = static_data(to);
-            };
-
-            if (is_static_alloced(*left) && is_static_alloced(*right))
-            {
-                Size to_size = 0;
-                if (left->size < right->size)
-                {
-                    to_size = left->size;
-                    transfer_static(right, left, left->size, right->size);
-                }
-                else
-                {
-                    to_size = right->size;
-                    transfer_static(left, right, right->size, left->size);
-                }
-
-                for (Size i = 0; i < to_size; i++)
-                {
-                    T& left_item = (*left)[i];
-                    T& right_item = (*right)[i];
-                    std::swap(left_item, right_item);
-                }
+                Slice<u8> old_slice = cast_slice<u8>(capacity_slice(stack));
+                stack->allocator->deallocate(old_slice, DEF_ALIGNMENT<T>);
             }
-            else if (is_static_alloced(*left))
-                transfer_half_static(left, right);
-            else if (is_static_alloced(*right))
-                transfer_half_static(right, left);
-            else
-                std::swap(left->data, right->data);
-
-            std::swap(left->size, right->size);
-            std::swap(left->capacity, right->capacity);
-
-            if constexpr(left->has_stateful_alloc)
-                std::swap(*alloc(left), *alloc(right));
         }
-
-        template<STACK_TEMPL>
-        proc alloc_data(Stack_T* vec, Size capacity) -> void 
-        {
-            if(capacity <= vec->static_capacity)
-            {
-                //We could also have Stack_Data with static capacity > 0 default init to these values
-                // - that however would make it so that default init is not zero init which could be a slow down
-                //The reallocating path is expensive anyways and this check will fire in so little cases 
-                // (actually only once) that it doesnt matter
-                if(vec->capacity < vec->static_capacity)
-                {
-                    vec->capacity = vec->static_capacity;
-                    vec->data = static_data(vec);
-                }
-
-                return;
-            }
-
-            vec->capacity = call_grow_function(*vec, capacity);
-            vec->data = allocate<T>(alloc(vec), vec->capacity * sizeof(T), DEF_ALIGNMENT<T>);
-        }
-
-        template<STACK_TEMPL>
-        proc dealloc_data(Stack_T* vec) -> void 
-        {
-            if(vec->capacity > vec->static_capacity)
-                deallocate<T>(alloc(vec), vec->data, vec->capacity * sizeof(T), DEF_ALIGNMENT<T>);
-        }
-
 
         //can be used for arbitrary growing/shrinking of data
         // when called on uninit stack acts as alloc_data
         // when called with new_capacity = 0 acts as dealloc_data
         // Destroys elements when shrinking but does not construct new ones when growing 
         //  (because doesnt know how to)
-        template<STACK_TEMPL>
-        proc set_capacity(Stack_T* vec, Size new_capacity) -> void 
+        templ_proc set_capacity(Stack<T>* stack, isize new_capacity) -> Allocator_State_Type 
         {
-            T* new_data = nullptr;
+            T* no_alias new_data = nullptr;
+            T* no_alias old_data = stack->data;
 
-            if(new_capacity <= vec->static_capacity)
+            Slice<u8> old_slice = cast_slice<u8>(capacity_slice(stack));
+            Allocation_Result resize_res = stack->allocator->resize(old_slice, new_capacity * sizeof(T));
+            if(resize_res.state == Allocator_State::OK)
             {
-                new_data = static_data(vec);
-                new_capacity = vec->static_capacity;
+                let cast_res = cast_slice<T>(resize_res.items);
+                assert(cast_res.size == new_capacity);
+                assert(cast_res.data == nullptr ? new_capacity == 0 : true);
+
+                stack->data = cast_res.data;
+                stack->capacity = cast_res.size;
+                return Allocator_State::OK;
+            }
+
+            Allocation_Result allocation_res = stack->allocator->allocate(new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
+            if(allocation_res.state != Allocator_State::OK)
+                return allocation_res.state;
+
+            let cast_res = cast_slice<T>(allocation_res.items);
+            new_data = cast_res.data;
+
+            assert((are_aliasing<T>(slice(stack), Slice<T>{new_data, new_capacity}) == false));
+            
+            isize copy_to = min(stack->size, new_capacity);
+            if constexpr(memcpyable<T>)
+            {
+                std::memcpy(new_data, old_data, copy_to * sizeof(T));
             }
             else
             {
-                let resize_res = action<T>(alloc(vec), Allocator_Actions::RESIZE, vec->data, vec->capacity * sizeof(T), new_capacity * sizeof(T));
-                if(resize_res.action_exists && resize_res.ptr != nullptr)
-                {
-                    vec->data = resize_res.ptr;
-                    vec->capacity = new_capacity;
-                    return;
-                }
-                else
-                    new_data = allocate<T>(alloc(vec), new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
+                for (isize i = 0; i < copy_to; i++)
+                    std::construct_at(new_data + i, move(old_data + i));
             }
 
-            let copy_to = std::min(vec->size, new_capacity);
-            for (Size i = 0; i < copy_to; i++)
-                std::construct_at(new_data + i, std::move(vec->data[i]));
+            destroy_items(stack, 0, stack->size);
+            dealloc_data(stack);
 
-            destroy_elems(vec);
-            dealloc_data(vec);
+            stack->data = new_data;
+            stack->capacity = new_capacity;
 
-            vec->data = new_data;
-            vec->capacity = new_capacity;
-        }
-
-        template<STACK_TEMPL, typename T_>
-        proc to_owned(Stack_T* vec, Slice_<T_, Size> const& other) -> void 
-        {
-            alloc_data(vec, other.size);
-            copy_construct_elems(vec, other);
-            vec->size = other.size;
-        }
-
-        template<STACK_TEMPL>
-        proc copy_construct_elems(Stack_T* vec, typename Stack_T::slice_type other) -> void 
-        {
-            for (Size i = 0; i < other.size; i++)
-                std::construct_at(vec->data + i, other.data[i]);
-        }
-
-        template<STACK_TEMPL>
-        proc destroy_elems(Stack_T* vec) -> void 
-        {
-            for (Size i = 0; i < vec->size; i++)
-                vec->data[i].~T();
+            return Allocator_State::OK;
         }
     }
 
+    templ_proc assign(Stack<T>* to, Stack<T> in from) noexcept -> State
+    {
+        State ret_state = OK_STATE;
+        if(to == &from)
+            return ret_state;
 
-    template <STACK_TEMPL>
-    proc reserve(Stack_T* stack, no_infer(Size) to_fit) -> bool
+        if(to->capacity < from.size)
+        {
+            let res = detail::set_capacity(to, from.size);
+            if(res == ERROR)
+                return res;
+        }
+
+        isize to_size = min(to->size, from.size);
+
+        //destroy extra
+        detail::destroy_items(to, from.size, to->size);
+
+        if(has_bit_by_bit_assign<T> && is_const_eval() == false)
+        {
+            //construct missing
+            if(to->size < from.size)
+                memcpy(to->data + to->size, from.data + to->size, (from.size - to->size) * sizeof(T));
+
+            //copy rest
+            memcpy(to->data, from.data, to_size * sizeof(T));
+        }
+        else
+        {
+            T* no_alias to_data = to->data;
+            const T* no_alias from_data = from.data;
+
+            //construct missing
+            for (isize i = to->size; i < from.size; i++)
+            {
+                State state = construct_assign_at(to_data + i, from_data[i]);
+                if(state == ERROR)
+                    ret_state = state;
+            }
+
+            //copy rest
+            for (isize i = 0; i < to_size; i++)
+            {
+                State state = assign(to_data + i, from_data[i]);
+                if(state == ERROR)
+                    ret_state = state;
+            }
+        }
+            
+        to->size = from.size;
+        return ret_state;
+    }
+
+    template<typename T>
+    Stack<T>::~Stack() noexcept 
+    {
+        if(data != nullptr)
+        {
+            detail::destroy_items(this, 0, this->size);
+            detail::dealloc_data(this);
+        }
+    }
+    
+    templ_proc swap(Stack<T>* left, Stack<T>* right) noexcept -> void 
+    {
+        swap(&left->data, &right->data);
+        swap(&left->size, &right->size);
+        swap(&left->capacity, &right->capacity);
+        swap(&left->allocator, &right->allocator);
+    }
+
+    template<typename T>
+    Stack<T>::Stack(Stack moved other) noexcept 
+    {
+        *this = move(&other);
+    }
+
+    template<typename T>
+    Stack<T>& Stack<T>::operator=(Stack<T> moved other) noexcept 
+    {
+        swap(this, &other);
+        return *this;
+    }
+
+    templ_proc reserve(Stack<T>* stack, isize to_fit) -> Allocator_State_Type
     {
         assert(is_invariant(*stack));
 
         if (stack->capacity >= to_fit)
-            return false;
+            return Allocator_State::OK;
 
-        Size realloc_to = 0;
-        //@NOTE: The below line could be merged with the same check in set_capacity
-        // (ie. there could be a version of set_capacity that doesnt have this check)
-        // but the improvemnt is so minor I have excluded it
-        if (to_fit <= stack->static_capacity)
-            realloc_to = stack->static_capacity;
-        else
-            realloc_to = call_grow_function(*stack, to_fit);
-
-        assert(realloc_to >= to_fit);
-        detail::set_capacity(stack, realloc_to);
+        isize realloc_to = calculate_growth(*stack, to_fit);
+        Allocator_State_Type state = detail::set_capacity(stack, realloc_to);
 
         assert(is_invariant(*stack));
-        return true;
+        return state;
     }
 
-    template <STACK_TEMPL>
-    proc clear(Stack_T* stack)
+    templ_proc clear(Stack<T>* stack) -> void
     {
         assert(is_invariant(*stack));
-        detail::destroy_elems(stack);
-        stack.size = 0;
+        detail::destroy_items(stack);
+        stack->size = 0;
         assert(is_invariant(*stack));
     }
 
-    template <STACK_TEMPL>
-    func empty(Stack_T const& stack) noexcept
+    templ_func empty(Stack<T> in stack) noexcept -> bool
     {
         assert(is_invariant(stack));
         return stack.size == 0;
     }
 
-    template <STACK_TEMPL>
-    func is_empty(Stack_T const& stack) noexcept
+    templ_func is_empty(Stack<T> in stack) noexcept -> bool
     {
         assert(is_invariant(stack));
         return stack.size == 0;
     }
 
-    template<typename T, typename Size, auto extent>
-    proc shift_left(Slice_<T, Size, extent>* slice, Size by)
-    {
-        for(Size i = slice->size; i--> 0; )
-            slice->data[i + by] = std::move(slice->data[i]);
-    }
-
-    template<typename T, typename Size, auto extent>
-    proc shift_right(Slice_<T, Size, extent>* slice, Size by)
-    {
-        for(Size i = 0; i < slice->size; )
-            slice->data[i] = std::move(slice->data[i + by]);
-    }
-
-
-    template <STACK_TEMPL, stdr::forward_range Inserted>
-    proc splice(Stack_T* stack, no_infer(Size) at, no_infer(Size) replace_size, Inserted&& inserted) -> void
+    template <class T, stdr::forward_range Inserted>
+    proc splice(Stack<T>* stack, isize at, isize replace_size, Inserted moved inserted) -> State
     {       
-        Stack_T& stack_ref = *stack; //for bounds checks
+        static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
+        State ret_state = OK_STATE;
+
+        Stack<T>& stack_ref = *stack; //for bounds checks
         assert(is_invariant(*stack));
 
-        let inserted_size = cast(Size) stdr::size(inserted);
-        let insert_to = at + inserted_size;
-        let replace_to = at + replace_size;
-        let remaining = stack_ref.size - replace_to;
-        let final_size = stack_ref.size + inserted_size - replace_size;
+        constexpr bool do_move_construct = std::is_rvalue_reference_v<decltype(inserted)>;
+        constexpr bool do_copy_construct = std::is_trivially_copy_constructible_v<T>;
+
+        const isize inserted_size = cast(isize) stdr::size(inserted);
+        const isize insert_to = at + inserted_size;
+        const isize replace_to = at + replace_size;
+        const isize remaining = stack_ref.size - replace_to;
+        const isize final_size = stack_ref.size + inserted_size - replace_size;
 
         assert(0 <= at && at <= stack_ref.size);
         assert(0 <= replace_to && replace_to <= stack_ref.size);
 
-        Size move_inserted_size = 0;
+        isize move_inserted_size = 0;
 
         if(inserted_size > replace_size)
         {
-            reserve(stack, final_size);
-            let constructed = inserted_size - replace_size;
-            let constructed_in_shift = min(constructed, remaining); 
-            let construction_gap = constructed - constructed_in_shift;
+            mut reserve_state = reserve(stack, final_size);
+            if(reserve_state == ERROR)
+                return reserve_state;
+
+            const isize constructed = inserted_size - replace_size;
+            const isize constructed_in_shift = min(constructed, remaining); 
+            const isize construction_gap = constructed - constructed_in_shift;
 
             move_inserted_size = inserted_size - construction_gap;
 
             //construct some elements by shifting right previous elements into them
-            let to = final_size - constructed_in_shift;
-            for (Size i = final_size; i-- > to; )
+            const isize to = final_size - constructed_in_shift;
+            for (isize i = final_size; i-- > to; )
             {
-                if constexpr(std::is_rvalue_reference_v<decltype(inserted)>)
-                    std::construct_at(stack->data + i, std::move(stack_ref[i - constructed]));
-                else
+                if constexpr(do_move_construct)
+                    std::construct_at(stack->data + i, move(&stack_ref[i - constructed]));
+                else if(do_copy_construct)
                     std::construct_at(stack->data + i, stack_ref[i - constructed]);
+                else
+                {
+                    State state = construct_assign_at(stack->data + i, stack_ref[i - constructed]);
+                    if(state == ERROR)
+                        ret_state = state;
+                }
             }
 
             //shifting right rest of the elems to make space for insertion
-            for(Size i = stack_ref.size; i-- > insert_to; )
-                stack_ref[i] = std::move(stack_ref[i - constructed]);
+            for(isize i = stack_ref.size; i-- > insert_to; )
+                stack_ref[i] = move(&stack_ref[i - constructed]);
         }
         else
         {
             move_inserted_size = inserted_size; 
 
             //move elems left to the freed space
-            let removed = replace_size - inserted_size;
-            for (Size i = insert_to; i < final_size; i++)
-                stack_ref[i] = std::move(stack_ref[i + removed]);
+            const isize removed = replace_size - inserted_size;
+            for (isize i = insert_to; i < final_size; i++)
+                stack_ref[i] = move(&stack_ref[i + removed]);
 
+            
             //Destroy all excess elems
-            for (Size i = final_size; i < stack_ref.size; i++)
-                stack_ref[i].~T();
+            detail::destroy_items(stack, final_size, stack->size);
         }
 
         stack->size = final_size;
 
         //insert the added elems into constructed slots
         mut it = stdr::begin(inserted);
-        let move_assign_to = at + move_inserted_size;
-        for (Size i = at; i < move_assign_to; i++, ++it)
+        const isize move_assign_to = at + move_inserted_size;
+        for (isize i = at; i < move_assign_to; i++, ++it)
         {
-            if constexpr(std::is_rvalue_reference_v<decltype(inserted)>)
-                stack_ref[i] = std::move(*it);
-            else
+            if constexpr(do_move_construct)
+            {
+                T in val = *it; //either copy or reference 
+                //either way now ve can actually get ptr to it and pass it to move
+                stack_ref[i] = move(&val);
+            }
+            else if(do_copy_construct)
                 stack_ref[i] = *it;
+            else
+            {
+                State state = assign(&stack_ref[i], *it);
+                if(state == ERROR)
+                    ret_state = state;
+            }
         }
 
         //insert construct leftover elements
-        for (Size i = move_assign_to; i < insert_to; i++, ++it)
+        for (isize i = move_assign_to; i < insert_to; i++, ++it)
         {
-            if constexpr(std::is_rvalue_reference_v<decltype(inserted)>)
-                std::construct_at(stack->data + i, std::move(*it));
-            else
+            T* prev = stack->data + i;
+            if constexpr(do_move_construct)
+            {
+                T in val = *it; //either copy or reference 
+                std::construct_at(stack->data + i, move(&val));
+            }
+            else if(do_copy_construct)
                 std::construct_at(stack->data + i, *it);
+            else
+            {
+                State state = construct_assign_at(stack->data + i, *it);
+                if(state == ERROR)
+                    ret_state = state;
+            }
         }
 
         assert(is_invariant(*stack));
+        return ret_state;
     }
 
-    template <STACK_TEMPL, stdr::forward_range Removed, stdr::forward_range Inserted>
-    proc splice(Stack_T* stack, no_infer(Size) at, Removed& removed, Inserted&& inserted) -> void
+    template <class T, stdr::forward_range Removed, stdr::forward_range Inserted>
+    proc splice(Stack<T>* stack, isize at, Removed* removed, Inserted moved inserted) -> State
     {       
-        Stack_T& stack_ref = *stack; //for bounds checks
+        static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
+        static_assert(std::convertible_to<stdr::range_value_t<Removed>, T>, "the types must be comaptible");
+        Stack<T>& stack_ref = *stack; //for bounds checks
 
-        mut it = stdr::begin(removed);
-        let end = stdr::end(removed);
-        Size i = at;
+        mut it = stdr::begin(*removed);
+        let end = stdr::end(*removed);
+        isize i = at;
         for (; it != end; i++, ++it)
-            *it = std::move(stack_ref[i]);
+            *it = move(&stack_ref[i]);
 
-        return splice(stack, at, i - at, std::forward<Inserted>(inserted));
+        return splice(stack, at, i - at, forward(Inserted, inserted));
     }
 
-    template <STACK_TEMPL>
-    proc splice(Stack_T* stack, no_infer(Size) at, no_infer(Size) replace_size) -> void
+    templ_proc splice(Stack<T>* stack, isize at, isize replace_size) -> State
     {
-        Slice_<T, Size> empty;
-        return splice(stack, at, replace_size, std::move(empty));
+        Slice<T, isize> empty;
+        return splice(stack, at, replace_size, move(&empty));
     }
 
-    template <STACK_TEMPL>
-    proc push(Stack_T* stack, no_infer(T) what) -> T*
+    templ_proc push(Stack<T>* stack, no_infer(T) what) -> State
     {
         assert(is_invariant(*stack));
 
-        reserve(stack, stack->size + 1);
+        State reserve_res = reserve(stack, stack->size + 1);
+        if(reserve_res == ERROR)
+            return reserve_res;
+        
         T* ptr = stack->data + stack->size;
-        std::construct_at(ptr, std::move(what));
+        std::construct_at(ptr, move(&what));
         stack->size++;
 
         assert(is_invariant(*stack));
-        return stack->data + stack->size - 1;
+        return Allocator_State::OK;
     }
 
-    template <STACK_TEMPL>
-    proc pop(Stack_T* stack) -> T
+    templ_proc pop(Stack<T>* stack) -> T
     {
         assert(is_invariant(*stack));
         assert(stack->size != 0);
 
         stack->size--;
 
-        T ret = std::move(stack->data[stack->size]);
+        T ret = move(&stack->data[stack->size]);
         stack->data[stack->size].~T();
         assert(is_invariant(*stack));
         return ret;
     }
 
-    template <STACK_TEMPL, typename ... _Ts>
-        requires (std::convertible_to<_Ts, T> && ...)
-    proc push(Stack_T* stack, _Ts&& ... what) -> void
+    template <class T, stdr::forward_range Inserted> requires (!same<Inserted, T>) 
+    proc push(Stack<T>* stack, Inserted moved inserted) -> State
     {
-        splice(stack, stack->size, 0, Array_<T, sizeof...(_Ts)>{cast(T)(what)...});
+        static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
+        return splice(stack, stack->size, 0, std::forward<Inserted>(inserted));
     }
 
-    template <STACK_TEMPL, stdr::forward_range Inserted>
-        requires std::convertible_to<stdr::range_value_t<Inserted>, T>
-    proc push(Stack_T* stack, Inserted&& inserted) -> void
+    templ_proc pop(Stack<T>* stack, isize count) -> void
     {
-        splice(stack, stack->size, 0, std::forward<Inserted>(inserted));
+        State state = splice(stack, stack->size - count, count);
+        assert(state == OK);
     }
 
-    //@TODO: add element type checks for ranges
-
-    template <STACK_TEMPL>
-    proc pop(Stack_T* stack, no_infer(Size) count) -> void
-    {
-        splice(stack, stack->size - count, count);
-    }
-
-    template <STACK_TEMPL>
-    proc back(Stack_T* stack) -> T*
+    templ_proc last(Stack<T>* stack) -> T*
     {
         assert(is_invariant(*stack));
         assert(stack->size > 0);
         return &stack->data[stack->size - 1];
     }
 
-    template <STACK_TEMPL>
-    proc back(Stack_T const& stack) -> T const&
+    templ_proc last(Stack<T> in stack) -> T in
     {
         assert(is_invariant(stack));
         assert(stack.size > 0);
         return stack.data[stack.size - 1];
     }
 
-    template <STACK_TEMPL>
-    proc front(Stack_T* stack) -> T*
+    templ_proc first(Stack<T>* stack) -> T*
     {
         assert(is_invariant(*stack));
         assert(stack->size > 0);
         return &stack->data[0];
     }
 
-    template <STACK_TEMPL>
-    proc front(Stack_T const& stack) -> T const&
+    templ_proc first(Stack<T> in stack) -> T in
     {
         assert(is_invariant(stack));
         assert(stack.size > 0);
         return stack.data[0];
     }
 
-    template <STACK_TEMPL, typename Fn>
-    proc resize(Stack_T* stack, no_infer(Size) to, Fn filler_fn) -> void
-        requires requires() { {filler_fn(0)} -> std::convertible_to<T>; }
+    template <class T, bool is_zero = false>
+    proc resize(Stack<T>* stack, isize to, no_infer(T) fillWith) -> State
     {
         assert(is_invariant(*stack));
         assert(0 <= to);
 
-        reserve(stack, to);
-        for (Size i = stack->size; i < to; i++)
-            std::construct_at(stack->data + i, filler_fn(i));
+        State ret_state = reserve(stack, to);
+        if(ret_state == ERROR)
+            return ret_state;
 
-        for (Size i = to; i < stack->size; i++)
-            stack->data[i].~T();
+        if(memsetable<T> && is_zero && is_const_eval() == false)
+        {
+            if(stack->size < to)
+                memset(stack->data + stack->size, 0, (to - stack->size)*sizeof(T));
+        }
+        else
+        {
+            for (isize i = stack->size; i < to; i++)
+            {
+                if constexpr(std::is_trivially_copy_constructible_v<T>)
+                    stack->data[i] = fillWith;
+                else
+                {
+                    mut state = construct_assign_at(stack->data + i, fillWith);
+                    if(state == ERROR)
+                        ret_state = state;
+                }
+            }
+
+            detail::destroy_items(stack, to, stack->size);
+        }
+
         stack->size = to;
-
         assert(is_invariant(*stack));
+        return ret_state;
     }
 
-    template <STACK_TEMPL>
-    proc resize(Stack_T* stack, no_infer(Size) to, no_infer(T) fillWith) -> void
+    templ_proc resize(Stack<T>* stack, isize to) -> State
     {
-        return resize(stack, to, [&](Size){return fillWith; });
+        return resize<T, true>(stack, to, T());
     }
 
-    template <STACK_TEMPL>
-    proc resize(Stack_T* stack, no_infer(Size) to) -> void
+    templ_proc resize_for_overwrite(Stack<T>* stack, isize to) -> State
     {
-        return resize(stack, to, T());
+        static_assert(std::is_trivially_constructible_v<T>, "type must be POD!");
+        State state = reserve(stack, to);
+        if(state == ERROR)
+            return state;
+
+        stack->size = to;
+        assert(is_invariant(*stack));
+        return Allocator_State::OK;
     }
 
-    #ifndef SLICE_OWN_INSERT
-        template <STACK_TEMPL>
-        proc insert(Stack_T* stack, no_infer(Size) at, no_infer(T) what) -> T*
-        {
-            assert(is_invariant(*stack));
-            assert(0 <= at && at <= stack->size);
+    templ_proc insert(Stack<T>* stack, isize at, no_infer(T) what) -> T*
+    {
+        assert(is_invariant(*stack));
+        assert(0 <= at && at <= stack->size);
 
-            Slice_<T> view = {&what, 1};
-            splice(stack, at, 0, std::move(view));
-            return stack->data + at;
-        }
+        Slice<T> view = {&what, 1};
+        splice(stack, at, 0, move(*view));
+        return stack->data + at;
+    }
 
-        template <STACK_TEMPL>
-        proc remove(Stack_T* stack, no_infer(Size) at) -> T
-        {
-            assert(is_invariant(*stack));
-            assert(0 <= at && at < stack->size);
-            assert(0 < stack->size);
+    templ_proc remove(Stack<T>* stack, isize at) -> T
+    {
+        assert(is_invariant(*stack));
+        assert(0 <= at && at < stack->size);
+        assert(0 < stack->size);
 
-            T removed = std::move(stack->data[at]);
-            splice(stack, at, 1);
-            return removed;
-        }
-    #else
-        template <STACK_TEMPL>
-        proc insert(Stack_T* stack, no_infer(Size) at, no_infer(T) what) -> T*
-        {
-            assert(is_invariant(*stack));
-            assert(0 <= at && at <= stack->size);
+        T removed = move(&stack->data[at]);
+        splice(stack, at, 1);
+        return removed;
+    }
 
-            if(stack->size == at)
-                return push(stack, what);
-
-            push(stack, std::move(back(stack)));
-            for (Size i = stack->size - 1; i-- > at; )
-                stack->data[i + 1] = std::move(stack->data[i]);
-
-            stack->data[at] = std::move(what);
-            assert(is_invariant(*stack));
-            return stack->data + at;
-        }
-
-        template <STACK_TEMPL>
-        proc remove(Stack_T* stack, no_infer(Size) at) -> T
-        {
-            assert(is_invariant(*stack));
-            assert(0 <= at && at < stack->size);
-            assert(0 < stack->size);
-
-            T removed = std::move(stack->data[at]);
-
-            for (Size i = at; i < stack->size - 1; i++)
-                stack->data[i] = std::move(stack->data[i + 1]);
-
-            pop(stack);
-
-            assert(is_invariant(*stack));
-            return removed;
-        }
-    #endif // SLICE_SPLICE_INSERT
-
-    template <STACK_TEMPL>
-    proc unordered_remove(Stack_T* stack, no_infer(Size) at) -> T
+    templ_proc unordered_remove(Stack<T>* stack, isize at) -> T
     {
         assert(0 <= at && at < stack->size);
         assert(0 < stack->size);
 
-        std::swap(stack->data[at], back(stack));
+        swap(&stack->data[at], back(stack));
         return pop(stack);
     }
 
-    template <STACK_TEMPL>
-    proc unordered_insert(Stack_T* stack, no_infer(Size) at, no_infer(T) what) -> T*
+    templ_proc unordered_insert(Stack<T>* stack, isize at, no_infer(T) what) -> State
     {
         assert(0 <= at && at <= stack->size);
 
-        push(stack, what);
-        std::swap(stack->data[at], back(stack));
-        return stack->data + at;
-    }
+        State state = push(stack, move(&what));
+        if(state == ERROR)
+            return state;
 
-    #undef STACK_TEMPL
-    #undef Stack_T
+        swap(&stack->data[at], back(stack));
+        return Allocator_State::OK;
+    }
 }
 
+namespace std 
+{
+    templ_proc swap(jot::Stack<T>& stack1, jot::Stack<T>& stack2) -> void
+    {
+        jot::swap(&stack1, &stack2);
+    }
+}
+
+
+#undef templ_func
+#undef templ_proc
 
 #include "undefs.h"

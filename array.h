@@ -1,34 +1,24 @@
 #pragma once
 
-#include <cstddef>
-#include <cassert>
 #include "meta.h"
+#include "types.h"
 #include "slice.h"
 #include "defines.h"
 
 namespace jot
 {
-    //Custom minimal std::array-like array implementation
-    //   is identitical to std::array but access to members is done directly (because typing () is annoying)
-    //Should be compatible with any algorhitms requiring begin(), end(), size() proc as they 
-    //   still extist but only as non members which removes the named collsions (defined generically inside span.h)
-    //Also includes slicing syntax in the form arr(5, END - 1)
-    template<typename T, size_t size_, typename Size = Def_Size>
-    struct Array_
+    template<typename T, isize size_>
+    struct Array
     {
-        using tag_type = Static_Container_Tag;
-        using slice_type = Slice_<T, Size>;
-        using const_slice_type = Slice_<const T, Size>;
+        static constexpr isize size = size_;
+        static constexpr isize capacity = size;
+        T data[size > 0 ? size : 1];
 
-        static constexpr Size size = cast(Size) size_;
-        static constexpr Size capacity = size;
-        T data[size ? size : 1];
+        nodisc constexpr bool operator==(const Array&) const noexcept requires(size != 0) = default;
+        constexpr func operator<=>(const Array&) const noexcept requires(size != 0) = default;
 
-        pure constexpr bool operator==(const Array_&) const noexcept requires(size != 0) = default;
-        func operator<=>(const Array_&) const noexcept requires(size != 0) = default;
-
-        pure constexpr bool operator==(const Array_&) const noexcept requires(size == 0) { return true; };
-        func operator<=>(const Array_&) const noexcept requires(size == 0) { return 0; };
+        nodisc constexpr bool operator==(const Array&) const noexcept requires(size == 0) { return true; };
+        constexpr func operator<=>(const Array&) const noexcept requires(size == 0) { return 0; };
 
         constexpr operator T*() noexcept             { return this->data; }
         constexpr operator const T*() const noexcept { return this->data; }
@@ -39,63 +29,90 @@ namespace jot
 
     //deduction guide
     template <class First, class... Rest>
-    Array_(First, Rest...) -> Array_<First, 1 + sizeof...(Rest)>;
+    Array(First, Rest...) -> Array<First, 1 + sizeof...(Rest)>;
 
-    //Adds self to slice
-    //template <class T, size_t size, class Size>
-    //Slice_(Array_<T, size, Size>) -> Slice_<T, Size, size>;
-
-    namespace detail 
+    template<typename Container>
+    concept static_direct_container = requires(Container container)
     {
-        template <class T, size_t N, size_t... I>
-        constexpr Array_<std::remove_cv_t<T>, N>
-            to_array_impl(const T (&a)[N], std::index_sequence<I...>)
-        {
-            return { {a[I]...} };
-        }
+        { container.data } -> ::std::convertible_to<void*>;
+        { Container::size } -> ::std::convertible_to<isize>;
+        requires(!same<decltype(container.data), void*>);
+    };
 
-        template <class T, size_t N, size_t... I>
-        constexpr Array_<std::remove_cv_t<T>, N>
-            to_array_impl(T (&&a)[N], std::index_sequence<I...>)
-        {
-            return { {std::move(a[I])...} };
-        }
-
+    template <class T, isize N>
+    constexpr func slice(Array<T, N>* array) -> Slice<T> {
+        return Slice<T>{array->data, N};
     }
 
-    template <class T, size_t N>
-    func to_array(const T (&a)[N]) -> Array_<std::remove_cv_t<T>, N>
-    {
-        return detail::to_array_impl(a, std::make_index_sequence<N>{});
-    }
-
-    template <class T, size_t N>
-    func to_array(T (&&a)[N]) -> Array_<std::remove_cv_t<T>, N>
-    {
-        return detail::to_array_impl(std::move(a), std::make_index_sequence<N>{});
+    template <class T, isize N, typename Size>
+    constexpr func slice(Array<T, N> in array) -> Slice<const T> {
+        return Slice<const T>{array->data, N};
     }
 }
 
 namespace std
 {
-    #define templ template <class T, size_t size, class Size>
-    template <class T, size_t size, class Size>
-    func begin(jot::Array_<T,size, Size>& arr) noexcept {return arr.data;}
-    template <class T, size_t size, class Size>
-    func begin(const jot::Array_<T,size, Size>& arr) noexcept {return arr.data;}
+    template<jot::static_direct_container Cont>
+    struct tuple_size<Cont> : integral_constant<size_t, Cont::size> {};
 
-    template <class T, size_t size, class Size>
-    func end(jot::Array_<T,size, Size>& arr) noexcept {return arr.data + arr.size;}
-    template <class T, size_t size, class Size>
-    func end(const jot::Array_<T,size, Size>& arr) noexcept {return arr.data + arr.size;}
+    template<size_t I, jot::static_direct_container Cont>
+    struct tuple_element<I, Cont> 
+    {using type = typename Cont::value_type;};
 
-    template <class T, size_t size, class Size>
-    func cbegin(const jot::Array_<T,size, Size>& arr) noexcept {return arr.data;}
-    template <class T, size_t size, class Size>
-    func cend(const jot::Array_<T,size, Size>& arr) noexcept {return arr.data + arr.size;}
+    template<size_t I, jot::static_direct_container Cont>
+    constexpr func get(Cont& arr) noexcept -> typename Cont::value_type&
+    {
+        static_assert(I < arr.size, "access out of bounds");
+        return arr[I];
+    }
 
-    template <class T, size_t _size, class Size>
-    func size(const jot::Array_<T,_size, Size>& arr) noexcept {return arr.size;}
+    template<size_t I, jot::static_direct_container Cont>
+    constexpr func get(Cont&& arr) noexcept -> typename Cont::value_type&&
+    {
+        static_assert(I < arr.size, "access out of bounds");
+        return move(arr[I]);
+    }
+
+    template<size_t I, jot::static_direct_container Cont>
+    constexpr func get(const Cont& arr) noexcept -> const typename Cont::value_type&
+    {
+        static_assert(I < arr.size, "access out of bounds");
+        return arr[I];
+    } 
+
+    template<size_t I, jot::static_direct_container Cont>
+    constexpr func get(const Cont&& arr) noexcept -> const typename Cont::value_type&&
+    {
+        static_assert(I < arr.size, "access out of bounds");
+        return move(arr[I]);
+    }
+
+    template<class T, jot::static_direct_container Cont>
+    constexpr func get(Cont& arr) noexcept -> T&
+    {
+        static_assert(is_same_v<T, typename Cont::value_type> && arr.size == 1, "exactly one element needs to satisfy the type");
+        return arr[0];
+    }
+    template<class T, jot::static_direct_container Cont>
+    constexpr func get(Cont&& arr) noexcept -> T&&
+    {
+        static_assert(is_same_v<T, typename Cont::value_type> && arr.size == 1, "exactly one element needs to satisfy the type");
+        return move(arr[0]);
+    }
+
+    template<class T, jot::static_direct_container Cont>
+    constexpr func get(const Cont& arr) noexcept -> const T&
+    {
+        static_assert(is_same_v<T, typename Cont::value_type> && arr.size == 1, "exactly one element needs to satisfy the type");
+        return arr[0];
+    }
+    template<class T, jot::static_direct_container Cont>
+    constexpr func get(const Cont&& arr) noexcept -> const T&&
+    {
+        static_assert(is_same_v<T, typename Cont::value_type> && arr.size == 1, "exactly one element needs to satisfy the type");
+        return move(arr[0]);
+    }
 }
+
 
 #include "undefs.h"

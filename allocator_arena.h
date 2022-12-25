@@ -1,286 +1,511 @@
 #pragma once
 
 #include "allocator.h"
-#include "allocator_resource.h"
-#include "block_list.h"
+#include "stack.h"
 #include "defines.h"
 
 namespace jot 
 {
+    #ifndef ALLOCATOR_UNBOUND_STACK_DEF_SIZE
+        #define ALLOCATOR_UNBOUND_STACK_DEF_SIZE 4096
+    #endif
 
-    struct Arena_Resource;
+    #ifndef ALLOCATOR_UNBOUND_STACK_DEF_GROW
+        #define ALLOCATOR_UNBOUND_STACK_DEF_GROW 2
+    #endif
 
-    runtime_proc allocate(Arena_Resource* resource, size_t size, size_t align) -> void*;
-    runtime_proc deallocate(Arena_Resource* resource, void* ptr, size_t old_size, size_t align) -> void;
-    runtime_proc resize(Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool;
-    runtime_proc deallocate_all(Arena_Resource* resource) -> void;
-    runtime_proc action(
-        Arena_Resource* resource, 
-        Allocator_Actions::Action action_type, 
-        void* old_ptr, 
-        size_t old_size, size_t new_size, 
-        size_t old_align, size_t new_align, 
-        void* custom_data = nullptr) -> Allocator_Actions::Result<void>;
-
-    //func align_size(size_t current_pos, )
-
-    struct Arena_Resource : Allocator_Resource
+    struct Unbound_Stack_Allocator : Scratch_Allocator
     {
-        using Block_List = Block_List_<byte, size_t, Allocator>;
-        using Header = Block_List::Header;
+        static constexpr isize MAGIC_NUMBER = 0x0ABCDEF0;
+        #if defined(DO_SNAPSHOT_VALIDTY_CHECKS) || defined(DO_ALLOCATOR_STATS)
+            #define ALLOCATOR_UNBOUND_STACK_DO_STATS
+        #endif
 
-        Allocator_Resource* upstream = new_delete_resource();
-        Block_List blocks = Block_List{upstream};
-        Block_List free_blocks = Block_List{upstream};
-        size_t filled_to = 0;
-        size_t chunk_size = 2097152; //2MiB
-        byte* last_allocation = nullptr;
-
-        Arena_Resource() = default;
-        Arena_Resource(size_t chunk_size) 
+        struct Block
         {
-            this->chunk_size = chunk_size;
-        }
-
-        runtime_proc do_allocate(size_t bytes, size_t alignment) -> void* override
+            Block* next = nullptr;
+            isize size = -1;
+            u32 align = -1;
+            b32 was_alloced = false;
+        };
+        
+        struct Chain
         {
-            return jot::allocate(this, bytes, alignment);
-        }
-        runtime_proc do_deallocate(void* old_ptr, size_t bytes, size_t alignment) -> void override
-        {
-            return jot::deallocate(this, old_ptr, bytes, alignment);
-        }
-        runtime_proc do_action(
-            Allocator_Actions::Action action_type, 
-            void* old_ptr, 
-            size_t old_size, size_t new_size, 
-            size_t old_align, size_t new_align, 
-            void* custom_data = nullptr) -> Result override
-        {
-            return action(this, action_type, old_ptr, old_size, new_size, old_align, new_align, custom_data);
-        }
-
-        runtime_proc do_upstream_resource() const noexcept -> Allocator_Resource* override
-        {
-            return upstream;
-        }
-
-        runtime_proc do_is_equal(std::pmr::memory_resource const& other) const noexcept -> bool override
-        {
-            return cast(std::pmr::memory_resource*)(this) == &other;
-        }
-    };
-
-
-    func align_forward(uintptr_t ptr_num, size_t align_to) -> uintptr_t
-    {
-        return div_round_up(ptr_num, align_to) * align_to;
-    }
-
-    runtime_func align_forward(void* ptr, size_t align_to) -> void*
-    {
-        return cast(void*)(align_forward(cast(uintptr_t) ptr, align_to));
-    }
-
-    runtime_proc allocate(Arena_Resource* resource, size_t byte_size, size_t align) -> void* 
-    {
-        assert(is_power_of_two(align));
-
-        using Alloc = Arena_Resource;
-        using Block_List = Alloc::Block_List;
-        using Header = Alloc::Header;
-
-        byte* block_from = nullptr;
-        byte* block_to = nullptr;
-        byte* filled_to_ptr = nullptr;
-        byte* allocated_from = nullptr;
-        byte* allocated_to = block_to + 1;
-
-        let calc_all_ptrs = [&](Header* last_block) 
-        {
-            block_from = data(last_block);
-            block_to = block_from + last_block->size;
-            filled_to_ptr = block_from + resource->filled_to;
-            allocated_from = cast(byte*) align_forward(filled_to_ptr, align);
-            allocated_to = allocated_from + byte_size;
+            Block* first = nullptr;
+            Block* last = nullptr;
         };
 
-        if(!is_empty(resource->blocks))
-            calc_all_ptrs(resource->blocks.last);
-
-        //will trigger even if all variables unitialized
-        if(allocated_to > block_to)
+        struct Snapshot_Data
         {
-            size_t chunk_size = resource->chunk_size;
-            size_t chunk_count = div_round_up(byte_size + align, chunk_size);
-            size_t total_alloced = chunk_count * chunk_size;
+            Block* from_block;
+            u8* available_from;
 
-            Header* found = nullptr;
-            for(mut& block : resource->free_blocks)
+            #ifdef ALLOCATOR_UNBOUND_STACK_DO_STATS
+            isize magic_number = MAGIC_NUMBER;
+            isize bytes_alloced = 0;
+            #endif // ALLOCATOR_UNBOUND_STACK_DO_STATS
+        };
+
+        static func data(Block* block) -> Slice<u8>
+        {
+            u8* address = cast(u8*) cast(void*) block;
+            if(block->size == 0)
+                return Slice<u8>{};
+
+            return Slice<u8>{address + sizeof(Block), block->size};
+        }
+
+        static func used_by_block(Block* block) -> Slice<u8>
+        {
+            u8* address = cast(u8*) cast(void*) block;
+            return Slice<u8>{address, block->size + cast(isize) sizeof(Block)};
+        }
+
+        u8* available_from = nullptr;
+        u8* available_to = nullptr;
+        Slice<u8> last_allocation = {dummy_data, 0};
+
+        Chain blocks;
+        Block* current_block = nullptr;
+
+        Allocator* parent = allocator_globals::DEFAULT;
+        isize chunk_size = ALLOCATOR_UNBOUND_STACK_DEF_SIZE;
+        isize chunk_grow = ALLOCATOR_UNBOUND_STACK_DEF_GROW;
+
+        isize used_blocks = 0;
+        isize max_used_blocks = 0;
+
+        isize bytes_alloced_ = 0; 
+        isize bytes_used_ = 0;
+        isize max_bytes_alloced_ = 0;
+        isize max_bytes_used_ = 0;
+
+        u8 dummy_data[8] = {0};
+
+        Unbound_Stack_Allocator(
+            Allocator* parent = allocator_globals::DEFAULT, 
+            size_t chunk_size = ALLOCATOR_UNBOUND_STACK_DEF_SIZE,
+            size_t chunk_grow = ALLOCATOR_UNBOUND_STACK_DEF_GROW) 
+            : parent(parent), chunk_size(chunk_size), chunk_grow(chunk_grow)
+        {
+            reset_last_allocation();
+            assert(is_invariant());
+        }
+
+        ~Unbound_Stack_Allocator()
+        {
+            assert(is_invariant());
+
+            isize dealloced_bytes = 0;
+            Block* current = blocks.first;
+            Block* prev = nullptr;
+            while(current != nullptr && prev != blocks.last)
             {
-                if(block.size >= total_alloced)
-                {
-                    found = &block;
-                    break;
-                }
+                prev = current;
+                current = current->next;
+
+                Slice<u8> total_block_data = used_by_block(prev);
+                dealloced_bytes += total_block_data.size;
+
+                if(prev->was_alloced)
+                    parent->deallocate(total_block_data, prev->align);
             }
 
-            if(found == nullptr)
+            assert(prev == blocks.last && "must be a valid chain!");
+            assert(dealloced_bytes == bytes_used_);
+        }
+
+        Chain
+        used_chain() const noexcept
+        {
+            return Chain{blocks.first, current_block};
+        }
+
+        Chain
+        free_chain() const noexcept
+        {
+            if(current_block == nullptr)
+                return Chain{nullptr, nullptr};
+
+            assert(current_block != nullptr);
+            return Chain{current_block->next, blocks.first};
+        }
+
+        virtual Allocation_Result 
+        allocate(isize size, isize align) noexcept override
+        {
+            assert(is_power_of_two(align));
+            u8* aligned = align_forward(available_from, align);
+            u8* used_to = aligned + size;
+
+            if(used_to > available_to)
             {
-                let filler = [](size_t){return 0;};            
-                push_back(&resource->blocks, make_block<Header, Allocator>(resource->upstream, total_alloced, filler)); 
+                Allocator_State_Type state = obtain_block_and_update(size, align);
+                if(state == ERROR)
+                    return Allocation_Result{state};
+
+                return allocate(size, align);
+            }
+
+            Slice<u8> alloced = Slice{aligned, size};
+            available_from = used_to;
+            last_allocation = alloced;
+
+            update_bytes_alloced(size);
+
+            return Allocation_Result{Allocator_State::OK, alloced};
+        }
+
+        virtual void 
+        deallocate(Slice<u8> allocated, isize align) noexcept override 
+        {
+            if(allocated != last_allocation)
+                return;
+
+            reset_last_allocation();
+
+            #ifdef ALLOCATOR_UNBOUND_STACK_DO_STATS
+            bytes_alloced_ -= allocated.size;
+            assert(bytes_alloced_ >= 0);
+            #endif
+        } 
+
+        virtual Allocation_Result 
+        resize(Slice<u8> allocated, isize new_size) noexcept override
+        {
+            u8* used_to = available_from + new_size;
+            if(allocated != last_allocation || used_to > available_to)
+            {
+                if(new_size < allocated.size)
+                    return Allocation_Result{Allocator_State::OK, trim(allocated, new_size)};
+
+                return Allocation_Result{Allocator_State::NOT_RESIZABLE};
+            }
+
+            available_from = used_to;
+            last_allocation.size = new_size;
+
+            update_bytes_alloced(new_size - allocated.size);
+            return Allocation_Result{Allocator_State::OK, {allocated.data, new_size}};
+        }
+
+        virtual Nullable<Allocator*> 
+        parent_allocator() const noexcept override
+        {
+            return {parent};
+        }
+
+        virtual isize 
+        bytes_allocated() const noexcept override
+        {
+            return bytes_alloced_;
+        }
+
+        virtual isize 
+        bytes_used() const noexcept override 
+        {
+            return bytes_used_;    
+        }
+
+        virtual isize 
+        max_bytes_allocated() const noexcept override
+        {
+            return max_bytes_alloced_;
+        }
+
+        virtual isize 
+        max_bytes_used() const noexcept override 
+        {
+            return max_bytes_used_;    
+        }
+
+        virtual Snapshot_Result 
+        snapshot() noexcept override 
+        {
+            Allocation_Result result = allocate(sizeof(Snapshot_Data), alignof(Snapshot_Data));
+            if(result.state == ERROR)
+                return {result.state};
+
+            Snapshot_Data* data = cast(Snapshot_Data*) cast(void*) result.items.data;
+
+            #ifdef ALLOCATOR_UNBOUND_STACK_DO_STATS
+                *data = Snapshot_Data{current_block, available_from, MAGIC_NUMBER, bytes_alloced_};
+            #else
+                *data = Snapshot_Data{current_block, available_from};
+            #endif
+
+            Allocator_Snapshot snapshot = Allocator_Snapshot{cast(isize) data};
+            return Snapshot_Result{Allocator_State::OK, snapshot};
+        }
+
+        void
+        reset(Allocator_Snapshot snapshot) noexcept
+        {
+            assert(is_invariant());
+
+            Snapshot_Data* snapshot_data = cast(Snapshot_Data*) cast(void*) cast(isize) snapshot;
+
+            assert(snapshot_data->magic_number == MAGIC_NUMBER && "invalid snapshot");
+            assert(snapshot_data->bytes_alloced <= bytes_alloced_ && "invalid snapshot");
+
+            reset_last_allocation();
+            if(blocks.first == nullptr)
+            {
+                assert(snapshot_data->from_block == nullptr);
+                assert(snapshot_data->available_from == nullptr);
+                assert(snapshot_data->bytes_alloced == 0);
+
+                return;
+            }
+
+            if(snapshot_data->from_block == nullptr)
+                current_block = blocks.first;
+            else
+                current_block = snapshot_data->from_block;
+
+            Slice<u8> block_data = data(current_block);
+            available_from = snapshot_data->available_from;
+            available_to = block_data.data + block_data.size;
+            bytes_alloced_ = snapshot_data->bytes_alloced;
+
+            assert(is_invariant());
+        }
+
+        
+        static Block*
+        extract_node(Chain* from, Block* extract_after, Block* what) noexcept
+        {
+            assert(is_valid_chain(*from));
+            assert(what != nullptr);
+            assert(from->first != nullptr && "cant extract from empty chain");
+
+            //if is start of chain
+            if(extract_after == nullptr)
+            {
+                from->first = what->next;
+            }
+            //if is end of chain
+            else if(what == from->last)
+            {
+                from->last = extract_after;
+                extract_after->next = what->next;
             }
             else
             {
-                Block_List popped = pop_block(&resource->free_blocks, found);
-                push_back(&resource->blocks, move(popped));
+                extract_after->next = what->next;
             }
 
-            calc_all_ptrs(resource->blocks.last);
-        }
-
-        assert(filled_to_ptr >= block_from);
-        assert(allocated_from >= filled_to_ptr);
-        assert(block_to >= allocated_to);
-
-        resource->last_allocation = allocated_from;
-        resource->filled_to = allocated_to - block_from;
-
-        assert(resource->filled_to > 0);
-        return resource->last_allocation;
-    }
-
-    runtime_proc deallocate(Arena_Resource* resource, void* ptr, size_t old_size, size_t align) -> void
-    {
-        assert(is_power_of_two(align));
-        cast(void) resize(resource, ptr, old_size, 0);
-    }
-
-    runtime_proc resize(Arena_Resource* resource, void* ptr, size_t old_size, size_t new_size) -> bool 
-    {
-        byte* byte_ptr = cast(byte*) ptr;
-        if(resource->last_allocation != byte_ptr)
-            return false;
-
-        mut* last_block = resource->blocks.last;
-        mut* block_data = data(resource->blocks.last);
-
-        let prev_offset = cast(size_t) (byte_ptr - block_data);
-
-        if(prev_offset + new_size < last_block->size)
-        {
-            resource->filled_to = prev_offset + new_size;
-            return true;
-        }
-        return false;
-    }
-
-    runtime_proc deallocate_all(Arena_Resource* resource) -> void
-    {
-        push_back(&resource->free_blocks, move(resource->blocks));
-        resource->filled_to = 0;
-        resource->last_allocation = nullptr;
-    }
-
-    runtime_proc action(
-        Arena_Resource* resource, 
-        Allocator_Actions::Action action_type, 
-        void* old_ptr, 
-        size_t old_size, size_t new_size, 
-        size_t old_align, size_t new_align, 
-        void* custom_data) -> Allocator_Actions::Result<void>
-    {
-        using namespace Allocator_Actions;
-        using Result = Allocator_Actions::Result<void>;
-        switch(action_type)
-        {
-            case DEALLOC_ALL: {
-                deallocate_all(resource); 
-                return Result{true, nullptr};
-            }
-            case RESIZE: {
-                bool ok = resize(resource, old_ptr, old_size, new_size);
-                return Result{true, ok ? old_ptr : nullptr};
-            }
-        }
-        return Result{false, nullptr};
-    }
-
-    struct Flat_Arena_Resource : Allocator_Resource
-    {
-        void* data;
-        size_t size;
-        size_t filled_to = 0;
-        void* last_alloc = nullptr;
-
-        using Result = Allocator_Actions::Result<void>;
-
-        Flat_Arena_Resource() = delete; 
-        Flat_Arena_Resource(void* data, size_t size)
-            : data(data), size(size) {}
-
-        runtime_proc do_allocate(size_t bytes, size_t alignment) -> void* override
-        {
-            size_t space = this->size - this->filled_to;
-            void* ptr = cast(byte*) this->data + this->size;
-
-            //this is such a horribly designed function...
-            if(std::align(alignment, bytes, ptr, space) == nullptr)
-                throw std::bad_alloc();
-
-            this->last_alloc = ptr;
-            return ptr;
-        }
-        runtime_proc do_deallocate(void* old_ptr, size_t bytes, size_t alignment) -> void override
-        {
-            cast(void) resize(old_ptr, bytes, 0);
-        }
-
-        runtime_proc resize(void* ptr, size_t old_size, size_t new_size) -> bool
-        {
-            if(ptr != this->last_alloc)
-                return false;
-
-            size_t start_index = cast(uintptr_t)this->data - cast(uintptr_t)ptr;
-            if(start_index + new_size > this->size)
-                return false;
-            
-            this->size = start_index + new_size;
-            return true;
-        }
-
-        runtime_proc do_action(
-            Allocator_Actions::Action action_type, 
-            void* old_ptr, 
-            size_t old_size, size_t new_size, 
-            size_t old_align, size_t new_align, 
-            void* custom_data = nullptr) -> Result override
-        {
-            using namespace Allocator_Actions;
-            switch(action_type)
+            if(from->first == nullptr || from->last == nullptr)
             {
-                case DEALLOC_ALL: {
-                    filled_to = 0;
-                    last_alloc = nullptr;
-                }
-                case RESIZE: {
-                    bool ok = resize(old_ptr, old_size, new_size);
-                    return Result{true, ok ? old_ptr : nullptr};
-                }
+                from->first = nullptr;
+                from->last = nullptr;
             }
-            return Result{false, nullptr};
+            assert(is_valid_chain(*from));
+
+            what->next = nullptr;
+            return what;
         }
 
-        runtime_proc do_upstream_resource() const noexcept -> Allocator_Resource* override
+        static void
+        insert_node(Chain* to, Block* insert_after, Block* what) noexcept
         {
-            return nullptr;
+            assert(is_valid_chain(*to));
+            assert(what != nullptr);
+
+            if(to->first == nullptr)
+            {
+                assert(insert_after == nullptr);
+                to->first = what;
+                to->last = what;
+                return;
+            }
+
+            //if is start of chain
+            if(insert_after == nullptr)
+            {
+                what->next = to->first->next;
+                to->first = what;
+            }
+            //if is end of chain
+            else if(insert_after == to->last)
+            {
+                to->last = what;
+                insert_after->next = what;
+                what->next = nullptr;
+            }
+            else
+            {
+                what->next = insert_after->next;
+                insert_after->next = what;
+            }
+
+            assert(is_valid_chain(*to));
         }
 
-        runtime_proc do_is_equal(std::pmr::memory_resource const& other) const noexcept -> bool override
+        static bool
+        is_valid_chain(Chain chain) noexcept
         {
-            //@TODO: use dynamic cast and compare data ptrs
-            return cast(std::pmr::memory_resource*)(this) == &other;
+            Block* current = chain.first;
+            Block* prev = nullptr;
+
+            while(current != nullptr && prev != chain.last)
+            {
+                prev = current;
+                current = current->next;
+            }
+
+            return prev == chain.last;
         }
+
+        void 
+        reset_last_allocation() noexcept 
+        {
+            last_allocation = Slice<u8>{dummy_data, 0};
+        }
+
+        struct Found_Block
+        {
+            Block* found;
+            Block* before;
+        };
+
+        static Found_Block
+        find_block_to_fit(Chain chain, isize size, isize align) noexcept
+        {
+            Block* current = chain.first;
+            Block* prev = nullptr;
+            while(current != nullptr)
+            {
+                Slice<u8> block_data = data(current);
+                Slice<u8> aligned = align_forward(block_data, align);
+                if(aligned.size >= size)
+                    return Found_Block{prev, current};
+
+                prev = current;
+                current = current->next;
+            }
+
+            return Found_Block{nullptr, nullptr};
+        }
+
+        struct Obtained_Block
+        {
+            Block* block;
+            Allocator_State_Type state;
+            bool was_just_alloced;
+        };
+
+        Obtained_Block
+        extract_or_allocate_block(isize size, isize align) noexcept
+        {
+            Found_Block found = find_block_to_fit(free_chain(), size, align);
+            if(found.found == nullptr)
+                return allocate_block(size, align);
+
+            Block* extracted = extract_node(&blocks, found.before, found.found);
+            return Obtained_Block{extracted, Allocator_State::OK, false};
+        }
+
+        Obtained_Block
+        allocate_block(isize size, isize align) noexcept
+        {
+            assert(is_invariant());
+
+            isize effective_size = size + sizeof(Block);
+            isize required_align = alignof(Block);
+            if(align > alignof(Block))
+                effective_size += align;
+
+            isize required_size = max(effective_size, chunk_size);
+
+            Allocation_Result result = parent->allocate(required_size, required_align);
+            if(result.state == ERROR)
+                return Obtained_Block{nullptr, result.state, true};
+
+            Block* block = cast(Block*) cast(void*) result.items.data;
+            *block = Block{nullptr, required_size - cast(isize) sizeof(Block), cast(u32) required_align, true};
+
+            bytes_used_ += required_size;
+            max_bytes_used_ = max(max_bytes_used_, bytes_used_);
+            return Obtained_Block{block, Allocator_State::OK, true};
+
+        }
+
+        Allocator_State_Type
+        obtain_block_and_update(isize size, isize align) noexcept
+        {
+            assert(is_invariant());
+            Obtained_Block obtained = extract_or_allocate_block(size, align);
+            if(obtained.state == ERROR)
+                return obtained.state;
+
+            assert(obtained.block != nullptr);
+            Slice<u8> block_data = data(obtained.block);
+
+            insert_node(&blocks, current_block, obtained.block);
+
+            available_from = block_data.data;
+            available_to = block_data.data + block_data.size;
+
+            reset_last_allocation();
+
+            if(obtained.was_just_alloced)
+            {
+                used_blocks ++;
+                max_used_blocks = max(max_used_blocks, used_blocks);
+                chunk_size *= chunk_grow;
+            }
+
+            current_block = obtained.block;
+
+            assert(is_invariant());
+            return obtained.state;
+        }
+
+        bool 
+        is_invariant() const noexcept
+        {
+            bool available_inv1 = available_from <= available_to;
+            bool available_inv2 = (available_from == nullptr) == (available_to == nullptr);
+
+            bool last_alloc_inv1 = (last_allocation.data == dummy_data) == (last_allocation.size == 0);
+            bool last_alloc_inv2 = last_allocation.data != nullptr;
+
+            bool blocks_inv1 = is_valid_chain(blocks);
+            bool blocks_inv2 = (blocks.first == nullptr) == (used_blocks == 0) && used_blocks >= 0;
+
+            bool parent_inv = parent != nullptr;
+            bool block_size_inv = chunk_size > sizeof(Block);
+
+            bool stat_inv1 = bytes_used_ >= 0 
+                && bytes_alloced_ >= 0 
+                && max_bytes_used_ >= 0
+                && max_bytes_alloced_ >= 0;
+
+            bool stat_inv2 = bytes_used_ >= bytes_alloced_
+                && max_bytes_used_ >= bytes_used_
+                && max_bytes_alloced_ >= bytes_alloced_;
+
+            bool total_inv = available_inv1 && available_inv2 
+                && last_alloc_inv1 && last_alloc_inv2
+                && blocks_inv1 && blocks_inv2
+                && parent_inv 
+                && block_size_inv
+                && stat_inv1 
+                && stat_inv2;
+
+            return total_inv;
+        }
+
+        void update_bytes_alloced(isize delta)
+        {
+            #ifdef ALLOCATOR_UNBOUND_STACK_DO_STATS
+            bytes_alloced_ += delta;
+            max_bytes_alloced_ = max(max_bytes_alloced_, bytes_alloced_);
+            assert(bytes_alloced_ >= 0);
+            #endif
+        }
+
     };
 }
 

@@ -3,7 +3,7 @@
 #include <cassert>
 #include <ranges>
 
-#include "meta.h"
+#include "traits.h"
 #include "types.h"
 #include "defines.h"
 
@@ -11,42 +11,6 @@ namespace jot
 {
     namespace stdr = std::ranges;
     namespace stdv = std::views;  
-
-    using std::move;
-    using std::forward;
-    using std::begin;
-    using std::end;
-    using std::size;
-
-    template<class Tag>
-    struct Begin_End
-    {
-        i64 val = 0;
-
-        template <typename T> 
-            requires requires() {cast(T) val;}
-        constexpr explicit operator T() const {return cast(T)val;}
-
-        constexpr Begin_End operator +(let& value) const { return {cast(i64)(val + value)}; } 
-        constexpr Begin_End operator -(let& value) const { return {cast(i64)(val - value)}; }  
-    };
-
-    struct PerElementDummy {};
-    struct Static_Container_Tag {};
-
-    using Begin = Begin_End<void>;
-    using End = Begin_End<char>;
-
-    constexpr static Begin BEGIN;
-    constexpr static End   END;
-
-    enum class Extent : u8 {Dynamic};
-    constexpr static Extent DYNAMIC_EXTENT = Extent::Dynamic; 
-
-    using Def_Size = size_t;
-
-    template <class T>
-    using Def_Alloc = std::allocator<T>;
 
     template<typename Container>
     concept direct_container = requires(Container container)
@@ -56,181 +20,60 @@ namespace jot
         requires(!same<decltype(container.data), void*>);
     };
 
-    template<typename Container>
-    concept static_direct_container = direct_container<Container> && Tagged<Container, Static_Container_Tag>;
-}
+    template<typename T>
+    struct Range 
+    {
+        T from;
+        T to;
+    };
 
+    using IRange = Range<isize>;
+
+    constexpr func is_invarinat(IRange range) -> bool {
+        return range.from <= range.to;
+    }
+
+    constexpr func in_range(IRange range, isize index) {
+        return (range.from <= index && index < range.to);
+    }
+
+    constexpr func in_inclusive_range(IRange range, isize index) {
+        return (range.from <= index && index <= range.to);
+    }
+
+    constexpr func sized_range(isize from, isize size) -> IRange {
+        return IRange{from, from + size};
+    }
+}
 
 namespace std 
 {
-    //func begin(jot::direct_container auto&& arr) noexcept {return arr.data;}
-    //func end(jot::direct_container auto&& arr) noexcept {return arr.data + arr.size;}
+    constexpr func begin(jot::direct_container auto& arr) noexcept {return arr.data;}
+    constexpr func begin(const jot::direct_container auto& arr) noexcept {return arr.data;}
 
-    func begin(jot::direct_container auto& arr) noexcept {return arr.data;}
-    func begin(const jot::direct_container auto& arr) noexcept {return arr.data;}
+    constexpr func end(jot::direct_container auto& arr) noexcept {return arr.data + arr.size;}
+    constexpr func end(const jot::direct_container auto& arr) noexcept {return arr.data + arr.size;}
 
-    func end(jot::direct_container auto& arr) noexcept {return arr.data + arr.size;}
-    func end(const jot::direct_container auto& arr) noexcept {return arr.data + arr.size;}
+    constexpr func cbegin(const jot::direct_container auto& arr) noexcept {return arr.data;}
+    constexpr func cend(const jot::direct_container auto& arr) noexcept {return arr.data + arr.size;}
 
-    func cbegin(const jot::direct_container auto& arr) noexcept {return arr.data;}
-    func cend(const jot::direct_container auto& arr) noexcept {return arr.data + arr.size;}
+    constexpr func size(const jot::direct_container auto& arr) noexcept {return arr.size;}
+    constexpr func data(const jot::direct_container auto& arr) noexcept {return arr.data;}
 
-    func size(const jot::direct_container auto& arr) noexcept {return arr.size;}
-
-    template<jot::static_direct_container Cont>
-    struct tuple_size<Cont> : integral_constant<size_t, Cont::size> {};
-
-    template<size_t I, jot::static_direct_container Cont>
-    struct tuple_element<I, Cont> 
-    {using type = typename Cont::value_type;};
-
-    template<size_t I, jot::static_direct_container Cont>
-    func get(Cont& arr) noexcept -> typename Cont::value_type&
-    {
-        static_assert(I < arr.size, "access out of bounds");
-        return arr[I];
-    }
-
-    template<size_t I, jot::static_direct_container Cont>
-    func get(Cont&& arr) noexcept -> typename Cont::value_type&&
-    {
-        static_assert(I < arr.size, "access out of bounds");
-        return move(arr[I]);
-    }
-
-    template<size_t I, jot::static_direct_container Cont>
-    func get(const Cont& arr) noexcept -> const typename Cont::value_type&
-    {
-        static_assert(I < arr.size, "access out of bounds");
-        return arr[I];
-    } 
-
-    template<size_t I, jot::static_direct_container Cont>
-    func get(const Cont&& arr) noexcept -> const typename Cont::value_type&&
-    {
-        static_assert(I < arr.size, "access out of bounds");
-        return move(arr[I]);
-    }
-
-    template<class T, jot::static_direct_container Cont>
-    func get(Cont& arr) noexcept -> T&
-    {
-        static_assert(is_same_v<T, typename Cont::value_type> && arr.size == 1, "exactly one element needs to satisfy the type");
-        return arr[0];
-    }
-    template<class T, jot::static_direct_container Cont>
-    func get(Cont&& arr) noexcept -> T&&
-    {
-        static_assert(is_same_v<T, typename Cont::value_type> && arr.size == 1, "exactly one element needs to satisfy the type");
-        return move(arr[0]);
-    }
-
-    template<class T, jot::static_direct_container Cont>
-    func get(const Cont& arr) noexcept -> const T&
-    {
-        static_assert(is_same_v<T, typename Cont::value_type> && arr.size == 1, "exactly one element needs to satisfy the type");
-        return arr[0];
-    }
-    template<class T, jot::static_direct_container Cont>
-    func get(const Cont&& arr) noexcept -> const T&&
-    {
-        static_assert(is_same_v<T, typename Cont::value_type> && arr.size == 1, "exactly one element needs to satisfy the type");
-        return move(arr[0]);
-    }
+    template <typename T>
+    constexpr func size(const jot::Range<T>& range) noexcept -> T {return range.from - range.to;}
 }
 
 
 namespace jot
 {
-    namespace detail
+    using ::std::begin;
+    using ::std::end;
+    using ::std::size;
+
+    constexpr func strlen(cstring str) noexcept -> isize
     {
-        using Extent_Const = Const<DYNAMIC_EXTENT, Extent>;
-
-        template<typename T, typename Size, typename Extent>
-        struct Slice_Data
-        {
-            using tag_type = Static_Container_Tag;
-
-            T* data = nullptr;
-            constexpr static Size size = cast(Size) Extent::value;
-            constexpr static Size capacity = cast(Size) Extent::value;
-
-            constexpr bool operator==(const Slice_Data&) const noexcept = default;
-        };
-
-        template<typename T, typename Size>
-        struct Slice_Data<T, Size, Extent_Const>
-        {
-            using tag_type = void;
-
-            T* data = nullptr;
-            Size size = 0;
-            constexpr static Size capacity = std::numeric_limits<Size>::max();
-
-            constexpr bool operator==(const Slice_Data&) const noexcept = default;
-        };
-
-        template <class It>
-        func addr(It&& it) noexcept -> decltype(&(*it))
-        {
-            return &(*it);
-        } 
-
-        template <class Range>
-        func range_addr(Range&& range) noexcept -> decltype(&(*std::begin(range)))
-        {
-            return &(*std::begin(range));
-        } 
-
-        template<class It>
-        concept addressable_iter = requires(It it)
-        {   
-            addr(it);
-        };
-        template<class Range>
-        concept addressable_range = requires(Range range)
-        {   
-            range_addr(range);
-        };
-
-
-        template <class R>
-        concept cont_range = stdr::contiguous_range<R>;// && addressable_range<R>;
-        template <class I>
-        concept cont_iter = std::contiguous_iterator<I>;// && addressable_iter<I>;
-
-        template <class Begin, class End>
-        func dist(Begin&& begin, End&& end) noexcept -> size_t
-        {
-            return cast(size_t) (addr(end) - addr(begin));
-        }
-
-        template <class R>
-        func dist(R&& range) noexcept -> size_t
-        {
-            return dist(std::begin(range), std::end(range));
-        }
-
-        template <typename It>
-        using Iter_Value = std::remove_reference_t<decltype(*It())>;
-
-        template <typename R>
-        using Range_Value = std::remove_reference_t<decltype(*std::begin(R()))>;
-
-        template<class It, typename T>
-        concept matching_iter = same<Iter_Value<It>, T> || same<Iter_Value<It>, std::remove_const_t<T>>;
-
-        template<class R, typename T>
-        concept matching_range = same<Range_Value<R>, T> || same<Range_Value<R>, std::remove_const_t<T>>;
-
-
-        template <typename T> 
-        concept literal_compatible = same<T, const char8_t> || same<T, const char>;
-    }
-
-    func strlen(cstring str) noexcept 
-    {
-        size_t size = 0;
+        isize size = 0;
         while(str[size] != '\0')
         {
             size++;
@@ -238,81 +81,109 @@ namespace jot
         return size;
     };
 
-    template<typename T, std::integral Size = Def_Size, auto extent = DYNAMIC_EXTENT>
-    struct Slice_ : detail::Slice_Data<T, Size, Const<extent, decltype(extent)>>
+
+    template<typename T>
+    struct Slice
     {
-        using Slice_Data = detail::Slice_Data<T, Size, Const<extent, decltype(extent)>>;
-        using slice_type = Slice_<T, Size>;
-        using const_slice_type = Slice_<const T, Size>;
+        T* data = nullptr;
+        isize size = 0;
 
-        constexpr static bool is_static = !same<decltype(extent), Extent>;
+        constexpr Slice() = default;
+        constexpr Slice(T* data, isize size) 
+            : data(data), size(size) {}
+        constexpr Slice(const char* strl) requires same<T, const char> 
+            : data(strl), size(strlen(strl)) {}
 
-        constexpr Slice_() = default;
-
-        //Dynamic
-        constexpr Slice_(cstring str) noexcept
-            requires detail::literal_compatible<T>
-        : Slice_Data{str, strlen(str)} {}
-
-        template <detail::cont_iter It> 
-            requires (!is_static) && detail::matching_iter<It, T>
-        constexpr Slice_(It it, Size size) noexcept
-            : Slice_Data{ detail::addr(it), size } {};
-
-        template <detail::cont_iter Begin, detail::cont_iter End>  
-            requires (!is_static) && detail::matching_iter<Begin, T>
-        constexpr Slice_(Begin begin, End end) noexcept
-            : Slice_Data{ detail::addr(begin), cast(Size) detail::dist(begin, end)} {};
-
-        template <detail::cont_range R> 
-            requires (!is_static) && detail::matching_range<R, T>
-        constexpr Slice_(R& range) noexcept
-            : Slice_Data{ detail::addr(std::begin<R>(range)), cast(Size) detail::dist(std::begin<R>(range), std::end<R>(range)) } 
-        {};
-
-        //Static
-        template <detail::cont_iter It> 
-            requires (is_static) && detail::matching_iter<It, T>
-        constexpr Slice_(It it) noexcept
-            : Slice_Data{ detail::addr(it) } {};
-
-        template <detail::cont_range R> 
-            requires (is_static) && detail::matching_range<R, T>
-        constexpr Slice_(R& range) noexcept
-            : Slice_Data{ detail::addr<R>(std::begin<R>(range)) } 
-        {
-            assert(this->size == detail::dist<R>(range));
-        };
-
-        template <detail::cont_iter Begin, detail::cont_iter End>  
-            requires (is_static) && detail::matching_iter<Begin, T>
-        constexpr Slice_(Begin begin, End end) noexcept
-            : Slice_Data{ detail::addr(begin)} 
-        {
-            assert(this->size == detail::dist(begin, end));
-        };
-
-        constexpr operator Slice_<T, Size>() const noexcept requires (is_static) { return Slice_<T, Size>{this->data, this->size}; }
-        constexpr operator Slice_<T, Size>()       noexcept requires (is_static) { return Slice_<T, Size>{this->data, this->size}; }
-        constexpr operator Slice_<const T, Size, extent>() const noexcept        { return Slice_<const T, Size, extent>{this->data, this->size}; }
+        constexpr operator Slice<const T>() const noexcept { return Slice<const T>{this->data, this->size}; }
+        constexpr bool operator ==(Slice const&) const noexcept = default;
+        constexpr bool operator !=(Slice const&) const noexcept = default;
 
         #include "slice_op_text.h"
     };
 
-    //deduction guides
-    template <detail::cont_iter Begin, class Size>
-        requires (!detail::cont_iter<Size>)
-    Slice_(Begin begin, Size) -> Slice_<detail::Iter_Value<Begin>>;
+    template<typename T>
+    Slice(T*, isize) -> Slice<T>;
 
-    template <detail::cont_iter Begin, class End>
-        requires (detail::cont_iter<End>)
-    Slice_(Begin begin, End) -> Slice_<detail::Iter_Value<Begin>>;
+    using String = Slice<const char>;
 
-    template <detail::cont_range Range>
-    Slice_(Range) -> Slice_<detail::Range_Value<Range>>;
+    Slice(const char*) -> String;
 
-    template <class T, size_t size>
-    Slice_(T (&elem)[size]) -> Slice_<T, size_t, size>;
+    constexpr func slice(cstring str) -> String {
+        return {str, strlen(str)};
+    }
+
+    #define templ_func template<typename T> constexpr func
+
+    templ_func slice(Slice<T> sliced) -> Slice<T> {
+        return sliced;
+    }
+
+    templ_func is_invarinat(Slice<T> slice) -> bool {
+        return slice.size >= 0;
+    }
+
+    templ_func slice(Slice<T> slice, isize from) -> Slice<T> {
+        assert((0 <= from && from <= slice.size) && "index out of bounds");
+        return Slice<T>{slice.data + from, slice.size - from};
+    }
+
+    templ_func trim(Slice<T> slice, isize to_index) -> Slice<T> {   
+        assert((0 <= to_index && to_index <= slice.size) && "index out of bounds");
+        return Slice<T>{slice.data, to_index};
+    }
+
+    templ_func slice_size(Slice<T> base_slice, isize from, isize size) -> Slice<T> {
+        return trim(slice(base_slice, from), size);
+    }
+
+    templ_func slice_range(Slice<T> base_slice, isize from, isize to) -> Slice<T> {
+        return slice(trim(base_slice, to), from);
+    }
+
+    templ_func slice(Slice<T> base_slice, IRange range) -> Slice<T> {
+        return slice_range(base_slice, range.from, range.to);
+    }
+
+    templ_func byte_size(Slice<T> slice) -> isize {
+        return slice.size * sizeof(T);
+    }
+
+    template<typename To_T, typename From_T = int>
+    constexpr func cast_slice(Slice<From_T> slice) -> Slice<To_T> 
+    {
+        if constexpr (std::is_convertible_v<From_T*, To_T*>)
+            return {cast(To_T*) slice.data, slice.size};
+        else
+            return {cast(To_T*) cast(void*) slice.data, (byte_size(slice) / cast(isize) sizeof(To_T))};
+    }
+
+    templ_func are_aliasing(Slice<const T> left, Slice<const T> right) noexcept -> bool
+    { 
+        uintptr_t left_pos = cast(uintptr_t) left.data;
+        uintptr_t right_pos = cast(uintptr_t) right.data;
+        if(right_pos < left_pos)
+        {
+            //[ right ]      [ left ]
+            //[ ?? right size ?? ]
+
+            uintptr_t diff = left_pos - right_pos;
+            return diff < cast(uintptr_t) right.size;
+        }
+        else
+        {
+            //[ left ]      [ right ]
+            //[ ?? left size ?? ]
+            uintptr_t diff = right_pos - left_pos;
+            return diff < cast(uintptr_t) left.size;
+        }
+    }
+
+    templ_func are_one_way_aliasing(Slice<const T> before, Slice<const T> after) noexcept -> bool
+    { 
+        return (before.data + before.size > after.data) && (after.data > before.data);
+    }
+
+    #undef templ_func
 }
 
 
