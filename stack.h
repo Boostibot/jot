@@ -3,7 +3,7 @@
 #include "utils.h"
 #include "types.h"
 #include "slice.h"
-#include "allocator.h"
+#include "memory.h"
 #include "defines.h"
 
 namespace jot
@@ -16,7 +16,7 @@ namespace jot
         T* data = nullptr;
         isize size = 0;
         isize capacity = 0;
-        Allocator* allocator = allocator_globals::DEFAULT;
+        Allocator* allocator = memory_globals::default_allocator();
 
         Stack() noexcept = default;
         Stack(Allocator* allocator) noexcept
