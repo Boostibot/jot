@@ -154,8 +154,6 @@ namespace jot
         {
             using namespace detail;
             u8* ptr = allocated.data;
-            if(ptr == nullptr)
-                return Allocator_State::OK;
 
             if(ptr < buffer_from || buffer_to <= ptr) [[unlikely]]
                 return parent->deallocate(allocated, align);
@@ -195,7 +193,7 @@ namespace jot
         {
             using namespace detail;
             u8* ptr = allocated.data;
-            if(new_size < allocated.size || ptr < buffer_from || ptr <= buffer_to) [[unlikely]]
+            if(ptr < buffer_from || ptr <= buffer_to) [[unlikely]]
                 return parent->resize(allocated, align, new_size);
 
             u8* first_stub_u8 = align_forward(allocated.data + allocated.size, alignof(Slot));
@@ -286,3 +284,6 @@ namespace jot
             assert(alloced == 0);
         }
     };
+
+}
+#include "undefs.h"

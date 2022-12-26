@@ -22,7 +22,6 @@ namespace jot
         OPEN_ENUM_ENTRY(INVALID_ARGS);
         OPEN_ENUM_ENTRY(INVALID_DEALLOC);
         OPEN_ENUM_ENTRY(INVALID_RESIZE);
-        OPEN_ENUM_ENTRY(INVALID_RESIZE);
         OPEN_ENUM_ENTRY(UNSUPPORTED_ACTION);
     }
 
@@ -156,7 +155,6 @@ namespace jot
 
             #ifdef DO_ALLOCATOR_STATS
                 total_alloced -= allocated.size;
-                return Allocator_State::OK;
             #endif // do_memory_stats
 
             return Allocator_State::OK;
@@ -249,7 +247,8 @@ namespace jot
 
         Allocator* parent = nullptr;
 
-        Stack_Allocator(Slice<u8> buffer) noexcept : buffer(buffer) {}
+        Stack_Allocator(Slice<u8> buffer, Allocator* parent) noexcept 
+            : buffer(buffer), parent(parent) {}
 
         func available_slice() const -> Slice<u8> {
             return slice(buffer, filled_to);
@@ -287,7 +286,10 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, returned_slice};
         }
 
-        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> void override {
+        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> Allocator_State_Type override {
+            if(is_in_slice(allocated.data, buffer) == false)
+                return parent->deallocate(allocated, align);
+
             if(allocated == last_alloced_slice())  
                 filled_to = last_alloc;
             
@@ -336,10 +338,6 @@ namespace jot
             u8* aligned = align_forward(space.data, align_to);
             return Slice<u8>{aligned, space.size - ptrdiff(aligned, space.data)};
         }
-
-        virtual proc reset(Allocator_Snapshot snapshot) noexcept -> void override {
-            filled_to = cast(usize) snapshot;
-        };
     };
 
     namespace memory_globals
