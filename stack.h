@@ -3,7 +3,7 @@
 #include "utils.h"
 #include "types.h"
 #include "slice.h"
-#include "allocator.h"
+#include "memory.h"
 #include "defines.h"
 
 namespace jot
@@ -16,7 +16,7 @@ namespace jot
         T* data = nullptr;
         isize size = 0;
         isize capacity = 0;
-        Allocator* allocator = allocator_globals::DEFAULT;
+        Allocator* allocator = memory_globals::default_allocator();
 
         Stack() noexcept = default;
         Stack(Allocator* allocator) noexcept
@@ -126,16 +126,23 @@ namespace jot
             T* no_alias old_data = stack->data;
 
             Slice<u8> old_slice = cast_slice<u8>(capacity_slice(stack));
-            Allocation_Result resize_res = stack->allocator->resize(old_slice, new_capacity * sizeof(T));
-            if(resize_res.state == Allocator_State::OK)
-            {
-                let cast_res = cast_slice<T>(resize_res.items);
-                assert(cast_res.size == new_capacity);
-                assert(cast_res.data == nullptr ? new_capacity == 0 : true);
 
-                stack->data = cast_res.data;
-                stack->capacity = cast_res.size;
-                return Allocator_State::OK;
+            //the resize will not rarely succeed when using stack allocator
+            // and is very expensive when using ring allocator 
+            // => we will use only use it when it saves considerable ammount of work
+            //if(stack->capacity > 64 / sizeof(T) || std::is_trivially_copyable_v<T> == false)
+            {
+                Allocation_Result resize_res = stack->allocator->resize(old_slice, DEF_ALIGNMENT<T>, new_capacity * sizeof(T));
+                if(resize_res.state == Allocator_State::OK)
+                {
+                    let cast_res = cast_slice<T>(resize_res.items);
+                    assert(cast_res.size == new_capacity);
+                    assert(cast_res.data == nullptr ? new_capacity == 0 : true);
+
+                    stack->data = cast_res.data;
+                    stack->capacity = cast_res.size;
+                    return Allocator_State::OK;
+                }
             }
 
             Allocation_Result allocation_res = stack->allocator->allocate(new_capacity * sizeof(T), DEF_ALIGNMENT<T>);

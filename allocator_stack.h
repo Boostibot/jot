@@ -1,6 +1,6 @@
 #pragma once
 
-#include "allocator.h"
+#include "memory.h"
 #include "stack.h"
 #include "defines.h"
 
@@ -14,36 +14,21 @@ namespace jot
         #define ALLOCATOR_UNBOUND_STACK_DEF_GROW 2
     #endif
 
-    struct Unbound_Stack_Allocator : Scratch_Allocator
+    namespace detail
     {
-        static constexpr isize MAGIC_NUMBER = 0x0ABCDEF0;
-        #if defined(DO_SNAPSHOT_VALIDTY_CHECKS) || defined(DO_ALLOCATOR_STATS)
-            #define ALLOCATOR_UNBOUND_STACK_DO_STATS
-        #endif
-
         struct Block
         {
             Block* next = nullptr;
+            Block* prev = nullptr;
             isize size = -1;
             u32 align = -1;
             b32 was_alloced = false;
         };
-        
+
         struct Chain
         {
             Block* first = nullptr;
             Block* last = nullptr;
-        };
-
-        struct Snapshot_Data
-        {
-            Block* from_block;
-            u8* available_from;
-
-            #ifdef ALLOCATOR_UNBOUND_STACK_DO_STATS
-            isize magic_number = MAGIC_NUMBER;
-            isize bytes_alloced = 0;
-            #endif // ALLOCATOR_UNBOUND_STACK_DO_STATS
         };
 
         static func data(Block* block) -> Slice<u8>
@@ -60,17 +45,181 @@ namespace jot
             u8* address = cast(u8*) cast(void*) block;
             return Slice<u8>{address, block->size + cast(isize) sizeof(Block)};
         }
+        
+        static bool
+        is_valid_chain(Chain chain) noexcept
+        {
+            Block* current = chain.first;
+            Block* prev = nullptr;
+
+            while(current != nullptr && prev != chain.last)
+            {
+                prev = current;
+                current = current->next;
+            }
+
+            return prev == chain.last;
+        }
+        
+        static void
+        link_chain(Block* before, Block* first_inserted, Block* last_inserted, Block* after) noexcept
+        {
+            assert(first_inserted != nullptr && last_inserted != nullptr && "must not be null");
+            assert(first_inserted->prev == nullptr && last_inserted->next == nullptr && "must be isolated");
+
+            first_inserted->prev = before;
+            if(before != nullptr)
+                before->next = first_inserted;
+
+            last_inserted->next = after;
+            if(after != nullptr)
+                after->prev = last_inserted;
+        }
+
+        static void
+        unlink_chain(Block* first_inserted, Block* last_inserted) noexcept
+        {
+            assert(first_inserted != nullptr && last_inserted != nullptr && "must not be null");
+
+            Block* before = first_inserted->prev;
+            Block* after = last_inserted->next;
+
+            first_inserted->prev = nullptr;
+            if(before != nullptr)
+                before->next = after;
+
+            last_inserted->next = nullptr;
+            if(after != nullptr)
+                after->prev = before;
+        }
+        
+        static Block*
+        extract_node(Chain* from, Block* what) noexcept
+        {
+            assert(is_valid_chain(*from));
+            assert(what != nullptr);
+            assert(from->first != nullptr && "cant extract from empty chain");
+
+            //if is start of chain
+            if(what->prev == nullptr)
+                from->first = what->next;
+            
+            //if is end of chain
+            if(what == from->last)
+                from->last = what->prev;
+
+            unlink_chain(what, what);
+            
+            if(from->first == nullptr || from->last == nullptr)
+            {
+                assert(from->first == nullptr && from->last == nullptr && "@TODO: remove this");
+                from->first = nullptr;
+                from->last = nullptr;
+            }
+            assert(is_valid_chain(*from));
+
+            return what;
+        }
+
+        static void
+        insert_node(Chain* to, Block* insert_after, Block* what) noexcept
+        {
+            assert(is_valid_chain(*to));
+            assert(what != nullptr);
+            assert(what->next == nullptr && what->prev == nullptr && "must be isolated");
+
+            if(to->first == nullptr)
+            {
+                assert(insert_after == nullptr);
+                to->first = what;
+                to->last = what;
+                return;
+            }
+
+            //if is start of chain
+            if(insert_after == nullptr)
+            {
+                link_chain(nullptr, what, what, to->first->next);
+                to->first = what;
+            }
+            //if is end of chain
+            else if(insert_after == to->last)
+            {
+                link_chain(insert_after, what, what, nullptr);
+                to->last = what;
+            }
+            else
+            {
+                link_chain(insert_after, what, what, insert_after->next);
+            }
+
+            assert(is_valid_chain(*to));
+        }
+
+
+        static isize
+        deallocated_and_count_chain(Allocator* alloc, Chain chain)
+        {
+            isize passed_bytes = 0;
+            Block* current = chain.last;
+            Block* next = nullptr;
+
+            //we dealloc backwards because if the parent allocator is some form 
+            // of stack allocator it allows us to reclaim more memory
+            //If the parent allocator is ring allocator it coealesces the reclaiming 
+            // into a single loop
+            while(current != nullptr && next != chain.first)
+            {
+                next = current;
+                current = current->prev;
+
+                Slice<u8> total_block_data = used_by_block(next);
+                passed_bytes += total_block_data.size;
+
+                if(next->was_alloced)
+                    alloc->deallocate(total_block_data, next->align);
+            }
+
+            assert(next == chain.first && "must be a valid chain!");
+
+            return passed_bytes;
+        }
+
+        static Block*
+        find_block_to_fit(Chain chain, isize size, isize align) noexcept
+        {
+            Block* current = chain.first;
+            while(current != nullptr)
+            {
+                Slice<u8> block_data = data(current);
+                Slice<u8> aligned = align_forward(block_data, align);
+                if(aligned.size >= size)
+                    return current;
+
+                current = current->next;
+            }
+
+            return nullptr;
+        }
+    }
+
+    //Allocate lineary from block. If the block is exhausted request more memory from its parent alocator and add it to block list.
+    // Can be easily reset without freeying any acquired memeory. Releases all emmory in destructor
+    struct Unbound_Stack_Allocator : Allocator
+    {
+        using Chain = detail::Chain;
+        using Block = detail::Block;
 
         u8* available_from = nullptr;
         u8* available_to = nullptr;
-        Slice<u8> last_allocation = {dummy_data, 0};
+        Slice<u8> last_allocation = {};
 
-        Chain blocks;
+        Chain blocks = {};
         Block* current_block = nullptr;
 
-        Allocator* parent = allocator_globals::DEFAULT;
-        isize chunk_size = ALLOCATOR_UNBOUND_STACK_DEF_SIZE;
-        isize chunk_grow = ALLOCATOR_UNBOUND_STACK_DEF_GROW;
+        Allocator* parent = nullptr;
+        isize chunk_size = 0;
+        isize chunk_grow = 0;
 
         isize used_blocks = 0;
         isize max_used_blocks = 0;
@@ -83,9 +232,9 @@ namespace jot
         u8 dummy_data[8] = {0};
 
         Unbound_Stack_Allocator(
-            Allocator* parent = allocator_globals::DEFAULT, 
-            size_t chunk_size = ALLOCATOR_UNBOUND_STACK_DEF_SIZE,
-            size_t chunk_grow = ALLOCATOR_UNBOUND_STACK_DEF_GROW) 
+            Allocator* parent = memory_globals::default_allocator(), 
+            size_t chunk_size = memory_constants::PAGE,
+            size_t chunk_grow = 2) 
             : parent(parent), chunk_size(chunk_size), chunk_grow(chunk_grow)
         {
             reset_last_allocation();
@@ -96,23 +245,9 @@ namespace jot
         {
             assert(is_invariant());
 
-            isize dealloced_bytes = 0;
-            Block* current = blocks.first;
-            Block* prev = nullptr;
-            while(current != nullptr && prev != blocks.last)
-            {
-                prev = current;
-                current = current->next;
-
-                Slice<u8> total_block_data = used_by_block(prev);
-                dealloced_bytes += total_block_data.size;
-
-                if(prev->was_alloced)
-                    parent->deallocate(total_block_data, prev->align);
-            }
-
-            assert(prev == blocks.last && "must be a valid chain!");
-            assert(dealloced_bytes == bytes_used_);
+            isize passed_bytes = deallocated_and_count_chain(parent, blocks);
+            
+            assert(passed_bytes == bytes_used_);
         }
 
         Chain
@@ -128,7 +263,7 @@ namespace jot
                 return Chain{nullptr, nullptr};
 
             assert(current_block != nullptr);
-            return Chain{current_block->next, blocks.first};
+            return Chain{current_block->next, blocks.last};
         }
 
         virtual Allocation_Result 
@@ -156,31 +291,28 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, alloced};
         }
 
-        virtual void 
+        virtual Allocator_State_Type 
         deallocate(Slice<u8> allocated, isize align) noexcept override 
         {
             if(allocated != last_allocation)
-                return;
+                return Allocator_State::OK;
 
             reset_last_allocation();
 
-            #ifdef ALLOCATOR_UNBOUND_STACK_DO_STATS
+            #ifdef DO_ALLOCATOR_STATS
             bytes_alloced_ -= allocated.size;
             assert(bytes_alloced_ >= 0);
             #endif
+
+            return Allocator_State::OK;
         } 
 
         virtual Allocation_Result 
-        resize(Slice<u8> allocated, isize new_size) noexcept override
+        resize(Slice<u8> allocated, isize align, isize new_size) noexcept override
         {
             u8* used_to = available_from + new_size;
             if(allocated != last_allocation || used_to > available_to)
-            {
-                if(new_size < allocated.size)
-                    return Allocation_Result{Allocator_State::OK, trim(allocated, new_size)};
-
                 return Allocation_Result{Allocator_State::NOT_RESIZABLE};
-            }
 
             available_from = used_to;
             last_allocation.size = new_size;
@@ -219,173 +351,58 @@ namespace jot
             return max_bytes_used_;    
         }
 
-        virtual Snapshot_Result 
-        snapshot() noexcept override 
+        void 
+        reset() 
         {
-            Allocation_Result result = allocate(sizeof(Snapshot_Data), alignof(Snapshot_Data));
-            if(result.state == ERROR)
-                return {result.state};
+            current_block = blocks.first;
 
-            Snapshot_Data* data = cast(Snapshot_Data*) cast(void*) result.items.data;
+            Slice<u8> block;
+            if(current_block != nullptr)
+                block = data(current_block);
 
-            #ifdef ALLOCATOR_UNBOUND_STACK_DO_STATS
-                *data = Snapshot_Data{current_block, available_from, MAGIC_NUMBER, bytes_alloced_};
-            #else
-                *data = Snapshot_Data{current_block, available_from};
-            #endif
+            available_from = block.data;
+            available_to = block.data + block.size;
 
-            Allocator_Snapshot snapshot = Allocator_Snapshot{cast(isize) data};
-            return Snapshot_Result{Allocator_State::OK, snapshot};
-        }
-
-        void
-        reset(Allocator_Snapshot snapshot) noexcept
-        {
-            assert(is_invariant());
-
-            Snapshot_Data* snapshot_data = cast(Snapshot_Data*) cast(void*) cast(isize) snapshot;
-
-            assert(snapshot_data->magic_number == MAGIC_NUMBER && "invalid snapshot");
-            assert(snapshot_data->bytes_alloced <= bytes_alloced_ && "invalid snapshot");
-
+            bytes_alloced_ = 0;
             reset_last_allocation();
-            if(blocks.first == nullptr)
-            {
-                assert(snapshot_data->from_block == nullptr);
-                assert(snapshot_data->available_from == nullptr);
-                assert(snapshot_data->bytes_alloced == 0);
-
-                return;
-            }
-
-            if(snapshot_data->from_block == nullptr)
-                current_block = blocks.first;
-            else
-                current_block = snapshot_data->from_block;
-
-            Slice<u8> block_data = data(current_block);
-            available_from = snapshot_data->available_from;
-            available_to = block_data.data + block_data.size;
-            bytes_alloced_ = snapshot_data->bytes_alloced;
-
-            assert(is_invariant());
         }
 
-        
-        static Block*
-        extract_node(Chain* from, Block* extract_after, Block* what) noexcept
+        void 
+        release_extra_memory() 
         {
-            assert(is_valid_chain(*from));
-            assert(what != nullptr);
-            assert(from->first != nullptr && "cant extract from empty chain");
-
-            //if is start of chain
-            if(extract_after == nullptr)
-            {
-                from->first = what->next;
-            }
-            //if is end of chain
-            else if(what == from->last)
-            {
-                from->last = extract_after;
-                extract_after->next = what->next;
-            }
-            else
-            {
-                extract_after->next = what->next;
-            }
-
-            if(from->first == nullptr || from->last == nullptr)
-            {
-                from->first = nullptr;
-                from->last = nullptr;
-            }
-            assert(is_valid_chain(*from));
-
-            what->next = nullptr;
-            return what;
+            isize released = deallocated_and_count_chain(parent, free_chain());
+            blocks.last = current_block;
+            bytes_used_ -= released;
         }
 
-        static void
-        insert_node(Chain* to, Block* insert_after, Block* what) noexcept
+        virtual proc custom_action(
+            Allocator_Action::Type action_type, 
+            Nullable<Allocator*> other_alloc, 
+            isize new_size, u8 new_align, 
+            Slice<u8> allocated, u8 old_align, 
+            Nullable<void*> custom_data) noexcept -> Allocation_Result
         {
-            assert(is_valid_chain(*to));
-            assert(what != nullptr);
-
-            if(to->first == nullptr)
+            if(action_type == Allocator_Action::RESET)
             {
-                assert(insert_after == nullptr);
-                to->first = what;
-                to->last = what;
-                return;
+                reset();
+                return Allocation_Result{Allocator_State::OK};
             }
 
-            //if is start of chain
-            if(insert_after == nullptr)
+            if(action_type == Allocator_Action::RELEASE_EXTRA_MEMORY)
             {
-                what->next = to->first->next;
-                to->first = what;
-            }
-            //if is end of chain
-            else if(insert_after == to->last)
-            {
-                to->last = what;
-                insert_after->next = what;
-                what->next = nullptr;
-            }
-            else
-            {
-                what->next = insert_after->next;
-                insert_after->next = what;
+                release_extra_memory();
+                return Allocation_Result{Allocator_State::OK};
             }
 
-            assert(is_valid_chain(*to));
+            assert_arg(new_size >= 0);
+            return Allocation_Result{Allocator_State::UNSUPPORTED_ACTION};
         }
 
-        static bool
-        is_valid_chain(Chain chain) noexcept
-        {
-            Block* current = chain.first;
-            Block* prev = nullptr;
-
-            while(current != nullptr && prev != chain.last)
-            {
-                prev = current;
-                current = current->next;
-            }
-
-            return prev == chain.last;
-        }
 
         void 
         reset_last_allocation() noexcept 
         {
             last_allocation = Slice<u8>{dummy_data, 0};
-        }
-
-        struct Found_Block
-        {
-            Block* found;
-            Block* before;
-        };
-
-        static Found_Block
-        find_block_to_fit(Chain chain, isize size, isize align) noexcept
-        {
-            Block* current = chain.first;
-            Block* prev = nullptr;
-            while(current != nullptr)
-            {
-                Slice<u8> block_data = data(current);
-                Slice<u8> aligned = align_forward(block_data, align);
-                if(aligned.size >= size)
-                    return Found_Block{prev, current};
-
-                prev = current;
-                current = current->next;
-            }
-
-            return Found_Block{nullptr, nullptr};
         }
 
         struct Obtained_Block
@@ -398,11 +415,11 @@ namespace jot
         Obtained_Block
         extract_or_allocate_block(isize size, isize align) noexcept
         {
-            Found_Block found = find_block_to_fit(free_chain(), size, align);
-            if(found.found == nullptr)
+            Block* found = find_block_to_fit(free_chain(), size, align);
+            if(found == nullptr)
                 return allocate_block(size, align);
 
-            Block* extracted = extract_node(&blocks, found.before, found.found);
+            Block* extracted = extract_node(&blocks, found);
             return Obtained_Block{extracted, Allocator_State::OK, false};
         }
 
@@ -423,7 +440,7 @@ namespace jot
                 return Obtained_Block{nullptr, result.state, true};
 
             Block* block = cast(Block*) cast(void*) result.items.data;
-            *block = Block{nullptr, required_size - cast(isize) sizeof(Block), cast(u32) required_align, true};
+            *block = Block{nullptr, nullptr, required_size - cast(isize) sizeof(Block), cast(u32) required_align, true};
 
             bytes_used_ += required_size;
             max_bytes_used_ = max(max_bytes_used_, bytes_used_);
@@ -462,6 +479,7 @@ namespace jot
             return obtained.state;
         }
 
+
         bool 
         is_invariant() const noexcept
         {
@@ -499,13 +517,12 @@ namespace jot
 
         void update_bytes_alloced(isize delta)
         {
-            #ifdef ALLOCATOR_UNBOUND_STACK_DO_STATS
+            #ifdef DO_ALLOCATOR_STATS
             bytes_alloced_ += delta;
             max_bytes_alloced_ = max(max_bytes_alloced_, bytes_alloced_);
             assert(bytes_alloced_ >= 0);
             #endif
         }
-
     };
 }
 

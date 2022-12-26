@@ -1,6 +1,5 @@
 #pragma once
 
-#include <concepts>
 #include <memory>
 #include "open_enum.h"
 #include "option.h"
@@ -12,7 +11,6 @@
 
 #define DO_ALLOCATOR_STATS
 #define DO_DEALLOC_VALIDTY_CHECKS
-#define DO_SNAPSHOT_VALIDTY_CHECKS
 
 namespace jot
 {
@@ -23,31 +21,9 @@ namespace jot
         OPEN_ENUM_ENTRY(NOT_RESIZABLE);
         OPEN_ENUM_ENTRY(INVALID_ARGS);
         OPEN_ENUM_ENTRY(INVALID_DEALLOC);
+        OPEN_ENUM_ENTRY(INVALID_RESIZE);
         OPEN_ENUM_ENTRY(UNSUPPORTED_ACTION);
     }
-
-    using Allocator_State_Type = Allocator_State::Type;
-    enum class Allocator_Snapshot : isize {};
-
-    template<>
-    struct Hasable<Allocator_State_Type>
-    {
-        static constexpr func perform(Allocator_State_Type state) noexcept -> bool {
-            return state == Allocator_State::OK;
-        }
-    };
-
-    struct Allocation_Result
-    {
-        Allocator_State_Type state = Allocator_State::OK;
-        Slice<u8> items;
-    };
-
-    struct Snapshot_Result
-    {
-        Allocator_State_Type state = Allocator_State::OK;
-        Allocator_Snapshot snapshot;
-    };
 
     namespace Allocator_Action
     {
@@ -59,19 +35,39 @@ namespace jot
         OPEN_ENUM_ENTRY(RELEASE_EXTRA_MEMORY);
     }
 
-    //todo: think about which guarantees we need: 
-    //  namely should deallocate be allowed to fail - If we want to check validity we should check it within the allocator not the calling code!
+    using Allocator_State_Type = Allocator_State::Type;
+    struct Allocation_Result
+    {
+        Allocator_State_Type state = Allocator_State::OK;
+        Slice<u8> items;
+    };
 
-    template <typename T>
-    static constexpr isize DEF_ALIGNMENT = max(alignof(T), alignof(std::max_align_t));
+    template<>
+    struct Hasable<Allocator_State_Type>
+    {
+        static constexpr func perform(Allocator_State_Type state) noexcept -> bool {
+            return state == Allocator_State::OK;
+        }
+    };
+
+    template<>
+    struct Hasable<Allocation_Result>
+    {
+        static constexpr func perform(Allocation_Result result) noexcept -> bool {
+            return result.state == Allocator_State::OK;
+        }
+    };
 
     struct Allocator
     {
         virtual proc allocate(isize size, isize align) noexcept -> Allocation_Result = 0; 
         
-        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> void = 0; 
+        //even though deallocate and such shouldnt fail and the caller should check
+        // we still allow it to fail. This is useful for signaling to backing allocator that the memory wasnt found
+        // here and it should perform dealocation there instead.
+        virtual auto deallocate(Slice<u8> allocated, isize align) noexcept -> Allocator_State_Type = 0; 
 
-        virtual proc resize(Slice<u8> allocated, isize new_size) noexcept -> Allocation_Result = 0; 
+        virtual proc resize(Slice<u8> allocated, isize align, isize new_size) noexcept -> Allocation_Result = 0; 
         
         virtual proc parent_allocator() const noexcept -> Nullable<Allocator*> = 0; 
         
@@ -95,26 +91,19 @@ namespace jot
         }
     };
 
-
-    struct Scratch_Allocator : Allocator
-    {
-        virtual proc snapshot() noexcept -> Snapshot_Result = 0;
-
-        virtual proc reset(Allocator_Snapshot snapshot) noexcept -> void = 0;
-    };
-
     //Fails on every allocation/deallocation
-    struct Failing_Allocator : Scratch_Allocator
+    struct Failing_Allocator : Allocator
     {
         virtual proc allocate(isize size, isize align) noexcept -> Allocation_Result override {
             assert_arg(size >= 0 && align >= 0);
             return {Allocator_State::UNSUPPORTED_ACTION};
         }
 
-        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> void override {
+        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> Allocator_State_Type override {
+            return Allocator_State::UNSUPPORTED_ACTION;
         }
 
-        virtual proc resize(Slice<u8> allocated, isize new_size) noexcept -> Allocation_Result override {
+        virtual proc resize(Slice<u8> allocated, isize align, isize new_size) noexcept -> Allocation_Result override {
             assert_arg(new_size >= 0);
             return {Allocator_State::UNSUPPORTED_ACTION};
         } 
@@ -138,12 +127,6 @@ namespace jot
         virtual proc max_bytes_used() const noexcept -> isize override {
             return 0;
         }
-
-        virtual proc snapshot() noexcept -> Snapshot_Result override {
-            return Snapshot_Result{Allocator_State::OK, {}};
-        }
-
-        virtual proc reset(Allocator_Snapshot) noexcept -> void override {};
     };
 
     //Acts as regular c++ new delete
@@ -167,15 +150,17 @@ namespace jot
             return {Allocator_State::OK, {cast(u8*) obtained, size}};
         }
 
-        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> void override {
+        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> Allocator_State_Type override {
             operator delete(allocated.data, std::align_val_t{cast(size_t) align}, std::nothrow_t{});
 
             #ifdef DO_ALLOCATOR_STATS
                 total_alloced -= allocated.size;
             #endif // do_memory_stats
+
+            return Allocator_State::OK;
         } 
 
-        virtual proc resize(Slice<u8> allocated, isize new_size) noexcept -> Allocation_Result override {
+        virtual proc resize(Slice<u8> allocated, isize align, isize new_size) noexcept -> Allocation_Result override {
             assert_arg(new_size >= 0);
 
             return {Allocator_State::UNSUPPORTED_ACTION};
@@ -217,62 +202,50 @@ namespace jot
     }
 
     template<typename T>
-    constexpr func is_in_slice(T* ptr, Slice<T> slice) -> bool
+    inline func is_in_slice(T* ptr, Slice<T> slice) -> bool
     {
         return ptr >= slice.data && ptr < slice.data + slice.size;
     }
-
-    constexpr func align_forward(usize ptr_num, isize align_to) -> usize
-    {
-        assert_arg(is_power_of_two(align_to));
-
-        usize mask = (align_to - 1);
-        usize mod = ptr_num & mask;
-        if(mod == 0)
-            return ptr_num;
-
-        return ptr_num + (align_to - mod);
-    }
     
-    constexpr func align_forward(u8* ptr, isize align_to) -> u8*
-    {
-        return cast(u8*) align_forward(cast(usize) ptr, align_to);
-    }
-    
-    constexpr func ptrdiff(void* ptr1, void* ptr2) -> isize
+    inline func ptrdiff(void* ptr1, void* ptr2) -> isize
     {
         return cast(isize) ptr1 - cast(isize) ptr2;
     }
 
-    constexpr func align_forward(Slice<u8> space, isize align_to) -> Slice<u8>
+    inline func align_forward(u8* ptr, isize align_to) -> u8*
     {
-        usize ptr_num = cast(usize) space.data;
-        usize aligned_num = align_forward(ptr_num, align_to);
-        isize offset = cast(isize) min(aligned_num - ptr_num, space.size);
+        assert_arg(is_power_of_two(align_to));
+
+        //this is a little criptic but according to the iternet should be the fastest way of doing this
+        // my benchmarks support this. 
+        //(its about 50% faster than using div_round_up would be - even if we supply log2 alignment and bitshifts)
+        usize mask = cast(usize) (align_to - 1);
+        isize ptr_num = cast(isize) ptr;
+        ptr_num += (-ptr_num) & mask;
+
+        return cast(u8*) ptr_num;
+    }
+
+    inline func align_forward(Slice<u8> space, isize align_to) -> Slice<u8>
+    {
+        u8* aligned = align_forward(space.data, align_to);
+        isize offset = cast(isize) min(space.size, ptrdiff(aligned, space.data));
 
         return slice(space, offset);
     }
 
-    //internal align function that might result in illegal negative sized slice
-    constexpr func _align_forward_negative(Slice<u8> space, isize align_to) -> Slice<u8>
+    //Allocate linearry from a buffer. Once the buffer is filled no more
+    // allocations are possible. Deallocation is possible only of the most recent allocation
+    //Doesnt insert any extra data into the provided buffer
+    struct Stack_Allocator : Allocator
     {
-        usize ptr_num = cast(usize) space.data;
-        usize aligned_num = align_forward(ptr_num, align_to);
-        
-        return Slice<u8>{
-            cast(u8*) cast(void*) aligned_num, 
-            space.size - cast(isize) ptr_num + cast(isize) aligned_num
-        };
-    }
-
-    struct Stack_Allocator : Scratch_Allocator
-    {
-        Slice<u8> buffer;
+        Slice<u8> buffer = {};
         isize filled_to = 0;
         isize last_alloc = 0;
-        isize max_used = 0;
         isize alloced = 0;
         isize max_alloced = 0;
+
+        Allocator* parent = nullptr;
 
         Stack_Allocator(Slice<u8> buffer) noexcept : buffer(buffer) {}
 
@@ -296,7 +269,7 @@ namespace jot
             Slice<u8> aligned = _align_forward_negative(available, align);
 
             if(aligned.size < size)
-                return Allocation_Result{Allocator_State::OUT_OF_MEM};
+                return parent->allocate(size, align);
 
             Slice<u8> returned_slice = trim(aligned, size);
             last_alloc = filled_to;
@@ -305,7 +278,6 @@ namespace jot
             filled_to += total_alloced_bytes;
 
             #ifdef DO_ALLOCATOR_STATS
-            max_used = max(filled_to, max_used);
             alloced += size;
             max_alloced += max(max_alloced, alloced);
             #endif
@@ -313,21 +285,24 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, returned_slice};
         }
 
-        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> void override {
+        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> Allocator_State_Type override {
+            if(is_in_slice(allocated.data, buffer) == false)
+                return parent->deallocate(allocated, align);
+
             if(allocated == last_alloced_slice())  
                 filled_to = last_alloc;
+            
+            return Allocator_State::OK;
         } 
 
-        virtual proc resize(Slice<u8> allocated, isize new_size) noexcept -> Allocation_Result override {
+        virtual proc resize(Slice<u8> allocated, isize used_align, isize new_size) noexcept -> Allocation_Result override {
             
             Slice<u8> last_slice = last_alloced_slice();
-            if(allocated != last_slice)
-            {
-                if(new_size < allocated.size)
-                    return Allocation_Result{Allocator_State::OK, trim(allocated, new_size)};
+            if(is_in_slice(allocated.data, buffer) == false)
+                return parent->resize(allocated, used_align, new_size);
 
+            if(allocated != last_slice)
                 return Allocation_Result{Allocator_State::NOT_RESIZABLE};
-            }
 
             isize new_filled_to = last_alloc + new_size;
             if(new_filled_to > buffer.size)
@@ -338,7 +313,7 @@ namespace jot
         } 
 
         virtual proc parent_allocator() const noexcept -> Nullable<Allocator*> override {
-            return {nullptr};
+            return {parent};
         }
 
         virtual proc bytes_allocated() const noexcept -> isize override {
@@ -357,69 +332,74 @@ namespace jot
             return buffer.size;
         }
 
-        virtual proc snapshot() noexcept -> Snapshot_Result override {
-            return Snapshot_Result{Allocator_State::OK, Allocator_Snapshot{filled_to}};
+        static func _align_forward_negative(Slice<u8> space, isize align_to) -> Slice<u8>
+        {
+            u8* aligned = align_forward(space.data, align_to);
+            return Slice<u8>{aligned, space.size - ptrdiff(aligned, space.data)};
         }
-
-        virtual proc reset(Allocator_Snapshot snapshot) noexcept -> void override {
-            filled_to = cast(usize) snapshot;
-        };
     };
 
-    namespace allocator_globals
+    namespace memory_globals
     {
         static New_Delete_Allocator NEW_DELETE_ALLOCATOR;
         static Failing_Allocator    FAILING_ALLOCATOR;
 
-        thread_local static Allocator* DEFAULT = &NEW_DELETE_ALLOCATOR;
-        thread_local static Scratch_Allocator* SCRATCH = &FAILING_ALLOCATOR;
-
-        inline Allocator* get_default() noexcept {
-            return DEFAULT;
+        namespace hidden
+        {
+            thread_local static Allocator* DEFAULT_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
+            thread_local static Allocator* SCRATCH_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
         }
 
-        inline Scratch_Allocator* get_scratch() noexcept {
-            return SCRATCH;
+        inline Allocator* default_allocator() noexcept {
+            return hidden::DEFAULT_ALLOCATOR;
         }
 
-        inline void set_default(Allocator* alloc) noexcept {
-            DEFAULT = alloc;
+        inline Allocator* scratch_allocator() noexcept {
+            return hidden::SCRATCH_ALLOCATOR;
         }
 
-        inline void set_scratch(Scratch_Allocator* alloc) noexcept {
-            SCRATCH = alloc;
-        }
-
-        //Upon construction exchnages the DEFAULT to the provided allocator
-        // and upon destruction restores original value of DEFAULT
+        //Upon construction exchnages the DEFAULT_ALLOCATOR to the provided allocator
+        // and upon destruction restores original value of DEFAULT_ALLOCATOR
         //Does safely compose
         struct Default_Swap
         {
             Allocator* new_allocator;
             Allocator* old_allocator;
 
-            Default_Swap(Allocator* resource, Allocator* old = allocator_globals::get_default()) : new_allocator(resource), old_allocator(old) {
-                set_default(new_allocator);
+            Default_Swap(Allocator* resource, Allocator* old = memory_globals::default_allocator()) : new_allocator(resource), old_allocator(old) {
+                hidden::DEFAULT_ALLOCATOR = new_allocator;
             }
 
             ~Default_Swap() {
-                set_default(old_allocator);
+                hidden::DEFAULT_ALLOCATOR = old_allocator;
             }
         };
 
         struct Scratch_Swap
         {
-            Scratch_Allocator* new_allocator;
-            Scratch_Allocator* old_allocator;
+            Allocator* new_allocator;
+            Allocator* old_allocator;
 
-            Scratch_Swap(Scratch_Allocator* resource, Scratch_Allocator* old = allocator_globals::get_scratch()) : new_allocator(resource), old_allocator(old) {
-                set_scratch(new_allocator);
+            Scratch_Swap(Allocator* resource, Allocator* old = memory_globals::scratch_allocator()) : new_allocator(resource), old_allocator(old) {
+                hidden::SCRATCH_ALLOCATOR = new_allocator;
             }
 
             ~Scratch_Swap() {
-                set_scratch(old_allocator);
+                hidden::SCRATCH_ALLOCATOR = old_allocator;
             }
         };
+    }
+
+    template <typename T>
+    static constexpr isize DEF_ALIGNMENT = max(alignof(T), 4);
+
+    namespace memory_constants
+    {
+        static constexpr isize PAGE = 4096;
+        static constexpr isize KIBI_BYTE = 1ull << 10;
+        static constexpr isize MEBI_BYTE = 1ull << 20;
+        static constexpr isize GIBI_BYTE = 1ull << 30;
+        static constexpr isize TEBI_BYTE = 1ull << 40;
     }
 }
 

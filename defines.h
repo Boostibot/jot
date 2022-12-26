@@ -6,9 +6,13 @@
 #define in const&
 #define moved &&
 #define no_alias __restrict
-
 #define cast(...) (__VA_ARGS__)
-#define address_alias [[no_unique_address]]
+
+#if defined(_MSC_VER)
+    #define address_alias [[msvc::no_unique_address]]
+#else
+    #define address_alias [[no_unique_address]]
+#endif
 
 #ifndef MOVE_DEFINED
 #define MOVE_DEFINED
