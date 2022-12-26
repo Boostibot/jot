@@ -286,6 +286,3 @@ namespace jot
             assert(alloced == 0);
         }
     };
-
-}
-#include "undefs.h"
