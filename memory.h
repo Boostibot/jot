@@ -43,18 +43,18 @@ namespace jot
     };
 
     template<>
-    struct Hasable<Allocator_State_Type>
+    struct Failable<Allocator_State_Type>
     {
         static constexpr func perform(Allocator_State_Type state) noexcept -> bool {
-            return state == Allocator_State::OK;
+            return state != Allocator_State::OK;
         }
     };
 
     template<>
-    struct Hasable<Allocation_Result>
+    struct Failable<Allocation_Result>
     {
         static constexpr func perform(Allocation_Result result) noexcept -> bool {
-            return result.state == Allocator_State::OK;
+            return result.state != Allocator_State::OK;
         }
     };
 

@@ -16,18 +16,18 @@ namespace jot
     enum Error_Type {ERROR};
 
     template<>
-    struct Hasable<State>
+    struct Failable<State>
     {
         static constexpr func perform(State state) -> bool {
-            return state == OK_STATE;
+            return state != OK_STATE;
         }
     };
 
     template<>
-    struct Hasable<bool>
+    struct Failable<bool>
     {
         static constexpr func perform(bool state) -> bool {
-            return state;
+            return state == false;
         }
     };
 
@@ -38,10 +38,10 @@ namespace jot
     };
 
     template<typename T>
-    struct Hasable<Nullable<T>>
+    struct Failable<Nullable<T>>
     {
         static constexpr func perform(Nullable<T> ptr) noexcept -> bool {
-            return ptr.value != nullptr;
+            return ptr.value == nullptr;
         }
     };
 
@@ -50,19 +50,20 @@ namespace jot
         return ptr.value;
     }
 
-    template <hasable T> func operator==(T in left, Ok_Type) noexcept -> bool { return has(left); }
-    template <hasable T> func operator!=(T in left, Ok_Type) noexcept -> bool { return has(left) == false; }
-    template <hasable T> func operator==(T in left, Error_Type) noexcept -> bool { return has(left) == false; }
-    template <hasable T> func operator!=(T in left, Error_Type) noexcept -> bool { return has(left); }
+    template <failable T> func operator==(T in left, Ok_Type) noexcept -> bool { return failed(left) == false; }
+    template <failable T> func operator!=(T in left, Ok_Type) noexcept -> bool { return failed(left); }
+    template <failable T> func operator==(T in left, Error_Type) noexcept -> bool { return failed(left); }
+    template <failable T> func operator!=(T in left, Error_Type) noexcept -> bool { return failed(left) == false; }
 
-    template <hasable T> proc force(T in value) -> void {
-        if(has(value) == false)
+    template <failable T> proc force(T in value) -> void {
+        if(failed(value))
             throw value;
     }
 
-    template <hasable T> proc force_error(T in value) -> void {
-        if(has(value))
+    template <failable T> proc force_error(T in value) -> void {
+        if(failed(value) == false)
             throw value;
     }
 }
+
 #include "undefs.h"

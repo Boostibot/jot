@@ -8,8 +8,6 @@
 
 namespace jot
 {
-    static_assert(hasable<Allocator_State_Type>, "!");
-
     template <typename T>
     struct Stack
     {   

@@ -31,17 +31,17 @@ namespace jot
 
     struct No_Default {};
     template <typename T, typename Enable = True>
-    struct Hasable : No_Default
+    struct Failable : No_Default
     {
         #if 0
         func perform(T in flag) noexcept -> bool {
-            return true;
+            return false;
         }
         #endif
     };
 
     template<typename T>
-    concept hasable = !std::is_base_of_v<No_Default, Hasable<T>>;
+    concept failable = !std::is_base_of_v<No_Default, Failable<T>>;
 
     template <typename T>
     constexpr proc assign(T* to, T in from) noexcept -> State {
@@ -53,9 +53,9 @@ namespace jot
         return Swappable<T>::perform(left, right);
     }
 
-    template <hasable T>
-    constexpr func has(T in flag) -> bool {
-        return Hasable<T>::perform(flag);
+    template <failable T>
+    constexpr func failed(T in flag) -> bool {
+        return Failable<T>::perform(flag);
     }
 
     template<typename T>
