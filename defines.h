@@ -18,11 +18,10 @@
 #define MOVE_DEFINED
 
     template <typename T>
-    constexpr func move_(T* val) noexcept -> T && {
+    constexpr func move(T* val) noexcept -> T && {
         return cast(T &&) *val;
     };
 
 #endif
 
-#define move(...) ::move_(__VA_ARGS__)
 #define forward(T, ...) (T &&) (__VA_ARGS__)

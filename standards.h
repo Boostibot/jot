@@ -3,10 +3,15 @@
 #include "open_enum.h"
 #include "defines.h"
 
+open_enum Open_Enum
+{
+    OPEN_ENUM_ENTRY(OK);
+}
+
 namespace jot
 {
-    using State = ::meta::Open_Enum;
-    constexpr State OK_STATE = {nullptr};
+    using State = ::Open_Enum::Type;
+    constexpr State OK_STATE = ::Open_Enum::OK;
 
     template <typename T, typename Enable = True>
     struct Assignable

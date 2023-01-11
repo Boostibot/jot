@@ -14,9 +14,10 @@
 
 namespace jot
 {
-    namespace Allocator_State
+    open_enum Allocator_State
     {
-        OPEN_ENUM_DECLARE(OK);
+        OPEN_ENUM_DECLARE("jot::Allocator_State");
+        OPEN_ENUM_ENTRY(OK);
         OPEN_ENUM_ENTRY(OUT_OF_MEM);
         OPEN_ENUM_ENTRY(NOT_RESIZABLE);
         OPEN_ENUM_ENTRY(INVALID_ARGS);
@@ -25,9 +26,9 @@ namespace jot
         OPEN_ENUM_ENTRY(UNSUPPORTED_ACTION);
     }
 
-    namespace Allocator_Action
+        open_enum Allocator_Action
     {
-        OPEN_ENUM_DECLARE(NO_OP);
+        OPEN_ENUM_DECLARE("jot::Allocator_Action");
         OPEN_ENUM_ENTRY(ALLOCATE);
         OPEN_ENUM_ENTRY(DEALLOCATE);
         OPEN_ENUM_ENTRY(RESIZE);
