@@ -11,16 +11,16 @@
 open_enum Open_Enum
 {
     namespace open_enum_info {                  
-    constexpr const char* TYPE_NAME = "Open_Enum"; 
-}       
+        constexpr const char* TYPE_NAME = "Open_Enum"; 
+    }       
 
-struct Holder
-{
-    const char* value_name;
-    const char* type_name;
-};
+    struct Holder
+    {
+        const char* value_name;
+        const char* type_name;
+    };
 
-using Type = const Holder*;
+    using Type = const Holder*;
 }
 
 #define OPEN_ENUM_DECLARE_DERIVED(Name, Parent) \
@@ -38,7 +38,7 @@ using Type = const Holder*;
         static constexpr Holder Name = Holder(                      \
             ::Open_Enum::Holder{PP_STRINGIFY(Name), TYPE_NAME});    \
     }                                                               \
-    static constexpr Type Name = &open_enum_info::Name;                              \
+    static constexpr const Holder* Name = &open_enum_info::Name;                              \
 
 
 //For pure C
