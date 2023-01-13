@@ -31,15 +31,15 @@ open_enum Open_Enum
     struct Holder : Parent {};                  \
     using Type = const Holder*;                 \
 
-#define OPEN_ENUM_DECLARE(Name) OPEN_ENUM_DECLARE_DERIVED(Name, ::Open_Enum::Holder)
 
 #define OPEN_ENUM_ENTRY(Name)                                       \
     namespace open_enum_info {                                      \
         static constexpr Holder Name = Holder(                      \
             ::Open_Enum::Holder{PP_STRINGIFY(Name), TYPE_NAME});    \
     }                                                               \
-    static constexpr const Holder* Name = &open_enum_info::Name;                              \
+    static constexpr const Holder* Name = &open_enum_info::Name;    \
 
+#define OPEN_ENUM_DECLARE(Name) OPEN_ENUM_DECLARE_DERIVED(Name, ::Open_Enum::Holder)
 
 //For pure C
 #ifdef OPEN_ENUM_C

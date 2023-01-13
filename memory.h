@@ -16,8 +16,7 @@ namespace jot
 {
     open_enum Allocator_State
     {
-        OPEN_ENUM_DECLARE("jot::Allocator_State");
-        OPEN_ENUM_ENTRY(OK);
+        OPEN_STATE_DECLARE("jot::Allocator_State");
         OPEN_ENUM_ENTRY(OUT_OF_MEM);
         OPEN_ENUM_ENTRY(NOT_RESIZABLE);
         OPEN_ENUM_ENTRY(INVALID_ARGS);
@@ -26,7 +25,7 @@ namespace jot
         OPEN_ENUM_ENTRY(UNSUPPORTED_ACTION);
     }
 
-        open_enum Allocator_Action
+    open_enum Allocator_Action
     {
         OPEN_ENUM_DECLARE("jot::Allocator_Action");
         OPEN_ENUM_ENTRY(ALLOCATE);
@@ -339,6 +338,12 @@ namespace jot
             u8* aligned = align_forward(space.data, align_to);
             return Slice<u8>{aligned, space.size - ptrdiff(aligned, space.data)};
         }
+
+        void reset() noexcept {
+            filled_to = 0;
+            last_alloc = 0;
+            alloced = 0;
+        };
     };
 
     namespace memory_globals

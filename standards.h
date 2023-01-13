@@ -5,13 +5,18 @@
 
 open_enum Open_Enum
 {
-    OPEN_ENUM_ENTRY(OK);
+    static constexpr Type OK = nullptr;
 }
 
 namespace jot
 {
     using State = ::Open_Enum::Type;
+    using State_Holder = ::Open_Enum::Holder;
     constexpr State OK_STATE = ::Open_Enum::OK;
+
+    #define OPEN_STATE_DECLARE(Name) \
+        OPEN_ENUM_DECLARE_DERIVED(Name, ::jot::State_Holder); \
+        static constexpr Type OK = nullptr;
 
     template <typename T, typename Enable = True>
     struct Assignable

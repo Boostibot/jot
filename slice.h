@@ -109,6 +109,22 @@ namespace jot
         return {str, strlen(str)};
     }
 
+    #if 0
+        struct No_Default {};
+        template <typename T, typename Enable = True>
+        struct Sliceable : No_Default
+        {
+            #if 0
+            func perform(T in collection) noexcept -> Slice<?> {
+                return Slice<?>{collection.data(), collection.size()};
+            }
+            #endif
+        };
+
+        template<typename T>
+        concept sliceable = !std::is_base_of_v<No_Default, Sliceable<T>>;
+    #endif
+
     #define templ_func template<typename T> constexpr func
 
     templ_func slice(Slice<T> sliced) -> Slice<T> {
