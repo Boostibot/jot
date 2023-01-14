@@ -170,7 +170,7 @@ namespace jot
             return {cast(To_T*) cast(void*) slice.data, (byte_size(slice) / cast(isize) sizeof(To_T))};
     }
 
-    templ_func are_aliasing(Slice<const T> left, Slice<const T> right) noexcept -> bool
+    templ_func are_aliasing(Slice<T> left, Slice<T> right) noexcept -> bool
     { 
         uintptr_t left_pos = cast(uintptr_t) left.data;
         uintptr_t right_pos = cast(uintptr_t) right.data;
@@ -191,9 +191,27 @@ namespace jot
         }
     }
 
-    templ_func are_one_way_aliasing(Slice<const T> before, Slice<const T> after) noexcept -> bool
+    templ_func are_one_way_aliasing(Slice<T> before, Slice<T> after) noexcept -> bool
     { 
         return (before.data + before.size > after.data) && (after.data > before.data);
+    }
+
+    template<typename T> proc null_slice(Slice<T>* to) noexcept
+    {
+        memset(to->data, 0, to->size * sizeof(T));
+    }
+
+    template<typename T> proc memcpy_slice(Slice<T>* to, Slice<const T> from) noexcept
+    {
+        assert(to->size == from.size && "sizes must match");
+        memmove(to->data, from.data, to->size * sizeof(T));
+    }
+
+    template<typename T> proc memcpy_slice_no_alias(Slice<T>* to, Slice<const T> from) noexcept
+    {
+        assert(are_aliasing(*to, from) == false && "must not alias");
+        assert(to->size == from.size && "sizes must match");
+        memcpy(to->data, from.data, to->size * sizeof(T));
     }
 
     #undef templ_func

@@ -226,6 +226,18 @@ namespace jot
         return cast(u8*) ptr_num;
     }
 
+    inline func align_backward(u8* ptr, isize align_to) -> u8*
+    {
+        assert_arg(is_power_of_two(align_to));
+
+        usize ualign = cast(usize) align_to;
+        usize mask = ~(ualign - 1);
+        isize ptr_num = cast(isize) ptr;
+        ptr_num = ptr_num & mask;
+
+        return cast(u8*) ptr_num;
+    }
+
     inline func align_forward(Slice<u8> space, isize align_to) -> Slice<u8>
     {
         u8* aligned = align_forward(space.data, align_to);

@@ -17,14 +17,6 @@ namespace jot
 {
     #define templ_func template<typename T> constexpr func
 
-    templ_func max(T in first) noexcept -> T in {   
-        return first;
-    }
-
-    templ_func min(T in first) noexcept -> T in {   
-        return first;
-    }
-
     templ_func max(T in a, no_infer(T) in b) noexcept -> T in {
         return a > b ? a : b;
     }

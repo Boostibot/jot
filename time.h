@@ -3,8 +3,7 @@
 #include <cstdint>
 #include <chrono>
 
-#define func auto [[nodiscard]]
-#define proc auto
+#define nodisc [[nodiscard]]
 #define cast(...) (__VA_ARGS__)
 
 namespace jot
@@ -12,13 +11,13 @@ namespace jot
     using i64 = int64_t;
 
     //sorry c++ chrono but I really dont want to iteract with all those templates
-    func clock() noexcept -> i64 {
+    nodisc i64 clock() noexcept {
         auto duration = std::chrono::high_resolution_clock::now().time_since_epoch();
         return duration_cast<std::chrono::nanoseconds>(duration).count(); 
     }
 
     template <typename Fn>
-    func ellapsed_time(Fn fn) noexcept -> i64
+    nodisc i64 ellapsed_time(Fn fn) noexcept
     {
         i64 from = clock();
         fn();
@@ -32,18 +31,17 @@ namespace jot
     };
 
     template <typename Fn>
-    func benchmark_ns(i64 max_time_ns, i64 warm_up_ns, Fn fn, i64 base_block_size = 1, i64 num_checks = 5) noexcept -> Bench_Result
+    nodisc Bench_Result benchmark_ns(i64 max_time_ns, i64 warm_up_ns, Fn fn, i64 base_block_size = 1, i64 num_checks = 10) noexcept
     {
         assert(num_checks > 0);
         assert(base_block_size > 0);
         assert(max_time_ns >= 0);
         assert(warm_up_ns >= 0);
 
-        i64 to_time = warm_up_ns;
-
         Bench_Result result;
-        i64 block_size = base_block_size;
 
+        i64 to_time = warm_up_ns;
+        i64 block_size = base_block_size;
         i64 start = clock();
 
         while(true)
@@ -77,7 +75,7 @@ namespace jot
     }
 
     template <typename Fn>
-    func benchmark(i64 max_time_ms, Fn fn) noexcept -> Bench_Result
+    nodisc Bench_Result benchmark(i64 max_time_ms, Fn fn) noexcept
     {
         i64 max_time_ns = max_time_ms * 1'000'000;
         return benchmark_ns(max_time_ns, max_time_ns / 10, fn);
@@ -100,7 +98,7 @@ namespace jot
 
     #ifdef HAS_INLINE_ASSEMBLY
         template <typename T>
-        FORCE_INLINE proc do_no_optimize(T const& value)
+        FORCE_INLINE void do_no_optimize(T const& value)
         {
             if(std::is_constant_evaluated())
                 return;
@@ -108,7 +106,7 @@ namespace jot
         }
 
         template <typename T>
-        FORCE_INLINE proc do_no_optimize(T& value)
+        FORCE_INLINE void do_no_optimize(T& value)
         {
             if(std::is_constant_evaluated())
                 return;
@@ -119,7 +117,7 @@ namespace jot
             #endif
         }
 
-        FORCE_INLINE proc read_write_barrier(){
+        FORCE_INLINE void read_write_barrier(){
             if(std::is_constant_evaluated())
                 return;
 
@@ -127,7 +125,7 @@ namespace jot
         }
     #elif defined(_MSC_VER)
         template <typename T>
-        FORCE_INLINE proc do_no_optimize(T const& value) {
+        FORCE_INLINE void do_no_optimize(T const& value) {
             if(std::is_constant_evaluated())
                 return;
 
@@ -135,7 +133,7 @@ namespace jot
             _ReadWriteBarrier();
         }
 
-        FORCE_INLINE proc read_write_barrier() {
+        FORCE_INLINE void read_write_barrier() {
             if(std::is_constant_evaluated())
                 return;
 
@@ -143,14 +141,13 @@ namespace jot
         }
     #else
         template <typename T>
-        FORCE_INLINE proc do_no_optimize(T const& value) {
+        FORCE_INLINE void do_no_optimize(T const& value) {
             use_pointer(cast(char const volatile*) cast(void*) &value);
         }
 
-        FORCE_INLINE proc read_write_barrier() {}
+        FORCE_INLINE void read_write_barrier() {}
     #endif
 }
 
-#undef func 
-#undef proc
+#undef nodisc 
 #undef cast

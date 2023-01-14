@@ -4,7 +4,6 @@
 
 namespace jot
 {
-
     template<typename T>
     struct alignas(alignof(T)) No_Destruct 
     {
