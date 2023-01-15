@@ -1,6 +1,7 @@
 #pragma once
 #include "traits.h"
 #include "open_enum.h"
+#include "utils.h"
 #include "defines.h"
 
 open_enum Open_Enum

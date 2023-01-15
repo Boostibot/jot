@@ -16,27 +16,39 @@ using const_iterator = const T*;
 using reverse_iterator       = std::reverse_iterator<iterator>;
 using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-constexpr func begin() noexcept -> iterator {
+constexpr [[nodiscard]] iterator 
+begin() noexcept 
+{
     return this->data;
 }
 
-constexpr func begin() const noexcept -> const_iterator {
+constexpr [[nodiscard]] const_iterator 
+begin() const noexcept 
+{
     return this->data;
 }
 
-constexpr func end() noexcept -> iterator{
+constexpr [[nodiscard]] iterator 
+end() noexcept 
+{
     return this->data + this->size;
 }
 
-constexpr func end() const noexcept -> const_iterator {
+constexpr [[nodiscard]] const_iterator 
+end() const noexcept
+{
     return this->data + this->size;
 }
 
-constexpr func operator[](isize index) const noexcept -> T const& { 
+constexpr [[nodiscard]] T const& 
+operator[](isize index) const noexcept  
+{ 
     assert(0 <= index && index < this->size && "index out of range"); 
     return this->data[index]; 
 }
-constexpr func operator[](isize index) noexcept -> T& { 
+constexpr [[nodiscard]] T& 
+operator[](isize index) noexcept 
+{ 
     assert(0 <= index && index < this->size && "index out of range"); 
     return this->data[index]; 
 }

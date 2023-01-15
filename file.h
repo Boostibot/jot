@@ -7,31 +7,26 @@
 #define _CRT_SECURE_NO_WARNINGS_GLOBALS
 #pragma warning(disable : 4996)
 
+#include <cstdio>
+#include <cassert>
 #include <fcntl.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
 #include "unistd.h"
-#include "resource.h"
-#include "types.h"
-#include "defines.h"
 
 namespace jot 
 {
-    struct C_Alloc {};
-
-    namespace File 
+    namespace file 
     {
-        typedef int Descriptor;
-        using Fd = Descriptor;
-        using Flag = int;
-        using Mode = mode_t;
-        using Stats = Stat64;
+        typedef int             Descriptor;
+        typedef int             Flag;
+        typedef mode_t          Mode;
+        typedef Stat64          Stats;
 
         //Shared flags
         namespace Flags {
-
             enum : Flag {
                 READ = O_RDONLY,
                 WRITE = O_WRONLY,
@@ -113,151 +108,165 @@ namespace jot
             Current = SEEK_END,
         };
 
-        using Open_Mode = enum_detail::Open_Mode;
+        typedef enum_detail::Open_Mode Open_Mode;
 
-        static constexpr Mode DEFAULT_OPEN_MODE = 0644;
-        static constexpr u64 MAX_READ_WRITE_CHUNK = 1 << 30;
+        static const Mode DEFAULT_OPEN_MODE = 0644;
+        static const int MAX_READ_WRITE_CHUNK = 1 << 30;
 
-
-        Res<Fd> open(cstring filename, Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY, Mode pmode = DEFAULT_OPEN_MODE) noexcept
+        struct File_Descriptor 
         {
-            return unsafe::make<Fd>(::open(filename, oflag | Windows_Flags::BINARY, pmode));
+            Descriptor descriptor = -1;
+            File_Descriptor() {}
+            File_Descriptor(Descriptor from) : descriptor(from) {}
+            File_Descriptor(File_Descriptor const&) = delete;
+
+            ~File_Descriptor() {
+                if(descriptor == -1)
+                    return;
+
+                ::close(descriptor);
+            }
+        };
+
+        File_Descriptor open(const char* filename, Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY, Mode pmode = DEFAULT_OPEN_MODE) noexcept
+        {
+            return File_Descriptor(::open(filename, oflag | Windows_Flags::BINARY, pmode));
         }
 
-        Res<Fd> create(cstring filename, Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY | Flags::CREATE, Mode pmode = DEFAULT_OPEN_MODE) noexcept
+        File_Descriptor create(const char* filename, Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY | Flags::CREATE, Mode pmode = DEFAULT_OPEN_MODE) noexcept
         {
             return open(filename, oflag, pmode);
         }
 
-        bool close(Res<Fd> fd) noexcept
+        bool close(File_Descriptor fd) noexcept
         {
-            if(fd == -1)
-            {
-                unsafe::drop(fd);
+            if(fd.descriptor == -1)
                 return true;
-            }
 
-            bool res = ::close(fd) == 0;
-            unsafe::drop(fd);
-            return res;
+            bool state = ::close(fd.descriptor) == 0;
+            fd.descriptor = -1;
+            return state;
         }
 
-        bool has_access(cstring path, Access_Permission permission) noexcept
+        bool has_access(const char* path, Access_Permission permission) noexcept
         {
-            return ::access(path, cast(int) permission) != -1;
+            return ::access(path, (int) permission) != -1;
         }
 
-        Res<Fd> copy(Fd fd) noexcept
+        File_Descriptor copy(File_Descriptor const& fd) noexcept
         {
-            return unsafe::make<Fd>(::dup(fd));
-        }
-        bool copy(Fd fd, Res<Fd>* to) noexcept
-        {
-            return ::dup2(fd, *to) == 0;
+            return File_Descriptor(::dup(fd.descriptor));
         }
 
-        bool truncate(Res<Fd>* fd, u64 size) noexcept
+        bool copy(File_Descriptor const& fd, File_Descriptor* to) noexcept
         {
-            return ::ftruncate(*fd, cast(long) size) == 0;
+            return ::dup2(fd.descriptor, to->descriptor) == 0;
         }
 
-        bool unlink(cstring filename) noexcept
+        bool truncate(File_Descriptor* fd, long size) noexcept
+        {
+            return ::ftruncate(fd->descriptor, (long) size) == 0;
+        }
+
+        bool unlink(const char* filename) noexcept
         {
             return ::unlink(filename) == 0;
         }
 
-        Res<Fd> from_c_file(FILE* stream) noexcept
+        File_Descriptor from_c_file(FILE* stream) noexcept
         {
-            return unsafe::make<Fd>(::fileno(stream));
+            return File_Descriptor(::fileno(stream));
         }
 
-        FILE* to_c_file(Res<Fd> fd, cstring mode) noexcept
+        FILE* to_c_file(File_Descriptor fd, const char* mode) noexcept
         {
-            unsafe::drop(fd);
-            return ::fdopen(*fd, mode);
+            return ::fdopen(fd.descriptor, mode);
         }
 
-        Res<char *, C_Alloc> get_current_dir(char *buffer, int maxlen) noexcept
+        //Fills buffer with the current dir const char*. If it is too small mallocs it instead
+        // returns a pointer to the potentionally alloced destination. This needs to be freed
+        // Might also fail and return NULL instead.
+        const char* fill_or_alloc_current_dir_cstring(char *buffer, int maxlen) noexcept
         {
-            return unsafe::make<char*, C_Alloc>(::getcwd(buffer, maxlen));
+            return ::getcwd(buffer, maxlen);
         }
 
-        bool change_dir(cstring dirname) noexcept
+        bool change_dir(const char* dirname) noexcept
         {
             return ::chdir(dirname) == 0;
         }
 
-        bool is_open(Fd fd) noexcept
+        bool is_open(File_Descriptor const& fd) noexcept
         {
-            return fd != -1;
+            return fd.descriptor != -1;
         }
 
-        bool is_character_device(Fd fd) noexcept
+        bool is_character_device(File_Descriptor const& fd) noexcept
         {
-            return is_open(fd) && ::isatty(fd) != 0;
+            return is_open(fd) && ::isatty(fd.descriptor) != 0;
         }
 
-
-        u64 seek(Res<Fd>* fd, u64 offset, Seek_From from = Seek_From::Begin) noexcept
+        off64_t seek(File_Descriptor* fd, off64_t offset, Seek_From from = Seek_From::Begin) noexcept
         {
-            return cast(u64) ::lseek64(*fd, cast(off64_t) offset, cast(int) from);
+            return ::lseek64(fd->descriptor, offset, (int) from);
         } 
 
-        u64 tell(Fd fd) noexcept
+        off64_t tell(File_Descriptor const& fd) noexcept
         {
-            return cast(u64) ::tell64(fd);
+            return ::tell64(fd.descriptor);
         }
 
-        bool make_dir(cstring dirname) noexcept
+        bool make_dir(const char* dirname) noexcept
         {
             return ::mkdir(dirname) == 0;
         }
 
-        bool remove_dir(cstring dirname) noexcept
+        bool remove_dir(const char* dirname) noexcept
         {
             return ::rmdir(dirname) == 0;
         }
 
-        bool rename(cstring old, cstring new_name) noexcept
+        bool rename(const char* old, const char* new_name) noexcept
         {
             return ::rename(old, new_name) == 0;
         }
 
         //Returns the number of bytes read or
         // EOF (-1) when end of file is reached
-        // -2... Signaling other errros
-        u64 read(Res<Fd>* fd, void * buffer, u64 buffer_size) noexcept
+        // -2... Signaling other errros (offset by one from the posix)
+        int read(File_Descriptor* fd, void * buffer, unsigned buffer_size) noexcept
         {
+            assert(buffer_size <= MAX_READ_WRITE_CHUNK && "past maximum buffer size");
             if(buffer_size == 0)
                 return 0;
 
-            int res = ::read(*fd, buffer, cast(unsigned) buffer_size);
+            int res = ::read(fd->descriptor, buffer, (unsigned) buffer_size);
             if(res == 0) 
-                return cast(u64) EOF;
-            if(res == -1)
-                return cast(u64) -2;
+                return EOF;
+            if(res < 0)
+                return res - 1;
             return res;
         }
 
         //Returns the number of bytes written
-        u64 write(Res<Fd>* fd, const void *buffer, u64 buffer_size) noexcept
+        int write(File_Descriptor* fd, const void *buffer, unsigned buffer_size) noexcept
         {
-            return cast(u64) ::write(*fd, buffer, cast(unsigned) buffer_size);
+            assert(buffer_size <= MAX_READ_WRITE_CHUNK && "past maximum buffer size");
+            return ::write(fd->descriptor, buffer, (unsigned) buffer_size);
         }
 
-        Stats get_stats(Fd fd) noexcept
+        Stats get_stats(File_Descriptor const& fd) noexcept
         {
             Stats stat;
-            ::fstat64(fd, &stat);
+            ::fstat64(fd.descriptor, &stat);
             return stat;
         }
 
-        Stats get_stats(cstring path) noexcept
+        Stats get_stats(const char* path) noexcept
         {
             Stats stat;
             ::stat64(path, &stat);
             return stat;
         }
-
     }
 }

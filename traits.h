@@ -37,27 +37,6 @@ namespace jot
     template<class T>
     struct Id { using type = T; };
 
-    //stops infering of arguments
-    template<typename T>
-    using No_Infer = Id<T>::type;
-    #define no_infer(...) No_Infer<__VA_ARGS__> 
-
-    #if 0
-    namespace example
-    {
-        template <typename T>
-        static void take_two(T a, no_infer(T) b)
-        {
-            (void) a; (void) b;
-        };
-
-        static void caller()
-        {
-            take_two(1.0, 1); //without No_Infer doesnt compile
-        }
-    }
-    #endif
-
     template<class T>
     concept regular_type = 
         std::is_nothrow_default_constructible_v<T> && 

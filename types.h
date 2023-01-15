@@ -31,3 +31,5 @@ namespace jot
 
     struct Unit {};
 }
+
+#define JOT_SIZE_T ::jot::isize

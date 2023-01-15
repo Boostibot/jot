@@ -5,6 +5,7 @@
 #include "option.h"
 #include "utils.h"
 #include "slice.h"
+#include "types.h"
 #include "defines.h"
 
 #define assert_arg(arg) assert(arg)

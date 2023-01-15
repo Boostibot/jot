@@ -175,10 +175,7 @@ void test_allocators()
                 force(result.state);
 
                 if(touch)
-                {
-                    Slice<u8> before_added = trim(result.items, old_size);
-                    memcpy_slice<u8>(&before_added, old_data);
-                }
+                    copy_bytes<u8>(&result.items, old_data);
 
                 force(tested->deallocate(old_data, align));
             }
@@ -186,7 +183,7 @@ void test_allocators()
             allocs[i] = result.items;
             Slice<u8> added = slice(result.items, old_size);
             if(touch)
-                null_slice(&added);
+                null_bytes(&added);
         }
 
         for(isize i = 1; i < block_size; i += 2)

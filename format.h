@@ -310,7 +310,7 @@ namespace jot
 
                 if(new_found != 0 && format_str[new_found - 1] == '\\')
                 {
-                    format_append(into, slice(format_str, IRange{last, new_found - 1}));
+                    format_append(into, slice_range(format_str, last, new_found - 1));
                     format_append(into, "{}");
                     continue;
                 }
@@ -318,7 +318,7 @@ namespace jot
 
                 assert(found_count < adapted.size && "number of arguments and holes must match");
 
-                format_append(into, slice(format_str, IRange{last, new_found}));
+                format_append(into, slice_range(format_str, last, new_found));
                 let& curr_adapted = adapted[found_count];
                 mut formatted_current = curr_adapted.call(curr_adapted.data);
                 force(push(into, formatted_current));

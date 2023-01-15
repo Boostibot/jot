@@ -1,7 +1,5 @@
 #pragma once
 
-#include "defines.h"
-
 namespace jot
 {
     template<typename T>
@@ -13,8 +11,8 @@ namespace jot
             new (bytes) T;
         }
 
-        No_Destruct(T moved value) noexcept {
-            new (bytes) T(move(&value));
+        No_Destruct(T && value) noexcept {
+            new (bytes) T((T&&) value);
         }
     };
 
@@ -22,14 +20,12 @@ namespace jot
     No_Destruct(T) -> No_Destruct<T>;
 
     template<typename T>
-    func get(No_Destruct<T> in item) noexcept -> T* {
-        return cast(T*) cast(void*) item.bytes;
+    auto get(No_Destruct<T> const& item) noexcept -> T const& {
+        return (T*) (void*) item.bytes;
     }
 
     template<typename T>
-    func get(No_Destruct<T>* item) noexcept -> T in{
-        return *cast(const T*) cast(void*) item->bytes;
+    auto get(No_Destruct<T>* item) noexcept -> T* {
+        return *(const T*) (void*) item->bytes;
     }
 }
-
-#include "undefs.h"

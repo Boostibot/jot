@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ranges>
+
 #include "utils.h"
 #include "types.h"
 #include "slice.h"
@@ -8,6 +10,9 @@
 
 namespace jot
 {
+    namespace stdr = std::ranges;
+    namespace stdv = std::views; 
+
     template <typename T>
     struct Stack
     {   
