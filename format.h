@@ -14,7 +14,8 @@ namespace jot
     using Mutable_String = Slice<char>;
     using String_Builder = Stack<char>;
 
-    func first_index_of(String in_str, String search_for, isize from = 0) -> isize
+    constexpr nodisc 
+    isize first_index_of(String in_str, String search_for, isize from = 0)
     {
         if(search_for.size == 0)
             return 0;
@@ -25,7 +26,7 @@ namespace jot
         isize to = min(in_str.size - search_for.size + 1, in_str.size);
         for(isize i = from; i < to; i++)
         {
-            let execute = [&](){
+            const auto execute = [&](){
                 for(isize j = 0; j < search_for.size; j++)
                 {
                     if(in_str[i + j] != search_for[j])
@@ -58,12 +59,13 @@ namespace jot
         '-'
     };
 
-    proc print(std::FILE* stream, String_Builder in builder) -> void
+    void print(std::FILE* stream, String_Builder const& builder)
     {
         fwrite(builder.data, sizeof(char), builder.size, stream);
     }
 
-    func format_number(i64 val, isize base = 10, String prefix = "", isize pad_to = 0, Array<char, 37> const& converter = UPPERCASE_NUM_CHAR_MAPPING) -> String_Builder
+    nodisc
+    String_Builder format_number(i64 val, isize base = 10, String prefix = "", isize pad_to = 0, Array<char, 37> const& converter = UPPERCASE_NUM_CHAR_MAPPING)
     {
         String_Builder into;
 
@@ -110,26 +112,26 @@ namespace jot
         return into;
     }
 
-    template<std::integral T>
-    func format(T in val)
+    template<std::integral T> nodisc 
+    String_Builder format(T const& val)
     {
         return format_number(cast(i64) val);
     }
 
-    template<std::floating_point T, typename... Formats>
-    func format(T in value, Formats... format_args) -> String_Builder
+    template<std::floating_point T, typename... Formats> nodisc 
+    String_Builder format(T const& value, Formats... format_args)
     {
         String_Builder into;
 
-        constexpr isize base_chars = 64; //64bit num in binary - nothing should be bigger than this 
-        constexpr isize chars_grow = 64; //but just in case...
+        constexpr isize base_chars = 64; //64bit num const& binary - nothing should be bigger than this 
+        constexpr isize chars_grow = 64; //but just const& case...
         constexpr isize max_tries = 1;
 
         isize old_size = into.size;
         isize current_try = 0;
 
         force(resize(&into, into.size + base_chars));
-        mut res = std::to_chars(into.data + old_size, into.data + into.size, value, format_args...);
+        auto res = std::to_chars(into.data + old_size, into.data + into.size, value, format_args...);
 
         for(; res.ec == std::errc::value_too_large && current_try < max_tries; current_try++)
         {
@@ -142,19 +144,22 @@ namespace jot
         return into;
     }
 
-    func format(String str) -> String_Builder
+    nodisc 
+    String_Builder format(String str)
     {
         String_Builder into;
         force(push(&into, str));
         return into;
     }
 
-    func format(cstring str) -> String_Builder
+    nodisc 
+    String_Builder format(cstring str)
     {
         return format(String(str));
     }
 
-    func format_multiple(String str, isize count = 1) -> String_Builder
+    nodisc
+    String_Builder format_multiple(String str, isize count = 1)
     {
         String_Builder into;
 
@@ -165,19 +170,22 @@ namespace jot
         return into;
     }
 
-    func format(String_Builder in builder) -> String_Builder
+    nodisc 
+    String_Builder format(String_Builder const& builder)
     {
         return format(slice(builder));
     }
 
-    func format(char in c, isize count = 1) -> String_Builder
+    nodisc 
+    String_Builder format(char const& c, isize count = 1)
     {
         String_Builder into;
         force(resize(&into, count, c));
         return into;
     }
 
-    func format(bool in val) -> String_Builder
+    nodisc 
+    String_Builder format(bool const& val)
     {
         return format(val ? String("true") : String("false"));
     }
@@ -185,13 +193,14 @@ namespace jot
     template <typename T>
     concept pointer = std::is_pointer_v<T>;
 
-    template<pointer T>
-    func format(T in val) -> String_Builder
+    template<pointer T> nodisc 
+    String_Builder format(T const& val)
     {
         return format_number(cast(isize) val, 16, "0x", 8);
     }
 
-    func format(nullptr_t) -> String_Builder
+    nodisc 
+    String_Builder format(nullptr_t)
     {
         return format<void*>(cast(void*) nullptr);
     }
@@ -205,25 +214,25 @@ namespace jot
     template <typename T>
     concept formattable_forward_range = stdr::forward_range<T> && formattable<stdr::range_value_t<T>>;
 
-    template<formattable_forward_range T>
-    func format(T moved range) -> String_Builder
+    template<formattable_forward_range T> nodisc 
+    String_Builder format(T && range)
     {
         String_Builder into;
         force(push(&into, '['));
 
-        mut it = stdr::begin(range);
-        let end = stdr::end(range);
+        auto it = stdr::begin(range);
+        const auto end = stdr::end(range);
         if(it != end)
         {
             {
-                mut first = format(*it);
+                auto first = format(*it);
                 force(push(&into, first));
                 ++it;
             }
 
             for(; it != end; ++it)
             {
-                mut formatted = format(*it);
+                auto formatted = format(*it);
                 force(push(&into, String(", ")));
                 force(push(&into, formatted));
             }
@@ -234,8 +243,8 @@ namespace jot
     }
 
     
-    template <formattable T, isize N>
-    func format(const T (&a)[N]) -> String_Builder
+    template <formattable T, isize N> nodisc 
+    String_Builder format(const T (&a)[N])
     {
         Slice<const T> slice = {a, N};
         return format(slice);
@@ -243,22 +252,23 @@ namespace jot
     
 
     template<formattable T>
-    func format_append(String_Builder* to, T in value) -> void {
-        mut formatted = format(to);
+    void format_append(String_Builder* to, T const& value) 
+    {
+        auto formatted = format(to);
         force(push(to, value));
     };
 
     namespace format_string 
     {
-        template <typename T>
-        proc copy_format_adaptor(void* content) -> String_Builder
+        template <typename T> nodisc
+        String_Builder copy_format_adaptor(void* content)
         {
             T* casted = cast(T*) content;
             return format(*casted);
         }
 
-        template <typename T, isize N>
-        proc array_copy_format_adaptor(void* content) -> String_Builder
+        template <typename T, isize N> nodisc
+        String_Builder array_copy_format_adaptor(void* content)
         {
             Slice<T> slice = {cast(T*) content, N};
             return format(slice);
@@ -268,30 +278,30 @@ namespace jot
         {
             using Func = String_Builder(*)(void*);
 
-            void* data;
-            Func call;
+            void* data = nullptr;
+            Func call = nullptr;
         };
 
-        template<typename T>
-        func make_adapted(T in val) -> Adapted
+        template<typename T> nodisc
+        Adapted make_adapted(T const& val)
         {
-            return Adapted{
-                .data = cast(void*) &val,
-                .call = &copy_format_adaptor<T>
-            };
+            Adapted adapted;
+            adapted.data = cast(void*) &val;
+            adapted.call = &copy_format_adaptor<T>;
+            return adapted;
         }
 
-        template <class T, isize N>
-        func make_adapted(const T (&a)[N]) -> Adapted
+        template <class T, isize N> nodisc
+        Adapted make_adapted(const T (&a)[N])
         {
-            return Adapted{
-                .data = cast(void*) a,
-                .call = &array_copy_format_adaptor<T, N>
-            };
+            Adapted adapted;
+            adapted.data = cast(void*) a;
+            adapted.call = &array_copy_format_adaptor<T, N>;
+            return adapted;
         }
 
         template<typename... Ts>
-        proc format_into(String_Builder* into, String format_str, Slice<Adapted> adapted) -> void
+        void format_into(String_Builder* into, String format_str, Slice<Adapted> adapted) 
         {
             constexpr String sub_for = "{}";
             isize last = 0;
@@ -319,8 +329,8 @@ namespace jot
                 assert(found_count < adapted.size && "number of arguments and holes must match");
 
                 format_append(into, slice_range(format_str, last, new_found));
-                let& curr_adapted = adapted[found_count];
-                mut formatted_current = curr_adapted.call(curr_adapted.data);
+                const auto& curr_adapted = adapted[found_count];
+                auto formatted_current = curr_adapted.call(curr_adapted.data);
                 force(push(into, formatted_current));
 
                 found_count ++;
@@ -328,7 +338,7 @@ namespace jot
         }
     }
     template<formattable... Ts>
-    proc format_into(String_Builder* builder, String format_str, Ts in... args) -> void
+    void format_into(String_Builder* builder, String format_str, Ts const&... args)
     {
         format_string::Adapted adapted_storage[] = {format_string::make_adapted(args)...};
         Slice<format_string::Adapted> adapted_slice = {adapted_storage, sizeof...(args)};
@@ -336,8 +346,8 @@ namespace jot
         format_string::format_into(builder, format_str, adapted_slice);
     }
 
-    template<formattable... Ts>
-    proc format(String format_str, Ts in... args) -> String_Builder
+    template<formattable... Ts> nodisc
+    String_Builder format(String format_str, Ts const&... args)
     {
         String_Builder into;
 
@@ -349,27 +359,27 @@ namespace jot
     }
 
     template <formattable... Ts>
-    proc print(std::FILE* stream, Ts in... types) -> void
+    void print(std::FILE* stream, Ts const&... types)
     {
         String_Builder builder = format(types...);
         fwrite(builder.data, sizeof(char), builder.size, stream);
     }
 
     template <formattable... Ts>
-    proc println(std::FILE* stream, Ts in... types) -> void
+    void println(std::FILE* stream, Ts const&... types)
     {
         print(stream, types...);
         fputc('\n', stream);
     }
 
     template <formattable... Ts>
-    proc print(Ts in... types) -> void
+    void print(Ts const&... types)
     {
         print(stdout, types...);
     }
 
     template <formattable... Ts>
-    proc println(Ts in... types) -> void
+    void println(Ts const&... types)
     {
         println(stdout, types...);
     }

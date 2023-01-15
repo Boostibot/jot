@@ -18,7 +18,9 @@ namespace jot
     template<>
     struct Failable<State>
     {
-        static constexpr func perform(State state) -> bool {
+        static constexpr nodisc 
+        bool perform(State state) 
+        {
             return state != OK_STATE;
         }
     };
@@ -26,7 +28,9 @@ namespace jot
     template<>
     struct Failable<bool>
     {
-        static constexpr func perform(bool state) -> bool {
+        static constexpr nodisc 
+        bool perform(bool state) 
+        {
             return state == false;
         }
     };
@@ -40,27 +44,42 @@ namespace jot
     template<typename T>
     struct Failable<Nullable<T>>
     {
-        static constexpr func perform(Nullable<T> ptr) noexcept -> bool {
+        static constexpr nodisc 
+        bool perform(Nullable<T> ptr) noexcept
+        {
             return ptr.value == nullptr;
         }
     };
 
-    template<typename T>
-    constexpr func value(Nullable<T> ptr) noexcept -> T {
+    template<typename T> constexpr nodisc 
+    T value(Nullable<T> ptr) noexcept
+    {
         return ptr.value;
     }
 
-    template <failable T> func operator==(T in left, Ok_Type) noexcept -> bool { return failed(left) == false; }
-    template <failable T> func operator!=(T in left, Ok_Type) noexcept -> bool { return failed(left); }
-    template <failable T> func operator==(T in left, Error_Type) noexcept -> bool { return failed(left); }
-    template <failable T> func operator!=(T in left, Error_Type) noexcept -> bool { return failed(left) == false; }
+    template <failable T> constexpr nodisc 
+    bool operator==(T const& left, Ok_Type) noexcept { return failed(left) == false; }
+    
+    template <failable T> constexpr nodisc 
+    bool operator!=(T const& left, Ok_Type) noexcept { return failed(left); }
+    
+    template <failable T> constexpr nodisc 
+    bool operator==(T const& left, Error_Type) noexcept { return failed(left); }
+    
+    template <failable T> constexpr nodisc 
+    bool operator!=(T const& left, Error_Type) noexcept { return failed(left) == false; }
 
-    template <failable T> proc force(T in value) -> void {
+
+    template <failable T> 
+    void force(T const& value)
+    {
         if(failed(value))
             throw value;
     }
 
-    template <failable T> proc force_error(T in value) -> void {
+    template <failable T> 
+    void force_error(T const& value)
+    {
         if(failed(value) == false)
             throw value;
     }

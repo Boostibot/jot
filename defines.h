@@ -1,24 +1,36 @@
-#define let const auto
-#define mut auto
 #define nodisc [[nodiscard]]
-#define proc nodisc auto
-#define func nodisc  auto
-#define in const&
-#define moved &&
-#define no_alias __restrict
 #define cast(...) (__VA_ARGS__)
 
-#if defined(_MSC_VER)
-    #define address_alias [[msvc::no_unique_address]]
+#if defined(__clang__)
+    #define RESTRICT __restrict__
+#elif defined(__GNUC__)
+    #define RESTRICT __restrict__
+#elif defined(_MSC_VER)
+    #define RESTRICT __restrict
 #else
-    #define address_alias [[no_unique_address]]
+    #define RESTRICT
+#endif
+
+#if defined(__GNUC__)
+    #define FORCE_INLINE __attribute__((always_inline))
+#elif defined(_MSC_VER) && !defined(__clang__)
+    #define FORCE_INLINE __forceinline
+#else
+    #define FORCE_INLINE
+#endif
+
+#if defined(_MSC_VER)
+    #define NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
+#else
+    #define NO_UNIQUE_ADDRESS [[no_unique_address]]
 #endif
 
 #ifndef MOVE_DEFINED
 #define MOVE_DEFINED
 
-    template <typename T>
-    constexpr func move(T* val) noexcept -> T && {
+    template <typename T> constexpr nodisc 
+    T && move(T* val) 
+    {
         return cast(T &&) *val;
     };
 

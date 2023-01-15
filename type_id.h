@@ -8,8 +8,8 @@ static constexpr Type_Id_Value _type_id_value = {sizeof(T)};
 
 using type_id = const Type_Id_Value*;
 
-template <typename T>
-constexpr type_id get_type_id() noexcept  {
+template <typename T> constexpr [[nodiscard]] 
+type_id get_type_id() {
     return &_type_id_value<T>;
 }
 

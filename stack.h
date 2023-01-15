@@ -25,48 +25,59 @@ namespace jot
         Stack(Allocator* allocator) noexcept
             : allocator{allocator} {}
 
-        Stack(Stack moved other) noexcept;
+        Stack(Stack && other) noexcept;
 
         Stack(T* data, isize size, isize capacity, Allocator* allocator) noexcept
             : data{data}, size{size}, capacity{capacity}, allocator{allocator} {}
 
         ~Stack() noexcept;
-        Stack& operator=(Stack moved other) noexcept;
+        Stack& operator=(Stack && other) noexcept;
 
-        Stack(Stack in other) noexcept = delete;
-        Stack& operator=(Stack in other) noexcept = delete;
+        Stack(Stack const& other) noexcept = delete;
+        Stack& operator=(Stack const& other) noexcept = delete;
 
         #include "slice_op_text.h"
     };
 
-    #define templ_func template<class T> func
-    #define templ_proc template<class T> proc
 
-    templ_func slice(Stack<T> in stack) noexcept -> Slice<const T>{
+    template<class T> nodisc
+    Slice<const T> slice(Stack<T> const& stack) 
+    {
         return Slice<const T>{stack.data, stack.size};
     }
 
-    templ_func slice(Stack<T>* stack) noexcept -> Slice<T>{
+    template<class T> nodisc
+    Slice<T> slice(Stack<T>* stack) 
+    {
         return Slice<T>{stack->data, stack->size};
     }
 
-    templ_func capacity_slice(Stack<T> in stack) noexcept -> Slice<const T>{
+    template<class T> nodisc
+    Slice<const T> capacity_slice(Stack<T> const& stack) 
+    {
         return Slice<const T>{stack.data, stack.capacity};
     }
 
-    templ_func capacity_slice(Stack<T>* stack) noexcept -> Slice<T>{
+    template<class T> nodisc
+    Slice<T> capacity_slice(Stack<T>* stack) 
+    {
         return Slice<T>{stack->data, stack->capacity};
     }
 
-    templ_func allocator(Stack<T> in stack) noexcept -> const Allocator* { 
+    template<class T> nodisc
+    const Allocator* allocator(Stack<T> const& stack) 
+    { 
         return &stack.allocator; 
     }
 
-    templ_func allocator(Stack<T>* stack) noexcept -> Allocator* { 
+    template<class T> nodisc
+    Allocator* allocator(Stack<T>* stack) 
+    { 
         return &stack.allocator; 
     }
 
-    templ_func is_invariant(Stack<T> in stack) noexcept -> bool
+    template<class T> nodisc
+    bool is_invariant(Stack<T> const& stack)
     {
         const bool size_inv = stack.capacity >= stack.size;
         const bool data_inv = (stack.capacity == 0) == (stack.data == nullptr);
@@ -75,7 +86,8 @@ namespace jot
         return size_inv && capa_inv && data_inv;
     }
 
-    templ_func calculate_growth(Stack<T> in stack, isize to_fit) -> isize
+    template<class T> nodisc
+    isize calculate_growth(Stack<T> const& stack, isize to_fit)
     {
         isize size = stack.size;
         while(size < to_fit)
@@ -92,14 +104,16 @@ namespace jot
 
     namespace detail 
     {
-        templ_proc destroy_items(Stack<T>* stack, isize from, isize to)
+        template<class T> 
+        void destroy_items(Stack<T>* stack, isize from, isize to)
         {
             if constexpr(std::is_trivially_destructible_v<T> == false)
                 for(isize i = from; i < to; i++)
                     stack->data[i].~T();
         }
 
-        templ_proc alloc_data(Stack<T>* stack, isize new_capacity) -> Allocator_State_Type 
+        template<class T> 
+        Allocator_State_Type alloc_data(Stack<T>* stack, isize new_capacity)
         {
             Allocation_Result res = stack->allocator->allocate(new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
             if(res.state != Allocator_State::OK)
@@ -109,7 +123,8 @@ namespace jot
             stack->capacity = new_capacity;
         }
 
-        templ_proc dealloc_data(Stack<T>* stack) -> void 
+        template<class T> 
+        void dealloc_data(Stack<T>* stack)
         {
             if(stack->data != nullptr)
             {
@@ -123,10 +138,12 @@ namespace jot
         // when called with new_capacity = 0 acts as dealloc_data
         // Destroys elements when shrinking but does not construct new ones when growing 
         //  (because doesnt know how to)
-        templ_proc set_capacity(Stack<T>* stack, isize new_capacity) -> Allocator_State_Type 
+        template<class T> 
+        Allocator_State_Type set_capacity(Stack<T>* stack, isize new_capacity)
         {
-            T* no_alias new_data = nullptr;
-            T* no_alias old_data = stack->data;
+            
+            T* RESTRICT new_data = nullptr;
+            T* RESTRICT old_data = stack->data;
 
             Slice<u8> old_slice = cast_slice<u8>(capacity_slice(stack));
 
@@ -138,7 +155,7 @@ namespace jot
                 Allocation_Result resize_res = stack->allocator->resize(old_slice, DEF_ALIGNMENT<T>, new_capacity * sizeof(T));
                 if(resize_res.state == Allocator_State::OK)
                 {
-                    let cast_res = cast_slice<T>(resize_res.items);
+                    const auto cast_res = cast_slice<T>(resize_res.items);
                     assert(cast_res.size == new_capacity);
                     assert(cast_res.data == nullptr ? new_capacity == 0 : true);
 
@@ -152,7 +169,7 @@ namespace jot
             if(allocation_res.state != Allocator_State::OK)
                 return allocation_res.state;
 
-            let cast_res = cast_slice<T>(allocation_res.items);
+            const auto cast_res = cast_slice<T>(allocation_res.items);
             new_data = cast_res.data;
 
             assert((are_aliasing<T>(slice(stack), Slice<T>{new_data, new_capacity}) == false));
@@ -178,7 +195,8 @@ namespace jot
         }
     }
 
-    templ_proc assign(Stack<T>* to, Stack<T> in from) noexcept -> State
+    template<class T> 
+    State assign(Stack<T>* to, Stack<T> const& from) noexcept
     {
         State ret_state = OK_STATE;
         if(to == &from)
@@ -186,7 +204,7 @@ namespace jot
 
         if(to->capacity < from.size)
         {
-            let res = detail::set_capacity(to, from.size);
+            const auto res = detail::set_capacity(to, from.size);
             if(res == ERROR)
                 return res;
         }
@@ -207,8 +225,8 @@ namespace jot
         }
         else
         {
-            T* no_alias to_data = to->data;
-            const T* no_alias from_data = from.data;
+            T* RESTRICT to_data = to->data;
+            const T* RESTRICT from_data = from.data;
 
             //construct missing
             for (isize i = to->size; i < from.size; i++)
@@ -241,7 +259,8 @@ namespace jot
         }
     }
     
-    templ_proc swap(Stack<T>* left, Stack<T>* right) noexcept -> void 
+    template<class T> 
+    void swap(Stack<T>* left, Stack<T>* right) noexcept
     {
         swap(&left->data, &right->data);
         swap(&left->size, &right->size);
@@ -250,19 +269,20 @@ namespace jot
     }
 
     template<typename T>
-    Stack<T>::Stack(Stack moved other) noexcept 
+    Stack<T>::Stack(Stack && other) noexcept 
     {
         *this = move(&other);
     }
 
     template<typename T>
-    Stack<T>& Stack<T>::operator=(Stack<T> moved other) noexcept 
+    Stack<T>& Stack<T>::operator=(Stack<T> && other) noexcept 
     {
         swap(this, &other);
         return *this;
     }
 
-    templ_proc reserve(Stack<T>* stack, isize to_fit) -> Allocator_State_Type
+    template<class T> 
+    Allocator_State_Type reserve(Stack<T>* stack, isize to_fit)
     {
         assert(is_invariant(*stack));
 
@@ -276,7 +296,8 @@ namespace jot
         return state;
     }
 
-    templ_proc clear(Stack<T>* stack) -> void
+    template<class T> 
+    void clear(Stack<T>* stack)
     {
         assert(is_invariant(*stack));
         detail::destroy_items(stack);
@@ -284,20 +305,22 @@ namespace jot
         assert(is_invariant(*stack));
     }
 
-    templ_func empty(Stack<T> in stack) noexcept -> bool
+    template<class T> nodisc
+    bool empty(Stack<T> const& stack) noexcept
     {
         assert(is_invariant(stack));
         return stack.size == 0;
     }
 
-    templ_func is_empty(Stack<T> in stack) noexcept -> bool
+    template<class T> nodisc
+    bool is_empty(Stack<T> const& stack) noexcept
     {
         assert(is_invariant(stack));
         return stack.size == 0;
     }
 
     template <class T, stdr::forward_range Inserted>
-    proc splice(Stack<T>* stack, isize at, isize replace_size, Inserted moved inserted) -> State
+    State splice(Stack<T>* stack, isize at, isize replace_size, Inserted && inserted)
     {       
         static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
         State ret_state = OK_STATE;
@@ -321,7 +344,7 @@ namespace jot
 
         if(inserted_size > replace_size)
         {
-            mut reserve_state = reserve(stack, final_size);
+            auto reserve_state = reserve(stack, final_size);
             if(reserve_state == ERROR)
                 return reserve_state;
 
@@ -368,13 +391,13 @@ namespace jot
         stack->size = final_size;
 
         //insert the added elems into constructed slots
-        mut it = stdr::begin(inserted);
+        auto it = stdr::begin(inserted);
         const isize move_assign_to = at + move_inserted_size;
         for (isize i = at; i < move_assign_to; i++, ++it)
         {
             if constexpr(do_move_construct)
             {
-                T in val = *it; //either copy or reference 
+                T const& val = *it; //either copy or reference 
                 //either way now ve can actually get ptr to it and pass it to move
                 stack_ref[i] = move(&val);
             }
@@ -394,7 +417,7 @@ namespace jot
             T* prev = stack->data + i;
             if constexpr(do_move_construct)
             {
-                T in val = *it; //either copy or reference 
+                T const& val = *it; //either copy or reference 
                 std::construct_at(stack->data + i, move(&val));
             }
             else if(do_copy_construct)
@@ -412,14 +435,14 @@ namespace jot
     }
 
     template <class T, stdr::forward_range Removed, stdr::forward_range Inserted>
-    proc splice(Stack<T>* stack, isize at, Removed* removed, Inserted moved inserted) -> State
+    State splice(Stack<T>* stack, isize at, Removed* removed, Inserted && inserted)
     {       
         static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
         static_assert(std::convertible_to<stdr::range_value_t<Removed>, T>, "the types must be comaptible");
         Stack<T>& stack_ref = *stack; //for bounds checks
 
-        mut it = stdr::begin(*removed);
-        let end = stdr::end(*removed);
+        auto it = stdr::begin(*removed);
+        const auto end = stdr::end(*removed);
         isize i = at;
         for (; it != end; i++, ++it)
             *it = move(&stack_ref[i]);
@@ -427,13 +450,15 @@ namespace jot
         return splice(stack, at, i - at, forward(Inserted, inserted));
     }
 
-    templ_proc splice(Stack<T>* stack, isize at, isize replace_size) -> State
+    template<class T> 
+    State splice(Stack<T>* stack, isize at, isize replace_size)
     {
         Slice<T, isize> empty;
         return splice(stack, at, replace_size, move(&empty));
     }
 
-    templ_proc push(Stack<T>* stack, no_infer(T) what) -> State
+    template<class T> 
+    State push(Stack<T>* stack, no_infer(T) what)
     {
         assert(is_invariant(*stack));
 
@@ -449,7 +474,8 @@ namespace jot
         return Allocator_State::OK;
     }
 
-    templ_proc pop(Stack<T>* stack) -> T
+    template<class T> 
+    T pop(Stack<T>* stack)
     {
         assert(is_invariant(*stack));
         assert(stack->size != 0);
@@ -463,40 +489,44 @@ namespace jot
     }
 
     template <class T, stdr::forward_range Inserted> requires (!same<Inserted, T>) 
-    proc push(Stack<T>* stack, Inserted moved inserted) -> State
+    State push(Stack<T>* stack, Inserted && inserted)
     {
         static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
         return splice(stack, stack->size, 0, std::forward<Inserted>(inserted));
     }
 
-    templ_proc pop(Stack<T>* stack, isize count) -> void
+    template<class T> 
+    void pop(Stack<T>* stack, isize count)
     {
         State state = splice(stack, stack->size - count, count);
         assert(state == OK);
     }
 
-    templ_proc last(Stack<T>* stack) -> T*
-    {
+    template<class T> nodisc
+    T* last(Stack<T>* stack){
         assert(is_invariant(*stack));
         assert(stack->size > 0);
         return &stack->data[stack->size - 1];
     }
 
-    templ_proc last(Stack<T> in stack) -> T in
+    template<class T> 
+    T const& last(Stack<T> const& stack)
     {
         assert(is_invariant(stack));
         assert(stack.size > 0);
         return stack.data[stack.size - 1];
     }
 
-    templ_proc first(Stack<T>* stack) -> T*
+    template<class T> 
+    T* first(Stack<T>* stack) 
     {
         assert(is_invariant(*stack));
         assert(stack->size > 0);
         return &stack->data[0];
     }
 
-    templ_proc first(Stack<T> in stack) -> T in
+    template<class T> 
+    T const& first(Stack<T> const& stack)
     {
         assert(is_invariant(stack));
         assert(stack.size > 0);
@@ -504,7 +534,7 @@ namespace jot
     }
 
     template <class T, bool is_zero = false>
-    proc resize(Stack<T>* stack, isize to, no_infer(T) fillWith) -> State
+    State resize(Stack<T>* stack, isize to, no_infer(T) fillWith)
     {
         assert(is_invariant(*stack));
         assert(0 <= to);
@@ -526,7 +556,7 @@ namespace jot
                     stack->data[i] = fillWith;
                 else
                 {
-                    mut state = construct_assign_at(stack->data + i, fillWith);
+                    auto state = construct_assign_at(stack->data + i, fillWith);
                     if(state == ERROR)
                         ret_state = state;
                 }
@@ -540,12 +570,14 @@ namespace jot
         return ret_state;
     }
 
-    templ_proc resize(Stack<T>* stack, isize to) -> State
+    template<class T> 
+    State resize(Stack<T>* stack, isize to)
     {
         return resize<T, true>(stack, to, T());
     }
 
-    templ_proc resize_for_overwrite(Stack<T>* stack, isize to) -> State
+    template<class T> 
+    State resize_for_overwrite(Stack<T>* stack, isize to)
     {
         static_assert(std::is_trivially_constructible_v<T>, "type must be POD!");
         State state = reserve(stack, to);
@@ -557,7 +589,8 @@ namespace jot
         return Allocator_State::OK;
     }
 
-    templ_proc insert(Stack<T>* stack, isize at, no_infer(T) what) -> T*
+    template<class T> 
+    T* insert(Stack<T>* stack, isize at, no_infer(T) what)
     {
         assert(is_invariant(*stack));
         assert(0 <= at && at <= stack->size);
@@ -567,7 +600,8 @@ namespace jot
         return stack->data + at;
     }
 
-    templ_proc remove(Stack<T>* stack, isize at) -> T
+    template<class T> 
+    T remove(Stack<T>* stack, isize at)
     {
         assert(is_invariant(*stack));
         assert(0 <= at && at < stack->size);
@@ -578,7 +612,8 @@ namespace jot
         return removed;
     }
 
-    templ_proc unordered_remove(Stack<T>* stack, isize at) -> T
+    template<class T> 
+    T unordered_remove(Stack<T>* stack, isize at)
     {
         assert(0 <= at && at < stack->size);
         assert(0 < stack->size);
@@ -587,7 +622,8 @@ namespace jot
         return pop(stack);
     }
 
-    templ_proc unordered_insert(Stack<T>* stack, isize at, no_infer(T) what) -> State
+    template<class T> 
+    State unordered_insert(Stack<T>* stack, isize at, no_infer(T) what)
     {
         assert(0 <= at && at <= stack->size);
 
@@ -602,14 +638,11 @@ namespace jot
 
 namespace std 
 {
-    templ_proc swap(jot::Stack<T>& stack1, jot::Stack<T>& stack2) -> void
+    template<class T> 
+    void swap(jot::Stack<T>& stack1, jot::Stack<T>& stack2)
     {
         jot::swap(&stack1, &stack2);
     }
 }
-
-
-#undef templ_func
-#undef templ_proc
 
 #include "undefs.h"

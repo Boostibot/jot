@@ -25,10 +25,11 @@ namespace jot
         type_id which = type_id_of(void);
         u8 bytes[byte_size];
 
-        constexpr Variant() noexcept = default;
+        constexpr 
+        Variant() noexcept = default;
 
-        template<typename T>
-        constexpr Variant(T value) noexcept
+        template<typename T> constexpr 
+        Variant(T value) noexcept
         {
             static_assert(variant_compatible<T>, "must be variant comaptible");
             static_assert(sizeof(T) <= byte_size && alignof(T) <= align, "must fit");
@@ -38,8 +39,8 @@ namespace jot
         }
     };
 
-    template<typename... Ts>
-    constexpr func max_size(Ts... sizes) noexcept -> isize
+    template<typename... Ts> constexpr nodisc 
+    isize max_size(Ts... sizes) noexcept
     {
         isize count = sizeof...(Ts);
         isize sizes[] = {cast(isize) sizes};
@@ -51,6 +52,8 @@ namespace jot
         return max;
     }
 
+    //This is very ugly. I appologize
+
     template<typename... Ts>
     using Variant_Of = Variant<
         max_size(sizeof(Ts)...), 
@@ -61,8 +64,8 @@ namespace jot
         max_size(prev_size, sizeof(Added)...), 
         max_size(prev_align, alignof(Added)...)>;
 
-    template<typename First, typename... Ts>
-    constexpr func make_variant(First in data) noexcept -> Variant_Of<First, Ts...>
+    template<typename First, typename... Ts> constexpr nodisc 
+    auto make_variant(First const& data) noexcept -> Variant_Of<First, Ts...>
     {
         static_assert(variant_compatible<First> && (variant_compatible<Ts> && ...), "all types must be variant compatible");
 
@@ -73,8 +76,8 @@ namespace jot
         return variant;
     }
 
-    template<typename Added, isize prev_size, isize prev_align>
-    constexpr func expand_variant(Variant<prev_size, prev_align> in variant) -> Expanded_Variant<prev_size, prev_align, Added>
+    template<typename Added, isize prev_size, isize prev_align> constexpr nodisc 
+    auto expand_variant(Variant<prev_size, prev_align> const& variant) -> Expanded_Variant<prev_size, prev_align, Added>
     {
         static_assert(variant_compatible<Added>, "must be variant compatible");
 
@@ -86,23 +89,27 @@ namespace jot
         return out;
     }
 
-    template<isize byte_size, isize align>
-    constexpr func slice(Variant<byte_size, align>* variant) -> Slice<u8> {
+    template<isize byte_size, isize align> constexpr nodisc 
+    Slice<u8> slice(Variant<byte_size, align>* variant) 
+    {
         return Slice<u8>{variant->bytes, variant->byte_size};
     }
 
-    template<isize byte_size, isize align>
-    constexpr func slice(Variant<byte_size, align> in variant) -> Slice<const u8> {
+    template<isize byte_size, isize align> constexpr nodisc 
+    Slice<const u8> slice(Variant<byte_size, align> const& variant) 
+    {
         return Slice<const u8>{variant->bytes, variant->byte_size};
     }
 
-    template<typename Which, isize byte_size, isize align>
-    constexpr func has(Variant<byte_size, align> in variant) noexcept -> bool {
+    template<typename Which, isize byte_size, isize align> constexpr nodisc 
+    bool has(Variant<byte_size, align> const& variant) noexcept 
+    {
         return variant.which = type_id_of(Which);
     }
 
-    template<typename Which, isize byte_size, isize align>
-    constexpr func get(Variant<byte_size, align> variant) noexcept -> Which {
+    template<typename Which, isize byte_size, isize align> constexpr nodisc 
+    Which get(Variant<byte_size, align> variant) noexcept 
+    {
         assert(has<Which>(Variant));
 
         constexpr isize size = sizeof(Which);
@@ -113,8 +120,9 @@ namespace jot
         return bit_cast<Which>(out_bytes);
     }
 
-    template<typename Which, isize byte_size, isize align>
-    func get(Variant<byte_size, align>* variant) noexcept -> Which* {
+    template<typename Which, isize byte_size, isize align> nodisc 
+    Which* get(Variant<byte_size, align>* variant) noexcept 
+    {
         assert(has<Which>(Variant));
         return cast(Which*) cast(void*) variant->bytes;
     }

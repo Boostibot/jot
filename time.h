@@ -11,13 +11,14 @@ namespace jot
     using i64 = int64_t;
 
     //sorry c++ chrono but I really dont want to iteract with all those templates
-    nodisc i64 clock() noexcept {
+    nodisc 
+    i64 clock() noexcept {
         auto duration = std::chrono::high_resolution_clock::now().time_since_epoch();
         return duration_cast<std::chrono::nanoseconds>(duration).count(); 
     }
 
-    template <typename Fn>
-    nodisc i64 ellapsed_time(Fn fn) noexcept
+    template <typename Fn> nodisc 
+    i64 ellapsed_time(Fn fn) noexcept
     {
         i64 from = clock();
         fn();
@@ -30,8 +31,8 @@ namespace jot
         i64 time_ns = 0;
     };
 
-    template <typename Fn>
-    nodisc Bench_Result benchmark_ns(i64 max_time_ns, i64 warm_up_ns, Fn fn, i64 base_block_size = 1, i64 num_checks = 10) noexcept
+    template <typename Fn> nodisc 
+    Bench_Result benchmark_ns(i64 max_time_ns, i64 warm_up_ns, Fn fn, i64 base_block_size = 1, i64 num_checks = 10) noexcept
     {
         assert(num_checks > 0);
         assert(base_block_size > 0);
@@ -74,8 +75,8 @@ namespace jot
         return result;
     }
 
-    template <typename Fn>
-    nodisc Bench_Result benchmark(i64 max_time_ms, Fn fn) noexcept
+    template <typename Fn> nodisc 
+    Bench_Result benchmark(i64 max_time_ms, Fn fn) noexcept
     {
         i64 max_time_ns = max_time_ms * 1'000'000;
         return benchmark_ns(max_time_ns, max_time_ns / 10, fn);
@@ -83,15 +84,17 @@ namespace jot
 
     void use_pointer(char const volatile*) {}
 
-    //modified version of DoNotOptimize and ClobberMemmory from google test
-    #if defined(__GNUC__)
-        #define FORCE_INLINE __attribute__((always_inline))
-    #elif defined(_MSC_VER) && !defined(__clang__)
-        #define FORCE_INLINE __forceinline
-    #else
-        #define FORCE_INLINE
+    #ifndef FORCE_INLINE
+        #if defined(__GNUC__)
+            #define FORCE_INLINE __attribute__((always_inline))
+        #elif defined(_MSC_VER) && !defined(__clang__)
+            #define FORCE_INLINE __forceinline
+        #else
+            #define FORCE_INLINE
+        #endif
     #endif
-
+    
+    //modified version of DoNotOptimize and ClobberMemmory from google test
     #if (defined(__GNUC__) || defined(__clang__)) && !defined(__pnacl__) && !defined(EMSCRIPTN)
         #define HAS_INLINE_ASSEMBLY
     #endif

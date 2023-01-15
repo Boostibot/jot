@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory.h"
+#include "types.h"
 #include "stack.h"
 #include "defines.h"
 
@@ -31,7 +32,8 @@ namespace jot
             Block* last = nullptr;
         };
 
-        static func data(Block* block) -> Slice<u8>
+        static nodisc
+        Slice<u8> data(Block* block)
         {
             u8* address = cast(u8*) cast(void*) block;
             if(block->size == 0)
@@ -40,14 +42,15 @@ namespace jot
             return Slice<u8>{address + sizeof(Block), block->size};
         }
 
-        static func used_by_block(Block* block) -> Slice<u8>
+        static nodisc
+        Slice<u8> used_by_block(Block* block)
         {
             u8* address = cast(u8*) cast(void*) block;
             return Slice<u8>{address, block->size + cast(isize) sizeof(Block)};
         }
         
-        static bool
-        is_valid_chain(Chain chain) noexcept
+        static nodisc
+        bool is_valid_chain(Chain chain)
         {
             Block* current = chain.first;
             Block* prev = nullptr;
@@ -61,8 +64,8 @@ namespace jot
             return prev == chain.last;
         }
         
-        static void
-        link_chain(Block* before, Block* first_inserted, Block* last_inserted, Block* after) noexcept
+        static 
+        void link_chain(Block* before, Block* first_inserted, Block* last_inserted, Block* after)
         {
             assert(first_inserted != nullptr && last_inserted != nullptr && "must not be null");
             assert(first_inserted->prev == nullptr && last_inserted->next == nullptr && "must be isolated");
@@ -76,8 +79,8 @@ namespace jot
                 after->prev = last_inserted;
         }
 
-        static void
-        unlink_chain(Block* first_inserted, Block* last_inserted) noexcept
+        static 
+        void unlink_chain(Block* first_inserted, Block* last_inserted)
         {
             assert(first_inserted != nullptr && last_inserted != nullptr && "must not be null");
 
@@ -93,8 +96,8 @@ namespace jot
                 after->prev = before;
         }
         
-        static Block*
-        extract_node(Chain* from, Block* what) noexcept
+        static nodisc
+        Block* extract_node(Chain* from, Block* what) 
         {
             assert(is_valid_chain(*from));
             assert(what != nullptr);
@@ -121,8 +124,8 @@ namespace jot
             return what;
         }
 
-        static void
-        insert_node(Chain* to, Block* insert_after, Block* what) noexcept
+        static
+        void insert_node(Chain* to, Block* insert_after, Block* what)
         {
             assert(is_valid_chain(*to));
             assert(what != nullptr);
@@ -157,8 +160,8 @@ namespace jot
         }
 
 
-        static isize
-        deallocated_and_count_chain(Allocator* alloc, Chain chain)
+        static
+        isize deallocated_and_count_chain(Allocator* alloc, Chain chain)
         {
             isize passed_bytes = 0;
             Block* current = chain.last;
@@ -185,8 +188,8 @@ namespace jot
             return passed_bytes;
         }
 
-        static Block*
-        find_block_to_fit(Chain chain, isize size, isize align) noexcept
+        static nodisc
+        Block* find_block_to_fit(Chain chain, isize size, isize align)
         {
             Block* current = chain.first;
             while(current != nullptr)
@@ -250,14 +253,13 @@ namespace jot
             assert(passed_bytes == bytes_used_);
         }
 
-        Chain
-        used_chain() const noexcept
+        Chain used_chain() const noexcept
         {
             return Chain{blocks.first, current_block};
         }
 
-        Chain
-        free_chain() const noexcept
+        
+        Chain free_chain() const noexcept
         {
             if(current_block == nullptr)
                 return Chain{nullptr, nullptr};
@@ -266,8 +268,8 @@ namespace jot
             return Chain{current_block->next, blocks.last};
         }
 
-        virtual Allocation_Result 
-        allocate(isize size, isize align) noexcept override
+        virtual nodisc
+        Allocation_Result allocate(isize size, isize align) noexcept override
         {
             assert(is_power_of_two(align));
             u8* aligned = align_forward(available_from, align);
@@ -291,8 +293,8 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, alloced};
         }
 
-        virtual Allocator_State_Type 
-        deallocate(Slice<u8> allocated, isize align) noexcept override 
+        virtual nodisc
+        Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override 
         {
             if(allocated != last_allocation)
                 return Allocator_State::OK;
@@ -307,8 +309,8 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual Allocation_Result 
-        resize(Slice<u8> allocated, isize align, isize new_size) noexcept override
+        virtual nodisc
+        Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override
         {
             u8* used_to = available_from + new_size;
             if(allocated != last_allocation || used_to > available_to)
@@ -321,38 +323,37 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, {allocated.data, new_size}};
         }
 
-        virtual Nullable<Allocator*> 
-        parent_allocator() const noexcept override
+        virtual nodisc
+        Nullable<Allocator*> parent_allocator() const noexcept override
         {
             return {parent};
         }
 
-        virtual isize 
-        bytes_allocated() const noexcept override
+        virtual nodisc 
+        isize bytes_allocated() const noexcept override
         {
             return bytes_alloced_;
         }
 
-        virtual isize 
-        bytes_used() const noexcept override 
+        virtual nodisc 
+        isize bytes_used() const noexcept override 
         {
             return bytes_used_;    
         }
 
-        virtual isize 
-        max_bytes_allocated() const noexcept override
+        virtual nodisc 
+        isize max_bytes_allocated() const noexcept override
         {
             return max_bytes_alloced_;
         }
 
-        virtual isize 
-        max_bytes_used() const noexcept override 
+        virtual nodisc 
+        isize max_bytes_used() const noexcept override 
         {
             return max_bytes_used_;    
         }
-
-        void 
-        reset() 
+         
+        void reset() 
         {
             current_block = blocks.first;
 
@@ -367,20 +368,20 @@ namespace jot
             reset_last_allocation();
         }
 
-        void 
-        release_extra_memory() 
+        void release_extra_memory() 
         {
             isize released = deallocated_and_count_chain(parent, free_chain());
             blocks.last = current_block;
             bytes_used_ -= released;
         }
 
-        virtual proc custom_action(
+        virtual nodisc 
+        Allocation_Result custom_action(
             Allocator_Action::Type action_type, 
             Nullable<Allocator*> other_alloc, 
             isize new_size, u8 new_align, 
             Slice<u8> allocated, u8 old_align, 
-            Nullable<void*> custom_data) noexcept -> Allocation_Result
+            Nullable<void*> custom_data) noexcept
         {
             if(action_type == Allocator_Action::RESET)
             {
@@ -399,8 +400,7 @@ namespace jot
         }
 
 
-        void 
-        reset_last_allocation() noexcept 
+        void reset_last_allocation() noexcept 
         {
             last_allocation = Slice<u8>{dummy_data, 0};
         }
@@ -411,9 +411,8 @@ namespace jot
             Allocator_State_Type state;
             bool was_just_alloced;
         };
-
-        Obtained_Block
-        extract_or_allocate_block(isize size, isize align) noexcept
+        
+        Obtained_Block extract_or_allocate_block(isize size, isize align) noexcept
         {
             Block* found = find_block_to_fit(free_chain(), size, align);
             if(found == nullptr)
@@ -423,8 +422,8 @@ namespace jot
             return Obtained_Block{extracted, Allocator_State::OK, false};
         }
 
-        Obtained_Block
-        allocate_block(isize size, isize align) noexcept
+        
+        Obtained_Block allocate_block(isize size, isize align) noexcept
         {
             assert(is_invariant());
 
@@ -448,8 +447,8 @@ namespace jot
 
         }
 
-        Allocator_State_Type
-        obtain_block_and_update(isize size, isize align) noexcept
+        
+        Allocator_State_Type obtain_block_and_update(isize size, isize align) noexcept
         {
             assert(is_invariant());
             Obtained_Block obtained = extract_or_allocate_block(size, align);
@@ -480,8 +479,8 @@ namespace jot
         }
 
 
-        bool 
-        is_invariant() const noexcept
+        nodisc
+        bool is_invariant() const noexcept
         {
             bool available_inv1 = available_from <= available_to;
             bool available_inv2 = (available_from == nullptr) == (available_to == nullptr);
@@ -515,7 +514,8 @@ namespace jot
             return total_inv;
         }
 
-        void update_bytes_alloced(isize delta)
+        void 
+        update_bytes_alloced(isize delta)
         {
             #ifdef DO_ALLOCATOR_STATS
             bytes_alloced_ += delta;

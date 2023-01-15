@@ -11,6 +11,8 @@ namespace meta
         #error "Unsupported compiler"
     #endif
 
+    #define nodisc [[nodiscard]]
+
     struct String
     {
         const char* data;
@@ -30,8 +32,8 @@ namespace meta
         }
     };
 
-    template<typename T>
-    constexpr String function_name_string() 
+    template<typename T> constexpr nodisc
+    String function_name_string() 
     {
         const char* whole_name_str = __FUNCTION_NAME__;
         int function_size = 0;
@@ -41,8 +43,8 @@ namespace meta
         return String{whole_name_str, 0, function_size};
     }
 
-    template<typename T>
-    constexpr String type_name_string() 
+    template<typename T> constexpr nodisc
+    String type_name_string() 
     {
         String function_name = function_name_string<T>();
         
@@ -86,8 +88,8 @@ namespace meta
     // - static constexpr locals are not alloved in standard c++ so we need to create 
     // a helper struct that will hold our string
 
-    template<typename Dummy_Struct, int dummy_struct_name_size>
-    constexpr String namespace_name_string() noexcept
+    template<typename Dummy_Struct, int dummy_struct_name_size> constexpr nodisc
+    String namespace_name_string() noexcept
     {
         String type_name = type_name_string<Dummy_Struct>();
 
@@ -115,24 +117,26 @@ namespace meta
         static constexpr const Static_String<str.to - str.from> static_str = {str.data, str.from, str.to};
     };
 
-    template<String str>
-    constexpr const char* to_const_char() noexcept 
+    template<String str> constexpr nodisc
+    const char* to_const_char() noexcept 
     {
         using Holder = Static_Holder<str>;
         return Holder::static_str.string;
     }
 
-    template<typename T>
-    constexpr const char* type_name() noexcept 
+    template<typename T> constexpr nodisc
+    const char* type_name() noexcept 
     {
         constexpr String name_str = type_name_string<T>();
         return to_const_char<name_str>();
     }
 
-    template<typename Dummy_Struct, int dummy_struct_name_size>
-    constexpr const char* namespace_name() noexcept
+    template<typename Dummy_Struct, int dummy_struct_name_size = 20> constexpr nodisc
+    const char* namespace_name() noexcept
     {
         constexpr String name_str = namespace_name_string<Dummy_Struct, dummy_struct_name_size>();
         return to_const_char<name_str>();
     }
 }
+
+#undef nodisc

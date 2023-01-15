@@ -7,14 +7,15 @@ namespace jot
 {
     namespace detail
     {
-        template<typename T>
-        inline func offset_ptr(T* ptr1, isize by_bytes) -> T*
+        template<typename T> nodisc static
+        T* offset_ptr(T* ptr1, isize by_bytes)
         {
             u8* address = cast(u8*) cast(void*) ptr1;
             return cast(T*) cast(void*) (address + by_bytes);
         }
 
-        inline func u8_ptr(void* ptr) -> u8*
+        static nodisc
+        u8* u8_ptr(void* ptr)
         {
             return cast(u8*) ptr;
         }
@@ -30,11 +31,15 @@ namespace jot
         static constexpr u64 USED_BIT = (1ull << 31);
         static constexpr u64 MAX_ALLOWED_SIZE = (SLOT_PAD_VALUE & ~USED_BIT) * sizeof(Slot);
 
-        static func size(Slot* slot) noexcept -> u64 {
+        static nodisc
+        u64 size(Slot* slot) 
+        {
             return (slot->size & ~USED_BIT) * sizeof(Slot);
         }
 
-        static func slot(void* ptr) noexcept -> Slot* {
+        static nodisc
+        Slot* slot(void* ptr) 
+        {
             u32* padding_ptr = cast(u32*) offset_ptr(ptr, -cast(isize) sizeof(Slot));
             while(*padding_ptr == SLOT_PAD_VALUE)
                 padding_ptr -= 1;
@@ -42,14 +47,17 @@ namespace jot
             return cast(Slot*) cast(void*) padding_ptr;
         }
 
-        static func data(Slot* slot, isize align) noexcept -> Slice<u8> {
+        static nodisc
+        Slice<u8> data(Slot* slot, isize align) 
+        {
             isize slot_size = size(slot); 
             u8* data = align_forward(u8_ptr(slot) + sizeof(Slot), align);
 
             return Slice<u8>{data, slot_size};
         }
 
-        static proc place_slot(Slot* at, u32 size, void* data_start, bool used)
+        static 
+        void place_slot(Slot* at, u32 size, void* data_start, bool used)
         {
             at->size = size / sizeof(Slot);
             if(used)
@@ -107,7 +115,8 @@ namespace jot
             return p >= used_from || p < used_to;
         }
 
-        virtual proc allocate(isize size, isize align) noexcept -> Allocation_Result override 
+        virtual nodisc 
+        Allocation_Result allocate(isize size, isize align) noexcept override 
         {
             using namespace detail;
             assert_arg(size >= 0 && align > 0);
@@ -150,7 +159,8 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, Slice<u8>{aligned_from, size}};
         }
 
-        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> Allocator_State_Type override 
+        virtual 
+        Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override 
         {
             using namespace detail;
             u8* ptr = allocated.data;
@@ -185,7 +195,8 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual proc resize(Slice<u8> allocated, isize align, isize new_size) noexcept -> Allocation_Result override 
+        virtual nodisc 
+        Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override 
         {
             using namespace detail;
             u8* ptr = allocated.data;
@@ -254,23 +265,33 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, Slice<u8>{ptr, new_size}};
         }
 
-        virtual proc parent_allocator() const noexcept -> Nullable<Allocator*> override {
+        virtual nodisc 
+        Nullable<Allocator*> parent_allocator() const noexcept override 
+        {
             return {nullptr};
         }
 
-        virtual proc bytes_allocated() const noexcept -> isize override {
+        virtual nodisc 
+        isize bytes_allocated() const noexcept override 
+        {
             return current_alloced;
         }
 
-        virtual proc bytes_used() const noexcept -> isize override {
+        virtual nodisc 
+        isize bytes_used() const noexcept override 
+        {
             return buffer_to - buffer_from;
         }
 
-        virtual proc max_bytes_allocated() const noexcept -> isize override {
+        virtual nodisc 
+        isize max_bytes_allocated() const noexcept override 
+        {
             return max_alloced;
         }
 
-        virtual proc max_bytes_used() const noexcept -> isize override {
+        virtual nodisc 
+        isize max_bytes_used() const noexcept override 
+        {
             return bytes_used();
         }
 
@@ -315,7 +336,8 @@ namespace jot
             last_block_from = buffer_from;
         }
 
-        virtual proc allocate(isize size, isize align) noexcept -> Allocation_Result override 
+        virtual nodisc 
+        Allocation_Result allocate(isize size, isize align) noexcept override 
         {
             using namespace detail;
             assert_arg(size >= 0 && align > 0);
@@ -356,7 +378,8 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, output};
         }
 
-        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> Allocator_State_Type override 
+        virtual 
+        Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override 
         {
             using namespace detail;
             u8* ptr = allocated.data;
@@ -395,7 +418,8 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual proc resize(Slice<u8> allocated, isize align, isize new_size) noexcept -> Allocation_Result override 
+        virtual nodisc 
+        Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override 
         {
             using namespace detail;
             u8* ptr = allocated.data;
@@ -405,23 +429,33 @@ namespace jot
             return Allocation_Result{Allocator_State::NOT_RESIZABLE};
         }
 
-        virtual proc parent_allocator() const noexcept -> Nullable<Allocator*> override {
+        virtual nodisc 
+        Nullable<Allocator*> parent_allocator() const noexcept override 
+        {
             return {nullptr};
         }
 
-        virtual proc bytes_allocated() const noexcept -> isize override {
+        virtual nodisc 
+        isize bytes_allocated() const noexcept override 
+        {
             return current_alloced;
         }
 
-        virtual proc bytes_used() const noexcept -> isize override {
+        virtual nodisc 
+        isize bytes_used() const noexcept override 
+        {
             return buffer_to - buffer_from;
         }
 
-        virtual proc max_bytes_allocated() const noexcept -> isize override {
+        virtual nodisc 
+        isize max_bytes_allocated() const noexcept override 
+        {
             return max_alloced;
         }
 
-        virtual proc max_bytes_used() const noexcept -> isize override {
+        virtual nodisc 
+        isize max_bytes_used() const noexcept override 
+        {
             return bytes_used();
         }
 
@@ -467,7 +501,8 @@ namespace jot
             last_block_from = buffer_from;
         }
 
-        virtual proc allocate(isize size, isize align) noexcept -> Allocation_Result override 
+        virtual nodisc 
+        Allocation_Result allocate(isize size, isize align) noexcept override 
         {
             using namespace detail;
             assert(is_invariant());
@@ -556,7 +591,8 @@ namespace jot
             return is_front_in_slice && is_back_in_slice && is_aligned && sizes_match;
         }
 
-        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> Allocator_State_Type override 
+        virtual 
+        Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override 
         {
             using namespace detail;
             assert(is_invariant());
@@ -595,7 +631,8 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual proc resize(Slice<u8> allocated, isize align, isize new_size) noexcept -> Allocation_Result override 
+        virtual nodisc 
+        Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override 
         {
             using namespace detail;
             assert(is_invariant());
@@ -652,23 +689,33 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, output};
         }
 
-        virtual proc parent_allocator() const noexcept -> Nullable<Allocator*> override {
+        virtual nodisc 
+        Nullable<Allocator*> parent_allocator() const noexcept override 
+        {
             return {nullptr};
         }
 
-        virtual proc bytes_allocated() const noexcept -> isize override {
+        virtual nodisc 
+        isize bytes_allocated() const noexcept override 
+        {
             return current_alloced;
         }
 
-        virtual proc bytes_used() const noexcept -> isize override {
+        virtual nodisc 
+        isize bytes_used() const noexcept override 
+        {
             return buffer_to - buffer_from;
         }
 
-        virtual proc max_bytes_allocated() const noexcept -> isize override {
+        virtual nodisc 
+        isize max_bytes_allocated() const noexcept override 
+        {
             return max_alloced;
         }
 
-        virtual proc max_bytes_used() const noexcept -> isize override {
+        virtual nodisc 
+        isize max_bytes_used() const noexcept override 
+        {
             return bytes_used();
         }
 
@@ -716,7 +763,8 @@ namespace jot
             last_block_from = buffer_from;
         }
 
-        virtual proc allocate(isize size, isize align) noexcept -> Allocation_Result override 
+        virtual nodisc 
+        Allocation_Result allocate(isize size, isize align) noexcept override 
         {
             using namespace detail;
             assert(is_invariant());
@@ -791,7 +839,8 @@ namespace jot
         }
 
 
-        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> Allocator_State_Type override 
+        virtual 
+        Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override 
         {
             using namespace detail;
             assert(is_invariant());
@@ -837,7 +886,8 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual proc resize(Slice<u8> allocated, isize align, isize new_size) noexcept -> Allocation_Result override 
+        virtual nodisc 
+        Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override 
         {
             using namespace detail;
             assert(is_invariant());
@@ -939,23 +989,33 @@ namespace jot
             return is_front_in_slice && is_back_in_slice && is_aligned && sizes_match;
         }
 
-        virtual proc parent_allocator() const noexcept -> Nullable<Allocator*> override {
+        virtual nodisc 
+        Nullable<Allocator*> parent_allocator() const noexcept override 
+        {
             return {parent};
         }
 
-        virtual proc bytes_allocated() const noexcept -> isize override {
+        virtual nodisc 
+        isize bytes_allocated() const noexcept override 
+        {
             return current_alloced;
         }
 
-        virtual proc bytes_used() const noexcept -> isize override {
+        virtual nodisc 
+        isize bytes_used() const noexcept override 
+        {
             return buffer_to - buffer_from;
         }
 
-        virtual proc max_bytes_allocated() const noexcept -> isize override {
+        virtual nodisc 
+        isize max_bytes_allocated() const noexcept override 
+        {
             return max_alloced;
         }
 
-        virtual proc max_bytes_used() const noexcept -> isize override {
+        virtual nodisc 
+        isize max_bytes_used() const noexcept override 
+        {
             return bytes_used();
         }
 
@@ -1027,7 +1087,8 @@ namespace jot
             return p >= used_from || p < used_to;
         }
 
-        virtual proc allocate(isize size, isize align) noexcept -> Allocation_Result override 
+        virtual nodisc 
+        Allocation_Result allocate(isize size, isize align) noexcept override 
         {
             using namespace detail;
             assert(is_invariant());
@@ -1117,7 +1178,8 @@ namespace jot
         }
 
 
-        virtual proc deallocate(Slice<u8> allocated, isize align) noexcept -> Allocator_State_Type override 
+        virtual 
+        Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override 
         {
             using namespace detail;
             assert(is_invariant());
@@ -1163,7 +1225,8 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual proc resize(Slice<u8> allocated, isize align, isize new_size) noexcept -> Allocation_Result override 
+        virtual nodisc 
+        Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override 
         {
             using namespace detail;
             assert(is_invariant());
@@ -1265,23 +1328,33 @@ namespace jot
             return is_front_in_slice && is_back_in_slice && is_aligned && sizes_match;
         }
 
-        virtual proc parent_allocator() const noexcept -> Nullable<Allocator*> override {
+        virtual nodisc 
+        Nullable<Allocator*> parent_allocator() const noexcept override 
+        {
             return {parent};
         }
 
-        virtual proc bytes_allocated() const noexcept -> isize override {
+        virtual nodisc 
+        isize bytes_allocated() const noexcept override 
+        {
             return current_alloced;
         }
 
-        virtual proc bytes_used() const noexcept -> isize override {
+        virtual nodisc 
+        isize bytes_used() const noexcept override 
+        {
             return buffer_to - buffer_from;
         }
 
-        virtual proc max_bytes_allocated() const noexcept -> isize override {
+        virtual nodisc 
+        isize max_bytes_allocated() const noexcept override 
+        {
             return max_alloced;
         }
 
-        virtual proc max_bytes_used() const noexcept -> isize override {
+        virtual nodisc 
+        isize max_bytes_used() const noexcept override 
+        {
             return bytes_used();
         }
 
