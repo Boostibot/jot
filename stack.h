@@ -112,7 +112,7 @@ namespace jot
                     stack->data[i].~T();
         }
 
-        template<class T> 
+        template<class T> nodisc
         Allocator_State_Type alloc_data(Stack<T>* stack, isize new_capacity)
         {
             Allocation_Result res = stack->allocator->allocate(new_capacity * sizeof(T), DEF_ALIGNMENT<T>);
@@ -138,7 +138,7 @@ namespace jot
         // when called with new_capacity = 0 acts as dealloc_data
         // Destroys elements when shrinking but does not construct new ones when growing 
         //  (because doesnt know how to)
-        template<class T> 
+        template<class T> nodisc
         Allocator_State_Type set_capacity(Stack<T>* stack, isize new_capacity)
         {
             
@@ -195,7 +195,7 @@ namespace jot
         }
     }
 
-    template<class T> 
+    template<class T> nodisc
     State assign(Stack<T>* to, Stack<T> const& from) noexcept
     {
         State ret_state = OK_STATE;
@@ -281,7 +281,7 @@ namespace jot
         return *this;
     }
 
-    template<class T> 
+    template<class T> nodisc
     Allocator_State_Type reserve(Stack<T>* stack, isize to_fit)
     {
         assert(is_invariant(*stack));
@@ -319,7 +319,7 @@ namespace jot
         return stack.size == 0;
     }
 
-    template <class T, stdr::forward_range Inserted>
+    template <class T, stdr::forward_range Inserted> nodisc
     State splice(Stack<T>* stack, isize at, isize replace_size, Inserted && inserted)
     {       
         static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
@@ -434,7 +434,7 @@ namespace jot
         return ret_state;
     }
 
-    template <class T, stdr::forward_range Removed, stdr::forward_range Inserted>
+    template <class T, stdr::forward_range Removed, stdr::forward_range Inserted> nodisc
     State splice(Stack<T>* stack, isize at, Removed* removed, Inserted && inserted)
     {       
         static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
@@ -450,14 +450,14 @@ namespace jot
         return splice(stack, at, i - at, forward(Inserted, inserted));
     }
 
-    template<class T> 
-    State splice(Stack<T>* stack, isize at, isize replace_size)
+    template<class T> nodisc
+    State remove_multiple(Stack<T>* stack, isize at, isize replace_size)
     {
         Slice<T, isize> empty;
         return splice(stack, at, replace_size, move(&empty));
     }
 
-    template<class T> 
+    template<class T> nodisc
     State push(Stack<T>* stack, no_infer(T) what)
     {
         assert(is_invariant(*stack));
@@ -488,8 +488,8 @@ namespace jot
         return ret;
     }
 
-    template <class T, stdr::forward_range Inserted> requires (!same<Inserted, T>) 
-    State push(Stack<T>* stack, Inserted && inserted)
+    template <class T, stdr::forward_range Inserted>  requires (!same<Inserted, T>) nodisc
+    State push_multiple(Stack<T>* stack, Inserted && inserted)
     {
         static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
         return splice(stack, stack->size, 0, std::forward<Inserted>(inserted));
@@ -533,7 +533,7 @@ namespace jot
         return stack.data[0];
     }
 
-    template <class T, bool is_zero = false>
+    template <class T, bool is_zero = false> nodisc
     State resize(Stack<T>* stack, isize to, no_infer(T) fillWith)
     {
         assert(is_invariant(*stack));
@@ -570,16 +570,18 @@ namespace jot
         return ret_state;
     }
 
-    template<class T> 
+    template<class T> nodisc 
     State resize(Stack<T>* stack, isize to)
     {
         return resize<T, true>(stack, to, T());
     }
 
-    template<class T> 
+    template<class T> nodisc 
     State resize_for_overwrite(Stack<T>* stack, isize to)
     {
-        static_assert(std::is_trivially_constructible_v<T>, "type must be POD!");
+        if(std::is_trivially_constructible_v<T> == false)
+            return resize(stack, to);
+
         State state = reserve(stack, to);
         if(state == ERROR)
             return state;
@@ -589,15 +591,14 @@ namespace jot
         return Allocator_State::OK;
     }
 
-    template<class T> 
-    T* insert(Stack<T>* stack, isize at, no_infer(T) what)
+    template<class T> nodisc 
+    State insert(Stack<T>* stack, isize at, no_infer(T) what)
     {
         assert(is_invariant(*stack));
         assert(0 <= at && at <= stack->size);
 
         Slice<T> view = {&what, 1};
-        splice(stack, at, 0, move(*view));
-        return stack->data + at;
+        return splice(stack, at, 0, move(*view));
     }
 
     template<class T> 
@@ -622,7 +623,7 @@ namespace jot
         return pop(stack);
     }
 
-    template<class T> 
+    template<class T> nodisc
     State unordered_insert(Stack<T>* stack, isize at, no_infer(T) what)
     {
         assert(0 <= at && at <= stack->size);

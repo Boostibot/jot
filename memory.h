@@ -252,7 +252,7 @@ namespace jot
     template<typename T> nodisc constexpr
     bool is_in_slice(T* ptr, Slice<T> slice)
     {
-        return ptr >= slice.data && ptr < slice.data + slice.size;
+        return ptr >= slice.data && ptr <= slice.data + slice.size;
     }
     
     inline nodisc
@@ -489,11 +489,11 @@ namespace jot
 
     namespace memory_constants
     {
-        static constexpr isize PAGE = 4096;
-        static constexpr isize KIBI_BYTE = 1ull << 10;
-        static constexpr isize MEBI_BYTE = 1ull << 20;
-        static constexpr isize GIBI_BYTE = 1ull << 30;
-        static constexpr isize TEBI_BYTE = 1ull << 40;
+        static constexpr i64 PAGE = 4096;
+        static constexpr i64 KIBI_BYTE = 1ull << 10;
+        static constexpr i64 MEBI_BYTE = 1ull << 20;
+        static constexpr i64 GIBI_BYTE = 1ull << 30;
+        static constexpr i64 TEBI_BYTE = 1ull << 40;
     }
 }
 

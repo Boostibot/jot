@@ -19,6 +19,14 @@
     #define FORCE_INLINE
 #endif
 
+#if defined(__GNUC__)
+    #define NO_INLINE __attribute__((noinline))
+#elif defined(_MSC_VER) && !defined(__clang__)
+    #define NO_INLINE __declspec(noinline)
+#else
+    #define NO_INLINE
+#endif
+
 #if defined(_MSC_VER)
     #define NO_UNIQUE_ADDRESS [[msvc::no_unique_address]]
 #else

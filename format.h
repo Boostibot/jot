@@ -88,9 +88,9 @@ namespace jot
             //        -12345
 
             i64 div = last / cast_base;
-            i64 last_digit = last - div * cast_base;
+            i64 last_digit = last % cast_base;
 
-            buffer[buffer.size - 1 - used_size] = converter[last_digit];
+            buffer[buffer.size - 1 - used_size] = converter[cast(isize) last_digit];
             used_size ++;
 
             last = div;
@@ -106,8 +106,8 @@ namespace jot
 
         Slice used = {buffer.data + buffer.size - used_size, used_size};
 
-        force(push(&into, prefix));
-        force(push(&into, used));
+        force(push_multiple(&into, prefix));
+        force(push_multiple(&into, used));
 
         return into;
     }
@@ -148,7 +148,7 @@ namespace jot
     String_Builder format(String str)
     {
         String_Builder into;
-        force(push(&into, str));
+        force(push_multiple(&into, str));
         return into;
     }
 
@@ -165,7 +165,7 @@ namespace jot
 
         force(reserve(&into, into.size + str.size * count));
         for(isize i = 0; i < count; i++)
-            force(push(&into, str));
+            force(push_multiple(&into, str));
 
         return into;
     }
@@ -233,8 +233,8 @@ namespace jot
             for(; it != end; ++it)
             {
                 auto formatted = format(*it);
-                force(push(&into, String(", ")));
-                force(push(&into, formatted));
+                force(push_multiple(&into, String(", ")));
+                force(push_multiple(&into, formatted));
             }
         }
 
@@ -254,8 +254,8 @@ namespace jot
     template<formattable T>
     void format_append(String_Builder* to, T const& value) 
     {
-        auto formatted = format(to);
-        force(push(to, value));
+        String_Builder formatted = format(to);
+        force(push_multiple(to, value));
     };
 
     namespace format_string 
@@ -331,7 +331,7 @@ namespace jot
                 format_append(into, slice_range(format_str, last, new_found));
                 const auto& curr_adapted = adapted[found_count];
                 auto formatted_current = curr_adapted.call(curr_adapted.data);
-                force(push(into, formatted_current));
+                force(push_multiple(into, formatted_current));
 
                 found_count ++;
             }

@@ -4,6 +4,7 @@
 #include "time.h"
 #include "memory.h"
 #include "allocator_stack.h"
+#include "allocator_stack_ring.h"
 #include "allocator_ring.h"
 #include "format.h"
 
@@ -41,9 +42,65 @@ namespace jot
         return IRange{from, from + size};
     }
 
+    void test_align()
+    {
+        u8 dummy = 0;
+        u8* aligned = align_forward(&dummy, 32);
+        usize ptr_num = cast(usize) aligned;
+        force(ptr_num/32*32 == ptr_num);
+
+        force(align_forward(aligned + 1, 4) == align_backward(aligned + 7, 4));
+        force(align_forward(aligned + 1, 8) == align_backward(aligned + 15, 8));
+        force(align_forward(aligned + 3, 16) == align_backward(aligned + 27, 16));
+        force(align_forward(aligned + 13, 16) == align_backward(aligned + 17, 16));
+    }
+
+    void test_stack_ring()
+    {
+        u8 stack_ring_storage[400];
+        {
+            Stack_Ring stack_ring = Stack_Ring(Slice{stack_ring_storage, 400}, &memory_globals::FAILING_ALLOCATOR);
+            Slice<u8> first = stack_ring.allocate(10, 8).items;
+            Slice<u8> second = stack_ring.allocate(20, 256).items;
+            Slice<u8> third = stack_ring.allocate(30, 8).items;
+
+            force(stack_ring.deallocate(second, 8));
+
+            Allocation_Result result = stack_ring.resize(first, 8, 25);
+            force(result.state);
+            first = result.items;
+
+            result = stack_ring.resize(first, 8, 40 + 256);
+            force(result.state == ERROR);
+
+            force(stack_ring.deallocate(first, 8));
+            force(stack_ring.deallocate(third, 8));
+        }
+
+        {
+            Stack_Ring stack_ring = Stack_Ring(Slice{stack_ring_storage, 256}, &memory_globals::FAILING_ALLOCATOR);
+            Slice<u8> a1 = stack_ring.allocate(64, 8).items;
+            Slice<u8> a2 = stack_ring.allocate(64, 8).items;
+            Slice<u8> a3 = stack_ring.allocate(64, 8).items;
+
+            force(stack_ring.deallocate(a1, 8));
+            force(stack_ring.deallocate(a2, 8));
+            
+            Slice<u8> a4 = stack_ring.allocate(64, 8).items;
+            Slice<u8> a5 = stack_ring.allocate(64, 8).items;
+
+            force(stack_ring.allocate(64, 8).state == ERROR);
+            
+            force(stack_ring.deallocate(a3, 8));
+            force(stack_ring.deallocate(a4, 8));
+            force(stack_ring.deallocate(a5, 8));
+        }
+    }
+
     void test_allocators()
     {
-        using namespace jot;
+        test_align();
+        //test_stack_ring();
 
         using Generator = std::mt19937;
 
@@ -75,11 +132,11 @@ namespace jot
         force(resize(&stack_simple_storage, max_alloced_storage));
 
         Failing_Allocator failling;
-        Ring_Allocator  ring = Ring_Allocator(slice(&ring_storage), &failling);
-        //Intrusive_Stack stack = Intrusive_Stack(slice(&ring_storage), &failling);
-        Intrusive_Stack_Scan stack_scan = Intrusive_Stack_Scan(slice(&ring_storage), &failling);
-        Intrusive_Stack_Resize stack_resize = Intrusive_Stack_Resize(slice(&ring_storage), &failling);
-        Intrusive_Stack_Simple stack_simple = Intrusive_Stack_Simple(slice(&ring_storage), &failling);
+        Ring_Allocator  ring = Ring_Allocator(slice(&ring_storage), def);
+        Intrusive_Stack_Scan stack_scan = Intrusive_Stack_Scan(slice(&ring_storage), def);
+        Intrusive_Stack_Resize stack_resi = Intrusive_Stack_Resize(slice(&ring_storage), def);
+        Stack_Ring stack_ring = Stack_Ring(slice(&ring_storage), def);
+        Intrusive_Stack_Simple stack_simp = Intrusive_Stack_Simple(slice(&ring_storage), def);
         Unbound_Stack_Allocator unbound = Unbound_Stack_Allocator(def);
 
         Stack<isize> size_table;
@@ -94,8 +151,8 @@ namespace jot
 
             for(isize i = 0; i < block_size; i++)
             {
-                size_table[i] = (1ll << size_distribution(gen)) + size_noise_distribution(gen);
-                align_table[i] = 1ll << align_distribution(gen);
+                size_table[i]  = cast(isize) ((1ll << size_distribution(gen)) + size_noise_distribution(gen));
+                align_table[i] = cast(isize) (1ll << align_distribution(gen));
             }
         };
 
@@ -167,6 +224,7 @@ namespace jot
         };   
 
         const auto test_allocs_temp = [&]() {
+
             for(isize i = 0; i < block_size; i++)
             {
                 Allocation_Result result = tested->allocate(size_table[i], align_table[i]);
@@ -226,10 +284,52 @@ namespace jot
 
             unbound.reset();   
         };
+        
+        //Alloc data, then read the data 10 times (summing bytes but the op doesnt matter), dealloc data fifo
+        const auto test_allocs_read = [&]() {
+            for(isize i = 0; i < block_size; i++)
+            {
+                isize size = size_table[i];
+                isize align = align_table[i];
+                Allocation_Result result = tested->allocate(size, align);
+                force(result.state);
+                allocs[i] = result.items;
+            }
 
+            isize sum = 0;
+            for(isize j = 0; j < 100; j++)
+            {
+                for(isize i = 0; i < block_size; i++)
+                {
+                    Slice<u8> alloced = allocs[i];
+                    for(isize k = 0; k < alloced.size; k++)
+                        sum += alloced[k];
+                }
+            }
+            
+            for(isize i = 0; i < block_size; i++)
+            {
+                Slice<u8> alloced = allocs[i];
+                isize align = align_table[i];
+                force(tested->deallocate(alloced, align));
+            }
 
+            unbound.reset();
+        };
+        
         const auto ms_per_iter = [&](Bench_Result result, isize iters) {
             return cast(f64) result.time_ns / (result.iters * 1'000'000 * iters);
+        };
+
+        force(sizeof(Stack_Ring) == sizeof(Intrusive_Stack_Scan));
+
+        const auto run_tests_on = [&](Allocator* tested_, f64 tested_res[4]){
+            tested = tested_;
+            tested_res[0] = ms_per_iter(benchmark(max_time, test_allocs_fifo), block_size);
+            tested_res[1] = ms_per_iter(benchmark(max_time, test_allocs_lifo), block_size);
+            tested_res[2] = ms_per_iter(benchmark(max_time, test_allocs_temp), block_size);
+            tested_res[3] = ms_per_iter(benchmark(max_time, test_allocs_resi), block_size);
+            tested_res[4] = ms_per_iter(benchmark(max_time, test_allocs_read), block_size);
         };
 
         const auto print_benchmark_for_block = [&](isize block_size_, IRange size_log2, IRange align_log2, bool touch = true){
@@ -238,108 +338,49 @@ namespace jot
             println("size:  {} - {}", 1ll << size_log2.from, 1ll << size_log2.to);
             println("align: {} - {}", 1ll << align_log2.from, 1ll << align_log2.to);
 
-            f64 new_del_res[4];
-            f64 unbound_res[4];
-            f64 ring_res[4];
-            f64 stack_simp_res[4];
-            f64 stack_scan_res[4];
-            f64 stack_resi_res[4];
-            f64* teste_res;
+            f64 new_del_res[5] = {0};
+            f64 unbound_res[5] = {0};
+            f64 ring_res[5] = {0};
+            f64 stack_simp_res[5] = {0};
+            f64 stack_scan_res[5] = {0};
+            f64 stack_resi_res[5] = {0};
+            f64 stack_ring_res[5] = {0};
+            f64* tested_res = nullptr;
 
-            tested = &memory_globals::NEW_DELETE_ALLOCATOR;
-            teste_res = new_del_res;
-            teste_res[0] = ms_per_iter(benchmark(max_time, test_allocs_fifo), block_size);
-            teste_res[1] = ms_per_iter(benchmark(max_time, test_allocs_lifo), block_size);
-            teste_res[2] = ms_per_iter(benchmark(max_time, test_allocs_temp), block_size);
-            teste_res[3] = ms_per_iter(benchmark(max_time, test_allocs_resi), block_size);
+            //run_tests_on(&memory_globals::NEW_DELETE_ALLOCATOR, new_del_res);
+            //run_tests_on(&unbound, unbound_res);
+            //run_tests_on(&ring, ring_res);
+            //run_tests_on(&stack_resi, stack_resi_res);
+            //run_tests_on(&stack_scan, stack_scan_res);
+            run_tests_on(&stack_ring, stack_ring_res);
+            run_tests_on(&stack_simp, stack_simp_res);
 
-            tested = &unbound;
-            teste_res = unbound_res;
-            teste_res[0] = ms_per_iter(benchmark(max_time, test_allocs_fifo), block_size);
-            teste_res[1] = ms_per_iter(benchmark(max_time, test_allocs_lifo), block_size);
-            teste_res[2] = ms_per_iter(benchmark(max_time, test_allocs_temp), block_size);
-            teste_res[3] = ms_per_iter(benchmark(max_time, test_allocs_resi), block_size);
-
-            tested = &ring;
-            teste_res = ring_res;
-            teste_res[0] = ms_per_iter(benchmark(max_time, test_allocs_fifo), block_size);
-            teste_res[1] = ms_per_iter(benchmark(max_time, test_allocs_lifo), block_size);
-            teste_res[2] = ms_per_iter(benchmark(max_time, test_allocs_temp), block_size);
-            teste_res[3] = ms_per_iter(benchmark(max_time, test_allocs_resi), block_size);
-
-            tested = &stack_resize;
-            teste_res = stack_resi_res;
-            teste_res[0] = ms_per_iter(benchmark(max_time, test_allocs_fifo), block_size);
-            teste_res[1] = ms_per_iter(benchmark(max_time, test_allocs_lifo), block_size);
-            teste_res[2] = ms_per_iter(benchmark(max_time, test_allocs_temp), block_size);
-            teste_res[3] = ms_per_iter(benchmark(max_time, test_allocs_resi), block_size);
-
-            tested = &stack_scan;
-            teste_res = stack_scan_res;
-            teste_res[0] = ms_per_iter(benchmark(max_time, test_allocs_fifo), block_size);
-            teste_res[1] = ms_per_iter(benchmark(max_time, test_allocs_lifo), block_size);
-            teste_res[2] = ms_per_iter(benchmark(max_time, test_allocs_temp), block_size);
-            teste_res[3] = ms_per_iter(benchmark(max_time, test_allocs_resi), block_size);
-
-            tested = &stack_simple;
-            teste_res = stack_simp_res;
-            teste_res[0] = ms_per_iter(benchmark(max_time, test_allocs_fifo), block_size);
-            teste_res[1] = ms_per_iter(benchmark(max_time, test_allocs_lifo), block_size);
-            teste_res[2] = ms_per_iter(benchmark(max_time, test_allocs_temp), block_size);
-            teste_res[3] = ms_per_iter(benchmark(max_time, test_allocs_resi), block_size);
-
-            println("new delete:    {}\t {}\t {}\t {}\t", new_del_res[0], new_del_res[1], new_del_res[2], new_del_res[2]);
-            println("unbound:       {}\t {}\t {}\t {}\t", unbound_res[0], unbound_res[1], unbound_res[2], unbound_res[3]);
-            println("ring:          {}\t {}\t {}\t {}\t", ring_res[0], ring_res[1], ring_res[2], ring_res[3]);
-            println("stack resize:  {}\t {}\t {}\t {}\t", stack_resi_res[0], stack_resi_res[1], stack_resi_res[2], stack_resi_res[3]);
-            println("stack scan:    {}\t {}\t {}\t {}\t", stack_scan_res[0], stack_scan_res[1], stack_scan_res[2], stack_scan_res[3]);
-            println("stack simple:  {}\t {}\t {}\t {}\t", stack_simp_res[0], stack_simp_res[1], stack_simp_res[2], stack_simp_res[3]);
+            println("               fifo                 \t lifo              \t temp                 \t resize                \t read");
+            println("new delete:    {}\t {}\t {}\t {}\t {}\t", new_del_res[0], new_del_res[1], new_del_res[2], new_del_res[2], new_del_res[4]);
+            println("unbound:       {}\t {}\t {}\t {}\t {}\t", unbound_res[0], unbound_res[1], unbound_res[2], unbound_res[3], unbound_res[4]);
+            println("ring:          {}\t {}\t {}\t {}\t {}\t", ring_res[0], ring_res[1], ring_res[2], ring_res[3], ring_res[4]);
+            println("stack resi:    {}\t {}\t {}\t {}\t {}\t", stack_resi_res[0], stack_resi_res[1], stack_resi_res[2], stack_resi_res[3], stack_resi_res[4]);
+            println("stack scan:    {}\t {}\t {}\t {}\t {}\t", stack_scan_res[0], stack_scan_res[1], stack_scan_res[2], stack_scan_res[3], stack_scan_res[4]);
+            println("stack ring:    {}\t {}\t {}\t {}\t {}\t", stack_ring_res[0], stack_ring_res[1], stack_ring_res[2], stack_ring_res[3], stack_ring_res[4]);
+            println("stack simp:    {}\t {}\t {}\t {}\t {}\t", stack_simp_res[0], stack_simp_res[1], stack_simp_res[2], stack_simp_res[3], stack_simp_res[4]);
             println("\n");
         };
 
-        {
-            u8 arr[256] = {0};
-            Slice<u8> arr_s = {arr, 64};
-            Slice<u8> aligned_s = align_forward(arr_s, 32);
-            u8* aligned = aligned_s.data;
 
-            assert(align_forward(aligned + 1, 4) == align_backward(aligned + 7, 4));
-            assert(align_forward(aligned + 1, 8) == align_backward(aligned + 15, 8));
-            assert(align_forward(aligned + 3, 16) == align_backward(aligned + 27, 16));
-            assert(align_forward(aligned + 13, 16) == align_backward(aligned + 17, 16));
-        }
-
-
-        #if 0
-        Slice<u8> zeroth = stack.allocate(1000, 8).items;
-        Slice<u8> first = stack.allocate(10, 8).items;
-        Slice<u8> second = stack.allocate(20, 256).items;
-        Slice<u8> third = stack.allocate(30, 8).items;
-
-        force(stack.deallocate(zeroth, 8));
-        force(stack.deallocate(second, 8));
-
-        Allocation_Result result = stack.resize(first, 8, 25);
-        force(result.state);
-        first = result.items;
-
-        result = stack.resize(first, 8, 40 + 256);
-        assert(result.state == ERROR);
-
-        force(stack.deallocate(first, 8));
-        force(stack.deallocate(third, 8));
-        #endif
-
-        //set_up_test(2, {4, 8}, {0, 5}, false);
-        //tested = &stack;
-        //test_allocs_resi();
+        set_up_test(80, {4, 8}, {0, 5}, false);
+        tested = &stack_ring;
+        test_allocs_fifo();
+        test_allocs_resi();
+        set_up_test(160, {4, 8}, {0, 5}, false);
+        test_allocs_fifo();
+        test_allocs_resi();
 
         println("SMALL SIZES NO TOUCH");
         println("===========");
         print_benchmark_for_block(10, {4, 8}, {0, 5}, false);
         print_benchmark_for_block(80, {4, 8}, {0, 5}, false);
         print_benchmark_for_block(640, {4, 8}, {0, 5}, false);
-
+        
         println("SMALL SIZES");
         println("===========");
         print_benchmark_for_block(10, {4, 8}, {0, 5});
