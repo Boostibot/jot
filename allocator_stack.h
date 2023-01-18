@@ -2,7 +2,7 @@
 
 #include "memory.h"
 #include "types.h"
-#include "stack.h"
+#include "intrusive_list.h"
 #include "defines.h"
 
 namespace jot 
@@ -14,250 +14,210 @@ namespace jot
     #ifndef ALLOCATOR_UNBOUND_STACK_DEF_GROW
         #define ALLOCATOR_UNBOUND_STACK_DEF_GROW 2
     #endif
+    
+    //we need only a single ptr. we need only simple size
 
     namespace detail
     {
-        struct Block
+        struct Arena_Block
         {
-            Block* next = nullptr;
-            Block* prev = nullptr;
+            static constexpr bool is_bidirectional = false;
+            Arena_Block* next = nullptr;
             isize size = -1;
-            u32 align = -1;
-            b32 was_alloced = false;
         };
+        
+        static constexpr isize ARENA_BLOCK_ALLOCED_BIT = cast(isize) 1 << (sizeof(isize) * CHAR_BIT - 1);
+        static constexpr isize ARENA_BLOCK_ALIGN = 32;
 
-        struct Chain
+        static
+        void set_size(Arena_Block* block, isize size)
         {
-            Block* first = nullptr;
-            Block* last = nullptr;
-        };
+            isize new_size = block->size & ARENA_BLOCK_ALLOCED_BIT | size & ~ARENA_BLOCK_ALLOCED_BIT;
+            block->size = new_size;
+        }
+        
+        static nodisc
+        isize get_size(Arena_Block block)
+        {
+            return block.size & ~ARENA_BLOCK_ALLOCED_BIT;
+        }
+        
+        static nodisc
+        bool was_alloced(Arena_Block block)
+        {
+            return block.size & ARENA_BLOCK_ALLOCED_BIT;
+        }
 
         static nodisc
-        Slice<u8> data(Block* block)
+        void set_alloced(Arena_Block* block, bool was_alloced = true)
+        {
+            isize cleared = get_size(*block);
+            if(was_alloced)
+                cleared |= ARENA_BLOCK_ALLOCED_BIT;
+
+            block->size = cleared;
+        }
+
+        static nodisc
+        Arena_Block* place_block(Slice<u8> items, bool was_alloced)
+        {
+            assert(items.size > sizeof(Arena_Block) && "must be big enough");
+            Arena_Block* block = cast(Arena_Block*) cast(void*) items.data;
+            *block = Arena_Block{};
+            detail::set_alloced(block, true);
+            detail::set_size(block, items.size - cast(isize) sizeof(Arena_Block));
+
+            return block;
+        }
+
+        static nodisc
+        Slice<u8> data(Arena_Block* block)
         {
             u8* address = cast(u8*) cast(void*) block;
+            isize size = get_size(*block);
             if(block->size == 0)
                 return Slice<u8>{};
 
-            return Slice<u8>{address + sizeof(Block), block->size};
+            return Slice<u8>{address + sizeof(Arena_Block), size};
         }
 
         static nodisc
-        Slice<u8> used_by_block(Block* block)
+        Slice<u8> used_by_block(Arena_Block* block)
         {
             u8* address = cast(u8*) cast(void*) block;
-            return Slice<u8>{address, block->size + cast(isize) sizeof(Block)};
+            isize size = get_size(*block);
+            return Slice<u8>{address, size + cast(isize) sizeof(Arena_Block)};
         }
         
-        static nodisc
-        bool is_valid_chain(Chain chain)
+        static
+        isize deallocate_and_count_chain(Allocator* alloc, Chain<Arena_Block> chain)
         {
-            Block* current = chain.first;
-            Block* prev = nullptr;
-
-            while(current != nullptr && prev != chain.last)
+            isize passed_bytes = 0;
+            Arena_Block* current = chain.first;
+            Arena_Block* prev = nullptr;
+            while(current != nullptr)
             {
                 prev = current;
                 current = current->next;
-            }
 
-            return prev == chain.last;
-        }
-        
-        static 
-        void link_chain(Block* before, Block* first_inserted, Block* last_inserted, Block* after)
-        {
-            assert(first_inserted != nullptr && last_inserted != nullptr && "must not be null");
-            assert(first_inserted->prev == nullptr && last_inserted->next == nullptr && "must be isolated");
-
-            first_inserted->prev = before;
-            if(before != nullptr)
-                before->next = first_inserted;
-
-            last_inserted->next = after;
-            if(after != nullptr)
-                after->prev = last_inserted;
-        }
-
-        static 
-        void unlink_chain(Block* first_inserted, Block* last_inserted)
-        {
-            assert(first_inserted != nullptr && last_inserted != nullptr && "must not be null");
-
-            Block* before = first_inserted->prev;
-            Block* after = last_inserted->next;
-
-            first_inserted->prev = nullptr;
-            if(before != nullptr)
-                before->next = after;
-
-            last_inserted->next = nullptr;
-            if(after != nullptr)
-                after->prev = before;
-        }
-        
-        static nodisc
-        Block* extract_node(Chain* from, Block* what) 
-        {
-            assert(is_valid_chain(*from));
-            assert(what != nullptr);
-            assert(from->first != nullptr && "cant extract from empty chain");
-
-            //if is start of chain
-            if(what->prev == nullptr)
-                from->first = what->next;
-            
-            //if is end of chain
-            if(what == from->last)
-                from->last = what->prev;
-
-            unlink_chain(what, what);
-            
-            if(from->first == nullptr || from->last == nullptr)
-            {
-                assert(from->first == nullptr && from->last == nullptr && "@TODO: remove this");
-                from->first = nullptr;
-                from->last = nullptr;
-            }
-            assert(is_valid_chain(*from));
-
-            return what;
-        }
-
-        static
-        void insert_node(Chain* to, Block* insert_after, Block* what)
-        {
-            assert(is_valid_chain(*to));
-            assert(what != nullptr);
-            assert(what->next == nullptr && what->prev == nullptr && "must be isolated");
-
-            if(to->first == nullptr)
-            {
-                assert(insert_after == nullptr);
-                to->first = what;
-                to->last = what;
-                return;
-            }
-
-            //if is start of chain
-            if(insert_after == nullptr)
-            {
-                link_chain(nullptr, what, what, to->first->next);
-                to->first = what;
-            }
-            //if is end of chain
-            else if(insert_after == to->last)
-            {
-                link_chain(insert_after, what, what, nullptr);
-                to->last = what;
-            }
-            else
-            {
-                link_chain(insert_after, what, what, insert_after->next);
-            }
-
-            assert(is_valid_chain(*to));
-        }
-
-
-        static
-        isize deallocated_and_count_chain(Allocator* alloc, Chain chain)
-        {
-            isize passed_bytes = 0;
-            Block* current = chain.last;
-            Block* next = nullptr;
-
-            //we dealloc backwards because if the parent allocator is some form 
-            // of stack allocator it allows us to reclaim more memory
-            //If the parent allocator is ring allocator it coealesces the reclaiming 
-            // into a single loop
-            while(current != nullptr && next != chain.first)
-            {
-                next = current;
-                current = current->prev;
-
-                Slice<u8> total_block_data = used_by_block(next);
+                Slice<u8> total_block_data = used_by_block(prev);
                 passed_bytes += total_block_data.size;
 
-                if(next->was_alloced)
-                    alloc->deallocate(total_block_data, next->align);
+                if(was_alloced(*prev))
+                    alloc->deallocate(total_block_data, ARENA_BLOCK_ALIGN);
             }
 
-            assert(next == chain.first && "must be a valid chain!");
-
+            assert(prev == chain.last && "must be a valid chain!");
             return passed_bytes;
         }
 
-        static nodisc
-        Block* find_block_to_fit(Chain chain, isize size, isize align)
+        struct Arena_Block_Found
         {
-            Block* current = chain.first;
+            Arena_Block* before = nullptr;
+            Arena_Block* found = nullptr;
+        };
+
+        static nodisc
+        Arena_Block_Found find_block_to_fit(Chain<Arena_Block> chain, Arena_Block* before, isize size, isize align)
+        {
+            Arena_Block* prev = before;
+            Arena_Block* current = chain.first;
+            Arena_Block_Found found;
             while(current != nullptr)
             {
                 Slice<u8> block_data = data(current);
                 Slice<u8> aligned = align_forward(block_data, align);
                 if(aligned.size >= size)
-                    return current;
+                {
+                    found.before = prev;
+                    found.found = current;
+                    return found;
+                }
 
+                prev = current;
                 current = current->next;
             }
+            
+            return found;
+        }
 
-            return nullptr;
+        isize default_arena_grow(isize current)
+        {
+            if(current == 0)
+                return memory_constants::PAGE;
+
+            isize new_size = current * 2;
+            return min(new_size, memory_constants::GIBI_BYTE*4);
         }
     }
 
+    #define ARENA_TRACK_BLOCKS
+
     //Allocate lineary from block. If the block is exhausted request more memory from its parent alocator and add it to block list.
     // Can be easily reset without freeying any acquired memeory. Releases all emmory in destructor
-    struct Unbound_Stack_Allocator : Allocator
+    struct Arena_Allocator : Allocator
     {
-        using Chain = detail::Chain;
-        using Block = detail::Block;
+        using Arena_Block = detail::Arena_Block;
+        using Chain = Chain<Arena_Block>;
+        using Grow_Fn = isize(*)(isize);
 
         u8* available_from = nullptr;
         u8* available_to = nullptr;
-        Slice<u8> last_allocation = {};
+        u8* last_allocation = nullptr;
 
         Chain blocks = {};
-        Block* current_block = nullptr;
+        Arena_Block* current_block = nullptr;
 
         Allocator* parent = nullptr;
-        isize chunk_size = 0;
-        isize chunk_grow = 0;
+        Grow_Fn chunk_grow = nullptr;
 
+        isize chunk_size = 0;
+        
+        #ifdef ARENA_TRACK_BLOCKS
         isize used_blocks = 0;
         isize max_used_blocks = 0;
+        #endif
 
         isize bytes_alloced_ = 0; 
         isize bytes_used_ = 0;
         isize max_bytes_alloced_ = 0;
         isize max_bytes_used_ = 0;
 
-        u8 dummy_data[8] = {0};
-
-        Unbound_Stack_Allocator(
+        Arena_Allocator(
             Allocator* parent = memory_globals::default_allocator(), 
             size_t chunk_size = memory_constants::PAGE,
-            size_t chunk_grow = 2) 
+            Grow_Fn chunk_grow = detail::default_arena_grow) 
             : parent(parent), chunk_size(chunk_size), chunk_grow(chunk_grow)
         {
             reset_last_allocation();
             assert(is_invariant());
         }
 
-        ~Unbound_Stack_Allocator()
+        ~Arena_Allocator()
         {
             assert(is_invariant());
 
-            isize passed_bytes = deallocated_and_count_chain(parent, blocks);
+            isize passed_bytes = deallocate_and_count_chain(parent, blocks);
             
             assert(passed_bytes == bytes_used_);
+        }
+
+        void add_external_block(Slice<u8> block_data)
+        {
+            if(block_data.size < sizeof(Arena_Block))
+                return;
+
+            Arena_Block* block = detail::place_block(block_data, false);
+            Chain free = free_chain();
+            detail::Arena_Block_Found found_res = detail::find_block_to_fit(free, current_block, get_size(*block), 1);
+
+            insert_node(&blocks, found_res.before, block);
         }
 
         Chain used_chain() const noexcept
         {
             return Chain{blocks.first, current_block};
         }
-
         
         Chain free_chain() const noexcept
         {
@@ -286,7 +246,7 @@ namespace jot
 
             Slice<u8> alloced = Slice{aligned, size};
             available_from = used_to;
-            last_allocation = alloced;
+            last_allocation = aligned;
 
             update_bytes_alloced(size);
 
@@ -296,11 +256,12 @@ namespace jot
         virtual nodisc
         Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override 
         {
-            if(allocated != last_allocation)
+            if(allocated.data != last_allocation)
                 return Allocator_State::OK;
 
+            available_from = allocated.data;
             reset_last_allocation();
-
+            
             #ifdef DO_ALLOCATOR_STATS
             bytes_alloced_ -= allocated.size;
             assert(bytes_alloced_ >= 0);
@@ -313,11 +274,10 @@ namespace jot
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override
         {
             u8* used_to = available_from + new_size;
-            if(allocated != last_allocation || used_to > available_to)
+            if(allocated.data != last_allocation || used_to > available_to)
                 return Allocation_Result{Allocator_State::NOT_RESIZABLE};
 
             available_from = used_to;
-            last_allocation.size = new_size;
 
             update_bytes_alloced(new_size - allocated.size);
             return Allocation_Result{Allocator_State::OK, {allocated.data, new_size}};
@@ -370,7 +330,7 @@ namespace jot
 
         void release_extra_memory() 
         {
-            isize released = deallocated_and_count_chain(parent, free_chain());
+            isize released = deallocate_and_count_chain(parent, free_chain());
             blocks.last = current_block;
             bytes_used_ -= released;
         }
@@ -402,56 +362,57 @@ namespace jot
 
         void reset_last_allocation() noexcept 
         {
-            last_allocation = Slice<u8>{dummy_data, 0};
+            last_allocation = cast(u8*) cast(void*) this;
         }
 
-        struct Obtained_Block
+        struct Obtained_Arena_Block
         {
-            Block* block;
+            Arena_Block* block;
             Allocator_State_Type state;
             bool was_just_alloced;
         };
         
-        Obtained_Block extract_or_allocate_block(isize size, isize align) noexcept
+        Obtained_Arena_Block extract_or_allocate_block(isize size, isize align) noexcept
         {
-            Block* found = find_block_to_fit(free_chain(), size, align);
-            if(found == nullptr)
+            Chain free = free_chain();
+            detail::Arena_Block_Found found_res = find_block_to_fit(free, current_block, size, align);
+            if(found_res.found == nullptr)
                 return allocate_block(size, align);
 
-            Block* extracted = extract_node(&blocks, found);
-            return Obtained_Block{extracted, Allocator_State::OK, false};
+            Arena_Block* extracted = extract_node(&blocks, found_res.before, found_res.found);
+            return Obtained_Arena_Block{extracted, Allocator_State::OK, false};
         }
-
         
-        Obtained_Block allocate_block(isize size, isize align) noexcept
+        Obtained_Arena_Block allocate_block(isize size, isize align) noexcept
         {
             assert(is_invariant());
+            using namespace detail;
 
-            isize effective_size = size + sizeof(Block);
-            isize required_align = alignof(Block);
-            if(align > alignof(Block))
+            isize effective_size = size + sizeof(Arena_Block);
+            if(align > ARENA_BLOCK_ALIGN)
                 effective_size += align;
 
             isize required_size = max(effective_size, chunk_size);
 
-            Allocation_Result result = parent->allocate(required_size, required_align);
+            Allocation_Result result = parent->allocate(required_size, ARENA_BLOCK_ALIGN);
             if(result.state == ERROR)
-                return Obtained_Block{nullptr, result.state, true};
+                return Obtained_Arena_Block{nullptr, result.state, true};
 
-            Block* block = cast(Block*) cast(void*) result.items.data;
-            *block = Block{nullptr, nullptr, required_size - cast(isize) sizeof(Block), cast(u32) required_align, true};
+            Arena_Block* block = cast(Arena_Block*) cast(void*) result.items.data;
+            *block = Arena_Block{nullptr};
+            detail::set_alloced(block, true);
+            detail::set_size(block, required_size - cast(isize) sizeof(Arena_Block));
 
             bytes_used_ += required_size;
             max_bytes_used_ = max(max_bytes_used_, bytes_used_);
-            return Obtained_Block{block, Allocator_State::OK, true};
+            return Obtained_Arena_Block{block, Allocator_State::OK, true};
 
         }
 
-        
         Allocator_State_Type obtain_block_and_update(isize size, isize align) noexcept
         {
             assert(is_invariant());
-            Obtained_Block obtained = extract_or_allocate_block(size, align);
+            Obtained_Arena_Block obtained = extract_or_allocate_block(size, align);
             if(obtained.state == ERROR)
                 return obtained.state;
 
@@ -467,9 +428,12 @@ namespace jot
 
             if(obtained.was_just_alloced)
             {
+                
+                #ifdef ARENA_TRACK_BLOCKS
                 used_blocks ++;
                 max_used_blocks = max(max_used_blocks, used_blocks);
-                chunk_size *= chunk_grow;
+                #endif
+                chunk_size = chunk_grow(chunk_size);
             }
 
             current_block = obtained.block;
@@ -478,21 +442,33 @@ namespace jot
             return obtained.state;
         }
 
-
         nodisc
         bool is_invariant() const noexcept
         {
             bool available_inv1 = available_from <= available_to;
             bool available_inv2 = (available_from == nullptr) == (available_to == nullptr);
 
-            bool last_alloc_inv1 = (last_allocation.data == dummy_data) == (last_allocation.size == 0);
-            bool last_alloc_inv2 = last_allocation.data != nullptr;
+            bool last_alloc_inv1 = last_allocation != nullptr;
 
-            bool blocks_inv1 = is_valid_chain(blocks);
+            bool blocks_inv1 = is_valid_chain(blocks.first, blocks.last);
+            
+            #ifdef ARENA_TRACK_BLOCKS
             bool blocks_inv2 = (blocks.first == nullptr) == (used_blocks == 0) && used_blocks >= 0;
+            isize count = 0;
+            Arena_Block* current = blocks.first;
+            while(current != nullptr)
+            {
+                count ++;
+                current = current->next;
+            }
+
+            assert(count == used_blocks);
+            #else
+            bool blocks_inv2 = true;
+            #endif
 
             bool parent_inv = parent != nullptr;
-            bool block_size_inv = chunk_size > sizeof(Block);
+            bool block_size_inv = chunk_size > sizeof(Arena_Block);
 
             bool stat_inv1 = bytes_used_ >= 0 
                 && bytes_alloced_ >= 0 
@@ -504,7 +480,7 @@ namespace jot
                 && max_bytes_alloced_ >= bytes_alloced_;
 
             bool total_inv = available_inv1 && available_inv2 
-                && last_alloc_inv1 && last_alloc_inv2
+                && last_alloc_inv1
                 && blocks_inv1 && blocks_inv2
                 && parent_inv 
                 && block_size_inv
@@ -524,6 +500,35 @@ namespace jot
             #endif
         }
     };
+
+    struct Unbound_Stack_Allocator;
+    struct Unbound_Tracking_Stack_Allocator;
+    //this structure should get used in the following way:
+    //we quickly set it up: should be 0 init
+    //we add first block of static data
+    //we allocate
+    //we destroy
+    //we dont do any block shuffeling at all since its 
+    //we cannot really guarantee that the blocks will be in order if we allow this function to be present durring runtime
+    //we dont have to guarantee that they are in order. We simply scan until we find then move the pointer there in order or not.
+    //we grow from last size using the static function
+    //we need to store: 
+    //  1 - vtable ptr    
+    //  2 - blocks first + last
+    //  1 - current block (also block start really so thats fine)
+    //  1 - block to
+    //  1 - last allocation
+    //  1 - last allocation to
+    //  1 - parent ptr
+    //  ------------------
+    //  8 & zero init!
+    // 
+    //  we can potentially do some template magic to use this with tracking as well
+    //  Unbound_Stack_Allocator & Unbound_Tracking_Stack_Allocator
+    //  
+    //  provide a proc for ordering based on size which will probably be the most complex proc
+    //  
+    // this should be exactly the same speed as simp stack allocator but able to use static buffer and grow
 }
 
 #include "undefs.h"

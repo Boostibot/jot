@@ -137,7 +137,7 @@ namespace jot
         Intrusive_Stack_Resize stack_resi = Intrusive_Stack_Resize(slice(&ring_storage), def);
         Stack_Ring stack_ring = Stack_Ring(slice(&ring_storage), def);
         Intrusive_Stack_Simple stack_simp = Intrusive_Stack_Simple(slice(&ring_storage), def);
-        Unbound_Stack_Allocator unbound = Unbound_Stack_Allocator(def);
+        Arena_Allocator unbound = Arena_Allocator(def);
 
         Stack<isize> size_table;
         Stack<isize> align_table;
@@ -348,7 +348,7 @@ namespace jot
             f64* tested_res = nullptr;
 
             //run_tests_on(&memory_globals::NEW_DELETE_ALLOCATOR, new_del_res);
-            //run_tests_on(&unbound, unbound_res);
+            run_tests_on(&unbound, unbound_res);
             //run_tests_on(&ring, ring_res);
             //run_tests_on(&stack_resi, stack_resi_res);
             //run_tests_on(&stack_scan, stack_scan_res);
