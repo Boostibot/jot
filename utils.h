@@ -24,37 +24,37 @@ namespace jot
     #define no_infer(...) No_Infer<__VA_ARGS__> 
     #define nodisc [[nodiscard]]
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     T max(T a, no_infer(T) b) noexcept
     {
         return a > b ? a : b;
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     T min(T a, no_infer(T) b) noexcept
     {
         return a < b ? a : b;
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     T clamp(T val, no_infer(T) lo, no_infer(T) hi) noexcept
     {
         return max(lo, min(val, hi));
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     float lerp(float lo, float hi, float t) noexcept 
     {
         return lo * (1.0f - t) + hi * t;
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     double lerp(double lo, double hi, double t) noexcept 
     {
         return lo * (1.0 - t) + hi * t;
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     T div_round_up(T value, no_infer(T) to_multiple_of) noexcept
     {
         return (value + to_multiple_of - 1) / to_multiple_of;

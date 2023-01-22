@@ -413,7 +413,7 @@ namespace jot
         //insert construct leftover elements
         for (isize i = move_assign_to; i < insert_to; i++, ++it)
         {
-            T* prev = stack->data + i;
+            //T* prev = stack->data + i;
             if constexpr(do_move_construct)
             {
                 T const& val = *it; //either copy or reference 

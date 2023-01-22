@@ -39,7 +39,7 @@ namespace jot
         }
     };
 
-    template<typename... Ts> constexpr nodisc 
+    template<typename... Ts> nodisc constexpr 
     isize max_size(Ts... sizes) noexcept
     {
         isize count = sizeof...(Ts);
@@ -64,7 +64,7 @@ namespace jot
         max_size(prev_size, sizeof(Added)...), 
         max_size(prev_align, alignof(Added)...)>;
 
-    template<typename First, typename... Ts> constexpr nodisc 
+    template<typename First, typename... Ts> nodisc constexpr 
     auto make_variant(First const& data) noexcept -> Variant_Of<First, Ts...>
     {
         static_assert(variant_compatible<First> && (variant_compatible<Ts> && ...), "all types must be variant compatible");
@@ -76,7 +76,7 @@ namespace jot
         return variant;
     }
 
-    template<typename Added, isize prev_size, isize prev_align> constexpr nodisc 
+    template<typename Added, isize prev_size, isize prev_align> nodisc constexpr 
     auto expand_variant(Variant<prev_size, prev_align> const& variant) -> Expanded_Variant<prev_size, prev_align, Added>
     {
         static_assert(variant_compatible<Added>, "must be variant compatible");
@@ -89,25 +89,25 @@ namespace jot
         return out;
     }
 
-    template<isize byte_size, isize align> constexpr nodisc 
+    template<isize byte_size, isize align> nodisc constexpr 
     Slice<u8> slice(Variant<byte_size, align>* variant) 
     {
         return Slice<u8>{variant->bytes, variant->byte_size};
     }
 
-    template<isize byte_size, isize align> constexpr nodisc 
+    template<isize byte_size, isize align> nodisc constexpr 
     Slice<const u8> slice(Variant<byte_size, align> const& variant) 
     {
         return Slice<const u8>{variant->bytes, variant->byte_size};
     }
 
-    template<typename Which, isize byte_size, isize align> constexpr nodisc 
+    template<typename Which, isize byte_size, isize align> nodisc constexpr 
     bool has(Variant<byte_size, align> const& variant) noexcept 
     {
         return variant.which = type_id_of(Which);
     }
 
-    template<typename Which, isize byte_size, isize align> constexpr nodisc 
+    template<typename Which, isize byte_size, isize align> nodisc constexpr 
     Which get(Variant<byte_size, align> variant) noexcept 
     {
         assert(has<Which>(Variant));

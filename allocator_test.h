@@ -22,22 +22,22 @@ namespace jot
 
     using IRange = Range<isize>;
 
-    constexpr nodisc 
+    nodisc constexpr 
     bool is_invarinat(IRange range) {
         return range.from <= range.to;
     }
 
-    constexpr nodisc 
+    nodisc constexpr 
     bool in_range(IRange range, isize index) {
         return (range.from <= index && index < range.to);
     }
 
-    constexpr nodisc 
+    nodisc constexpr 
     bool in_inclusive_range(IRange range, isize index) {
         return (range.from <= index && index <= range.to);
     }
 
-    constexpr nodisc 
+    nodisc constexpr 
     IRange sized_range(isize from, isize size) {
         return IRange{from, from + size};
     }
@@ -318,7 +318,7 @@ namespace jot
         };
         
         const auto ms_per_iter = [&](Bench_Result result, isize iters) {
-            return cast(f64) result.time_ns / (result.iters * 1'000'000 * iters);
+            return cast(f64) result.time_ns / cast(f64) (result.iters * 1'000'000 * iters);
         };
 
         force(sizeof(Stack_Ring_Allocator) == sizeof(Intrusive_Stack_Scan));
@@ -345,7 +345,6 @@ namespace jot
             f64 stack_scan_res[5] = {0};
             f64 stack_resi_res[5] = {0};
             f64 stack_ring_res[5] = {0};
-            f64* tested_res = nullptr;
 
             //run_tests_on(&memory_globals::NEW_DELETE_ALLOCATOR, new_del_res);
             run_tests_on(&unbound, unbound_res);

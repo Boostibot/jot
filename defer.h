@@ -5,6 +5,7 @@ struct Defered
 {
     Fn fn;
 
+    Defered& operator=(Defered const&) = delete;
     Defered(Fn fn_) : fn(fn_) {}
     ~Defered() {fn();}
 };

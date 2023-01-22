@@ -14,7 +14,7 @@ namespace jot
     using Mutable_String = Slice<char>;
     using String_Builder = Stack<char>;
 
-    constexpr nodisc 
+    nodisc constexpr 
     isize first_index_of(String in_str, String search_for, isize from = 0)
     {
         if(search_for.size == 0)
@@ -43,25 +43,25 @@ namespace jot
         return -1;
     }
 
-    constexpr Array<char, 37> LOWERCASE_NUM_CHAR_MAPPING = {
+    constexpr Array<char, 37> LOWERCASE_NUM_CHAR_MAPPING = {{
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
         'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
         'u', 'v', 'w', 'x', 'y', 'z',
         '-'
-    };
+    }};
 
-    constexpr Array<char, 37> UPPERCASE_NUM_CHAR_MAPPING = {
+    constexpr Array<char, 37> UPPERCASE_NUM_CHAR_MAPPING = {{
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
         'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
         'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
         'U', 'V', 'W', 'X', 'Y', 'Z',
         '-'
-    };
+    }};
 
     void print(std::FILE* stream, String_Builder const& builder)
     {
-        fwrite(builder.data, sizeof(char), builder.size, stream);
+        fwrite(builder.data, sizeof(char), cast(size_t) builder.size, stream);
     }
 
     nodisc
@@ -362,7 +362,7 @@ namespace jot
     void print(std::FILE* stream, Ts const&... types)
     {
         String_Builder builder = format(types...);
-        fwrite(builder.data, sizeof(char), builder.size, stream);
+        fwrite(builder.data, sizeof(char), cast(size_t) builder.size, stream);
     }
 
     template <formattable... Ts>

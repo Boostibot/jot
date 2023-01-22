@@ -46,7 +46,7 @@ namespace jot
     template<>
     struct Failable<Allocator_State_Type>
     {
-        static constexpr nodisc 
+        nodisc static constexpr 
         bool perform(Allocator_State_Type state) noexcept 
         {
             return state != Allocator_State::OK;
@@ -56,7 +56,7 @@ namespace jot
     template<>
     struct Failable<Allocation_Result>
     {
-        static constexpr nodisc 
+        nodisc static constexpr 
         bool perform(Allocation_Result result) noexcept 
         {
             return result.state != Allocator_State::OK;
@@ -65,7 +65,7 @@ namespace jot
 
     struct Allocator
     {
-        virtual nodisc
+        nodisc virtual
         Allocation_Result allocate(isize size, isize align) noexcept = 0; 
         
         //even though deallocate and such shouldnt fail and the caller should check
@@ -74,89 +74,105 @@ namespace jot
         virtual 
         Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept = 0; 
 
-        virtual nodisc
+        nodisc virtual
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept = 0; 
         
-        virtual nodisc
+        nodisc virtual
         Nullable<Allocator*> parent_allocator() const noexcept = 0; 
         
-        virtual nodisc
+        nodisc virtual
         isize bytes_allocated() const noexcept = 0;
 
-        virtual nodisc
+        nodisc virtual
         isize bytes_used() const noexcept = 0;
 
-        virtual nodisc
+        nodisc virtual
         isize max_bytes_allocated() const noexcept = 0;
 
-        virtual nodisc
+        nodisc virtual
         isize max_bytes_used() const noexcept = 0;
 
-        virtual nodisc
+        nodisc virtual
         Allocation_Result custom_action(
             Allocator_Action::Type action_type, 
             Nullable<Allocator*> other_alloc, 
-            isize new_size, u8 new_align, 
-            Slice<u8> allocated, u8 old_align, 
+            isize new_size, isize new_align, 
+            Slice<u8> allocated, isize old_align, 
             Nullable<void*> custom_data) noexcept 
         {
+            cast(void) action_type;
+            cast(void) other_alloc;
+            cast(void) new_size;
+            cast(void) new_align;
+            cast(void) allocated;
+            cast(void) old_align;
+            cast(void) custom_data;
+
             assert_arg(new_size >= 0);
             return {Allocator_State::UNSUPPORTED_ACTION};
         }
+
+        virtual
+        ~Allocator() noexcept = 0;
     };
 
     //Fails on every allocation/deallocation
     struct Failing_Allocator : Allocator
     {
-        virtual nodisc
+        nodisc virtual
         Allocation_Result allocate(isize size, isize align) noexcept override
         {
             assert_arg(size >= 0 && align >= 0);
             return {Allocator_State::UNSUPPORTED_ACTION};
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override
         {
+            assert_arg(allocated.data != nullptr && align >= 0);
             return Allocator_State::UNSUPPORTED_ACTION;
         }
 
-        virtual nodisc
+        nodisc virtual
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override
         {
+            cast(void) allocated; cast(void) align; cast(void) new_size; 
             assert_arg(new_size >= 0);
             return {Allocator_State::UNSUPPORTED_ACTION};
         } 
 
-        virtual nodisc
+        nodisc virtual
         Nullable<Allocator*> parent_allocator() const noexcept  override 
         {
             return {nullptr};
         }
 
-        virtual nodisc
+        nodisc virtual
         isize bytes_allocated() const noexcept override 
         {
             return 0;
         }
 
-        virtual nodisc
+        nodisc virtual
         isize bytes_used() const noexcept override 
         {
             return 0;
         }
 
-        virtual nodisc
+        nodisc virtual
         isize max_bytes_allocated() const noexcept override 
         {
             return 0;
         }
 
-        virtual nodisc
+        nodisc virtual
         isize max_bytes_used() const noexcept override 
         {
             return 0;
         }
+        
+        virtual
+        ~Failing_Allocator() noexcept override {}
     };
 
     //Acts as regular c++ new delete
@@ -165,7 +181,7 @@ namespace jot
         isize total_alloced = 0;
         isize max_alloced = 0;
 
-        virtual nodisc
+        nodisc virtual
         Allocation_Result allocate(isize size, isize align) noexcept override
         {
             assert_arg(size >= 0 && align >= 0);
@@ -182,7 +198,7 @@ namespace jot
             return {Allocator_State::OK, {cast(u8*) obtained, size}};
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override
         {
             operator delete(allocated.data, std::align_val_t{cast(size_t) align}, std::nothrow_t{});
@@ -194,21 +210,22 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual nodisc
+        nodisc virtual
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override
         {
             assert_arg(new_size >= 0);
+            cast(void) align; cast(void) allocated; cast(void) new_size;
 
             return {Allocator_State::UNSUPPORTED_ACTION};
         } 
 
-        virtual nodisc
+        nodisc virtual
         Nullable<Allocator*> parent_allocator() const noexcept override 
         {
             return {nullptr};
         }
 
-        virtual nodisc
+        nodisc virtual
         isize bytes_allocated() const noexcept override 
         {
             #ifdef DO_ALLOCATOR_STATS
@@ -218,31 +235,32 @@ namespace jot
             #endif // DO_ALLOCATOR_STATS
         }
 
-        virtual nodisc
+        nodisc virtual
         isize bytes_used() const noexcept override 
         {
             return -1;
         }
 
-        virtual nodisc
+        nodisc virtual
         isize max_bytes_allocated() const noexcept override 
         {
             return max_alloced;
         }
 
-        virtual nodisc
+        nodisc virtual
         isize max_bytes_used() const noexcept override 
         {
             return -1;
         }
 
-        ~New_Delete_Allocator() noexcept
+        virtual
+        ~New_Delete_Allocator() noexcept override
         {
             assert(total_alloced == 0);
         }
     };
 
-    inline constexpr nodisc 
+    nodisc inline constexpr 
     bool is_power_of_two(isize num) noexcept 
     {
         usize n = cast(usize) num;
@@ -255,13 +273,13 @@ namespace jot
         return ptr >= slice.data && ptr <= slice.data + slice.size;
     }
     
-    inline nodisc
+    nodisc inline
     isize ptrdiff(void* ptr1, void* ptr2)
     {
         return cast(isize) ptr1 - cast(isize) ptr2;
     }
 
-    inline nodisc
+    nodisc inline
     u8* align_forward(u8* ptr, isize align_to)
     {
         assert_arg(is_power_of_two(align_to));
@@ -276,20 +294,20 @@ namespace jot
         return cast(u8*) ptr_num;
     }
 
-    inline nodisc
+    nodisc inline
     u8* align_backward(u8* ptr, isize align_to)
     {
         assert_arg(is_power_of_two(align_to));
 
         usize ualign = cast(usize) align_to;
         usize mask = ~(ualign - 1);
-        isize ptr_num = cast(isize) ptr;
+        usize ptr_num = cast(usize) ptr;
         ptr_num = ptr_num & mask;
 
         return cast(u8*) ptr_num;
     }
 
-    inline nodisc
+    nodisc inline
     Slice<u8> align_forward(Slice<u8> space, isize align_to)
     {
         u8* aligned = align_forward(space.data, align_to);
@@ -329,7 +347,7 @@ namespace jot
             return slice_range(buffer, last_alloc, filled_to);
         }
 
-        virtual nodisc
+        nodisc virtual
         Allocation_Result allocate(isize size, isize align) noexcept override
         {
             assert(filled_to >= 0 && last_alloc >= 0);
@@ -355,7 +373,7 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, returned_slice};
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override
         {
             if(is_in_slice(allocated.data, buffer) == false)
@@ -367,7 +385,7 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual nodisc
+        nodisc virtual
         Allocation_Result resize(Slice<u8> allocated, isize used_align, isize new_size) noexcept override 
         {
             
@@ -386,31 +404,31 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, last_slice};
         } 
 
-        virtual nodisc
+        nodisc virtual
         Nullable<Allocator*> parent_allocator() const noexcept override 
         {
             return {parent};
         }
 
-        virtual nodisc
+        nodisc virtual
         isize bytes_allocated() const noexcept override 
         {
             return alloced;
         }
 
-        virtual nodisc
+        nodisc virtual
         isize bytes_used() const noexcept override 
         {
             return buffer.size;
         }
 
-        virtual nodisc
+        nodisc virtual
         isize max_bytes_allocated() const noexcept override 
         {
             return max_alloced;
         }
 
-        virtual nodisc
+        nodisc virtual
         isize max_bytes_used() const noexcept override 
         {
             return buffer.size;
@@ -429,6 +447,9 @@ namespace jot
             last_alloc = 0;
             alloced = 0;
         };
+
+        virtual
+        ~Stack_Allocator() noexcept override {}
     };
 
     namespace memory_globals
@@ -442,12 +463,12 @@ namespace jot
             thread_local static Allocator* SCRATCH_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
         }
 
-        inline nodisc Allocator* default_allocator() noexcept 
+        nodisc inline Allocator* default_allocator() noexcept 
         {
             return hidden::DEFAULT_ALLOCATOR;
         }
 
-        inline nodisc Allocator* scratch_allocator() noexcept 
+        nodisc inline Allocator* scratch_allocator() noexcept 
         {
             return hidden::SCRATCH_ALLOCATOR;
         }
@@ -485,7 +506,7 @@ namespace jot
     }
 
     template <typename T>
-    static constexpr isize DEF_ALIGNMENT = max(alignof(T), 4);
+    static constexpr isize DEF_ALIGNMENT = cast(isize) max(alignof(T), 4);
 
     namespace memory_constants
     {

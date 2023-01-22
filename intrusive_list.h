@@ -47,7 +47,7 @@ namespace jot
         return prev == last;
     }
 
-    template<typename Node> static nodisc
+    template<typename Node> nodisc static
     bool is_isolated(Node node)
     {
         if constexpr(Node::is_bidirectional)
@@ -56,7 +56,7 @@ namespace jot
             return node.next == nullptr;
     }
 
-    template<typename Node> static nodisc
+    template<typename Node> nodisc static
     bool is_isolated(const Node first, const Node last)
     {
         if constexpr(Node::is_bidirectional)

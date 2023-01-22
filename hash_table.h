@@ -37,9 +37,11 @@ namespace jot
         Hash_Table() noexcept = default;
         Hash_Table(Allocator* alloc) noexcept : allocator(alloc) {}
         Hash_Table(Hash_Table&& other) noexcept;
+        Hash_Table(Hash_Table const& other) = delete;
         ~Hash_Table() noexcept;
 
         Hash_Table& operator=(Hash_Table&& other) noexcept;
+        Hash_Table& operator=(Hash_Table const& other) = delete;
     };
     
     template <typename Key, typename Value, typename Fns> nodisc
@@ -131,20 +133,20 @@ namespace jot
         if(this->keys != nullptr)
         {
             //destruct all keys and used values
-            Slice<Key> keys = jot::keys(this);
-            Slice<Value> value = jot::values(this);
+            Slice<Key> key_items = jot::keys(this);
+            Slice<Value> value_items = jot::values(this);
 
             for(isize i = 0; i < this->size; i++)
             {
                 if(is_used(*this, i))
-                    value[i].~Value();
+                    value_items[i].~Value();
 
-                keys[i].~Key();
+                key_items[i].~Key();
             }
 
             //deallocate alloced
-            this->allocator->deallocate(cast_slice<u8>(keys), HASH_SET_KEYS_ALIGN);
-            this->allocator->deallocate(cast_slice<u8>(value), HASH_SET_KEYS_ALIGN);
+            this->allocator->deallocate(cast_slice<u8>(key_items), HASH_SET_KEYS_ALIGN);
+            this->allocator->deallocate(cast_slice<u8>(value_items), HASH_SET_VALUES_ALIGN);
         }
     }
 
@@ -170,7 +172,7 @@ namespace jot
         u64 mask = cast(u64) hash.size - 2;
 
         u64 index = result & mask;
-        u64 contention = 0;
+        isize contention = 0;
 
         assert(hash.size >= 3 && "size must not be smaller than 3 (2 regular size)");
         for(u64 i = index;; contention++)
@@ -197,7 +199,7 @@ namespace jot
     Allocator_State_Type rehash(Hash_Table<Key, Value, Fns>* hash, isize min_size)
     {
         assert(is_invariant(*hash));
-        constexpr isize base_elems = max(HASH_SET_BASE_BYTES / sizeof(Key), HASH_SET_BASE_SIZE);
+        constexpr isize base_elems = max(HASH_SET_BASE_BYTES / cast(isize) sizeof(Key), HASH_SET_BASE_SIZE);
 
         isize old_regular_size = hash->size - 1;
         isize new_regular_size = max(old_regular_size, base_elems);
@@ -208,11 +210,11 @@ namespace jot
         assert(is_power_of_two(new_size - 1));
         assert(new_size >= 3);
 
-        Allocation_Result keys_res = hash->allocator->allocate(new_size * sizeof(Key), HASH_SET_KEYS_ALIGN);
+        Allocation_Result keys_res = hash->allocator->allocate(new_size * cast(isize) sizeof(Key), HASH_SET_KEYS_ALIGN);
         if(keys_res.state == ERROR)
             return keys_res.state;
 
-        Allocation_Result vals_res = hash->allocator->allocate(new_size * sizeof(Value), HASH_SET_VALUES_ALIGN);
+        Allocation_Result vals_res = hash->allocator->allocate(new_size * cast(isize) sizeof(Value), HASH_SET_VALUES_ALIGN);
         if(vals_res.state == ERROR)
         {
             if(keys_res.state == OK)
@@ -241,8 +243,8 @@ namespace jot
             
             Value* val = &hash->values[i + 1];
 
-            u64 hash = Fns::hash(key);
-            u64 index = hash & new_mask;
+            u64 hashed = Fns::hash(key);
+            u64 index = hashed & new_mask;
             new_keys[index + 1] = move(&key);
             new (&new_vals[index + 1]) Value(move(val));
         }
@@ -281,7 +283,7 @@ namespace jot
         u64 mask = cast(u64) hash->size - 2;
 
         u64 index = result & mask;
-        u64 contention = 0;
+        isize contention = 0;
         isize found_i = 0;
         bool first_used = false;
         
@@ -346,7 +348,7 @@ namespace jot
         static uint64_t hash(Int_Key const& key)
         {
             u64 convreted = cast(u64) key;
-            return uint64_hash(key);
+            return uint64_hash(convreted);
         }
 
         static bool is_equal(Int_Key const& a, Int_Key const& b)
@@ -446,7 +448,7 @@ namespace jot
         };
         
         template <typename Key, typename Value, typename Fns> nodisc
-        bool value_matches_at(Hash_Table<Key, Value, Fns> const& hash, no_infer(Key) key, no_infer(Value) value, bool is_empty = false, bool fail = false)
+        bool value_matches_at(Hash_Table<Key, Value, Fns> const& hash, no_infer(Key) key, no_infer(Value) value)
         {
             isize found = find_key(hash, move(&key));
             if(found == -1)

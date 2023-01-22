@@ -29,17 +29,17 @@ namespace jot
 
 namespace std 
 {
-    constexpr nodisc auto begin(jot::direct_container auto& arr)        noexcept {return arr.data;}
-    constexpr nodisc auto begin(const jot::direct_container auto& arr)  noexcept {return arr.data;}
+    nodisc constexpr auto begin(jot::direct_container auto& arr)        noexcept {return arr.data;}
+    nodisc constexpr auto begin(const jot::direct_container auto& arr)  noexcept {return arr.data;}
 
-    constexpr nodisc auto end(jot::direct_container auto& arr)          noexcept {return arr.data + arr.size;}
-    constexpr nodisc auto end(const jot::direct_container auto& arr)    noexcept {return arr.data + arr.size;}
+    nodisc constexpr auto end(jot::direct_container auto& arr)          noexcept {return arr.data + arr.size;}
+    nodisc constexpr auto end(const jot::direct_container auto& arr)    noexcept {return arr.data + arr.size;}
 
-    constexpr nodisc auto cbegin(const jot::direct_container auto& arr) noexcept {return arr.data;}
-    constexpr nodisc auto cend(const jot::direct_container auto& arr)   noexcept {return arr.data + arr.size;}
+    nodisc constexpr auto cbegin(const jot::direct_container auto& arr) noexcept {return arr.data;}
+    nodisc constexpr auto cend(const jot::direct_container auto& arr)   noexcept {return arr.data + arr.size;}
 
-    constexpr nodisc auto size(const jot::direct_container auto& arr)   noexcept {return arr.size;}
-    constexpr nodisc auto data(const jot::direct_container auto& arr)   noexcept {return arr.data;}
+    nodisc constexpr auto size(const jot::direct_container auto& arr)   noexcept {return arr.size;}
+    nodisc constexpr auto data(const jot::direct_container auto& arr)   noexcept {return arr.data;}
 }
 
 namespace jot
@@ -48,7 +48,7 @@ namespace jot
     using ::std::end;
     using ::std::size;
 
-    constexpr nodisc 
+    nodisc constexpr 
     isize strlen(const char* str)
     {
         isize size = 0;
@@ -84,13 +84,13 @@ namespace jot
 
     Slice(const char*) -> Slice<const char>;
 
-    constexpr nodisc 
+    nodisc constexpr 
     Slice<const char> slice(const char* str) 
     {
         return {str, strlen(str)};
     }
 
-    template<direct_container Cont> constexpr nodisc 
+    template<direct_container Cont> nodisc constexpr 
     auto slice(Cont const& sliced) 
     {
         using T_ref = decltype(*sliced.data);
@@ -98,7 +98,7 @@ namespace jot
         return Slice<T>{sliced.data, sliced.size};
     }
 
-    template<direct_container Cont> constexpr nodisc 
+    template<direct_container Cont> nodisc constexpr 
     auto slice(Cont* sliced) 
     {
         using T_ref = decltype(*sliced->data);
@@ -108,39 +108,39 @@ namespace jot
 
     #define constexpr_assert(a) (std::is_constant_evaluated() ? (void)0 : assert(a))
 
-    template<typename T> constexpr nodisc  
+    template<typename T> nodisc constexpr  
     bool is_invarinat(Slice<T> slice) {
         return slice.size >= 0;
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     Slice<T> slice(Slice<T> slice, isize from) {
         constexpr_assert((0 <= from && from <= slice.size) && "index out of bounds");
         return Slice<T>{slice.data + from, slice.size - from};
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     Slice<T> trim(Slice<T> slice, isize to_index) {   
         constexpr_assert((0 <= to_index && to_index <= slice.size) && "index out of bounds");
         return Slice<T>{slice.data, to_index};
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     Slice<T> slice_size(Slice<T> base_slice, isize from, isize size) {
         return trim(slice(base_slice, from), size);
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     Slice<T> slice_range(Slice<T> base_slice, isize from, isize to) {
         return slice(trim(base_slice, to), from);
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     isize byte_size(Slice<T> slice) {
         return slice.size * sizeof(T);
     }
 
-    template<typename To, typename From = int> constexpr nodisc
+    template<typename To, typename From = int> nodisc constexpr
     Slice<To> cast_slice(Slice<From> slice)
     {
         if constexpr (std::is_convertible_v<From*, To*>)
@@ -149,7 +149,7 @@ namespace jot
             return {cast(To*) cast(void*) slice.data, (byte_size(slice) / cast(isize) sizeof(To))};
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     bool are_aliasing(Slice<T> left, Slice<T> right)
     { 
         uintptr_t left_pos = cast(uintptr_t) left.data;
@@ -166,7 +166,7 @@ namespace jot
         }
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     bool are_one_way_aliasing(Slice<T> before, Slice<T> after)
     { 
         return (before.data + before.size > after.data) && (after.data > before.data);
@@ -191,7 +191,7 @@ namespace jot
         fill(to, cast(T) 0);
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     int compare(Slice<T> a, Slice<T> b, bool byte_by_byte = false) noexcept
     {
         if(a.size < b.size)
@@ -215,7 +215,7 @@ namespace jot
         return 0;
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     int compare_bytes(Slice<T> a, Slice<T> b) noexcept
     {
         return compare(a, b, true);

@@ -36,19 +36,19 @@ namespace jot
             block->size = new_size;
         }
         
-        static nodisc
+        nodisc static
         isize get_size(Arena_Block block)
         {
             return block.size & ~ARENA_BLOCK_ALLOCED_BIT;
         }
         
-        static nodisc
+        nodisc static
         bool was_alloced(Arena_Block block)
         {
             return block.size & ARENA_BLOCK_ALLOCED_BIT;
         }
 
-        static nodisc
+        nodisc static
         void set_alloced(Arena_Block* block, bool was_alloced = true)
         {
             isize cleared = get_size(*block);
@@ -58,19 +58,19 @@ namespace jot
             block->size = cleared;
         }
 
-        static nodisc
+        nodisc static
         Arena_Block* place_block(Slice<u8> items, bool was_alloced)
         {
             assert(items.size > sizeof(Arena_Block) && "must be big enough");
             Arena_Block* block = cast(Arena_Block*) cast(void*) items.data;
             *block = Arena_Block{};
-            detail::set_alloced(block, true);
+            detail::set_alloced(block, was_alloced);
             detail::set_size(block, items.size - cast(isize) sizeof(Arena_Block));
 
             return block;
         }
 
-        static nodisc
+        nodisc static
         Slice<u8> data(Arena_Block* block)
         {
             u8* address = cast(u8*) cast(void*) block;
@@ -81,7 +81,7 @@ namespace jot
             return Slice<u8>{address + sizeof(Arena_Block), size};
         }
 
-        static nodisc
+        nodisc static
         Slice<u8> used_by_block(Arena_Block* block)
         {
             u8* address = cast(u8*) cast(void*) block;
@@ -117,7 +117,7 @@ namespace jot
             Arena_Block* found = nullptr;
         };
 
-        static nodisc
+        nodisc static
         Arena_Block_Found find_block_to_fit(Chain<Arena_Block> chain, Arena_Block* before, isize size, isize align)
         {
             Arena_Block* prev = before;
@@ -185,20 +185,20 @@ namespace jot
 
         Arena_Allocator(
             Allocator* parent = memory_globals::default_allocator(), 
-            size_t chunk_size = memory_constants::PAGE,
+            isize chunk_size = memory_constants::PAGE,
             Grow_Fn chunk_grow = detail::default_arena_grow) 
-            : parent(parent), chunk_size(chunk_size), chunk_grow(chunk_grow)
+            : parent(parent), chunk_grow(chunk_grow), chunk_size(chunk_size)
         {
             reset_last_allocation();
             assert(is_invariant());
         }
 
-        ~Arena_Allocator()
+        virtual
+        ~Arena_Allocator() override
         {
             assert(is_invariant());
 
             isize passed_bytes = deallocate_and_count_chain(parent, blocks);
-            
             assert(passed_bytes == bytes_used_);
         }
 
@@ -228,7 +228,7 @@ namespace jot
             return Chain{current_block->next, blocks.last};
         }
 
-        virtual nodisc
+        nodisc virtual
         Allocation_Result allocate(isize size, isize align) noexcept override
         {
             assert(is_power_of_two(align));
@@ -253,9 +253,10 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, alloced};
         }
 
-        virtual nodisc
+        nodisc virtual
         Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override 
         {
+            cast(void) align;
             if(allocated.data != last_allocation)
                 return Allocator_State::OK;
 
@@ -270,9 +271,10 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual nodisc
+        nodisc virtual
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override
         {
+            cast(void) align;
             u8* used_to = available_from + new_size;
             if(allocated.data != last_allocation || used_to > available_to)
                 return Allocation_Result{Allocator_State::NOT_RESIZABLE};
@@ -283,31 +285,31 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, {allocated.data, new_size}};
         }
 
-        virtual nodisc
+        nodisc virtual
         Nullable<Allocator*> parent_allocator() const noexcept override
         {
             return {parent};
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize bytes_allocated() const noexcept override
         {
             return bytes_alloced_;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize bytes_used() const noexcept override 
         {
             return bytes_used_;    
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize max_bytes_allocated() const noexcept override
         {
             return max_bytes_alloced_;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize max_bytes_used() const noexcept override 
         {
             return max_bytes_used_;    
@@ -335,14 +337,19 @@ namespace jot
             bytes_used_ -= released;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Allocation_Result custom_action(
             Allocator_Action::Type action_type, 
             Nullable<Allocator*> other_alloc, 
-            isize new_size, u8 new_align, 
-            Slice<u8> allocated, u8 old_align, 
-            Nullable<void*> custom_data) noexcept
+            isize new_size, isize new_align, 
+            Slice<u8> allocated, isize old_align, 
+            Nullable<void*> custom_data) noexcept override
         {
+            cast(void) custom_data;
+            cast(void) allocated;
+            cast(void) old_align;
+            cast(void) new_align;
+            cast(void) other_alloc;
             if(action_type == Allocator_Action::RESET)
             {
                 reset();
@@ -388,7 +395,7 @@ namespace jot
             assert(is_invariant());
             using namespace detail;
 
-            isize effective_size = size + sizeof(Arena_Block);
+            isize effective_size = size + cast(isize) sizeof(Arena_Block);
             if(align > ARENA_BLOCK_ALIGN)
                 effective_size += align;
 

@@ -18,7 +18,7 @@ namespace jot
     template<>
     struct Failable<State>
     {
-        static constexpr nodisc 
+        nodisc static constexpr 
         bool perform(State state) 
         {
             return state != OK_STATE;
@@ -28,7 +28,7 @@ namespace jot
     template<>
     struct Failable<bool>
     {
-        static constexpr nodisc 
+        nodisc static constexpr 
         bool perform(bool state) 
         {
             return state == false;
@@ -44,29 +44,29 @@ namespace jot
     template<typename T>
     struct Failable<Nullable<T>>
     {
-        static constexpr nodisc 
+        nodisc static constexpr 
         bool perform(Nullable<T> ptr) noexcept
         {
             return ptr.value == nullptr;
         }
     };
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     T value(Nullable<T> ptr) noexcept
     {
         return ptr.value;
     }
 
-    template <failable T> constexpr nodisc 
+    template <failable T> nodisc constexpr 
     bool operator==(T const& left, Ok_Type) noexcept { return failed(left) == false; }
     
-    template <failable T> constexpr nodisc 
+    template <failable T> nodisc constexpr 
     bool operator!=(T const& left, Ok_Type) noexcept { return failed(left); }
     
-    template <failable T> constexpr nodisc 
+    template <failable T> nodisc constexpr 
     bool operator==(T const& left, Error_Type) noexcept { return failed(left); }
     
-    template <failable T> constexpr nodisc 
+    template <failable T> nodisc constexpr 
     bool operator!=(T const& left, Error_Type) noexcept { return failed(left) == false; }
 
 

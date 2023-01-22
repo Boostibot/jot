@@ -36,7 +36,7 @@
 #ifndef MOVE_DEFINED
 #define MOVE_DEFINED
 
-    template <typename T> constexpr nodisc 
+    template <typename T> nodisc constexpr 
     T && move(T* val) 
     {
         return cast(T &&) *val;

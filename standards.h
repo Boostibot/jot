@@ -23,7 +23,7 @@ namespace jot
     template <typename T, typename Enable = True>
     struct Assignable
     {
-        static constexpr nodisc
+        nodisc static constexpr
         State perform(T* to, T const& from) noexcept
         {
             static_assert(std::is_nothrow_copy_assignable_v<T>, "must be nothrow copyable! If not provide a custom overload of this function");
@@ -50,7 +50,7 @@ namespace jot
     struct Failable : No_Default
     {
         #if 0
-        static constexpr nodisc
+        nodisc static constexpr
         bool perform(T const& flag) noexcept {
             return false;
         }
@@ -60,7 +60,7 @@ namespace jot
     template<typename T>
     concept failable = !std::is_base_of_v<No_Default, Failable<T>>;
 
-    template <typename T> constexpr nodisc 
+    template <typename T> nodisc constexpr 
     State assign(T* to, T const& from) noexcept 
     {
         return Assignable<T>::perform(to, from);
@@ -72,13 +72,13 @@ namespace jot
         return Swappable<T>::perform(left, right);
     }
 
-    template <failable T> constexpr nodisc 
+    template <failable T> nodisc constexpr 
     bool failed(T const& flag) noexcept 
     {
         return Failable<T>::perform(flag);
     }
 
-    template<typename T> constexpr nodisc 
+    template<typename T> nodisc constexpr 
     State construct_assign_at(T* to, no_infer(T) const& from)
     {
         std::construct_at(to);

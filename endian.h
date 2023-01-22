@@ -15,7 +15,7 @@ namespace jot
     template<typename T>
     using Bytes = Array<u8, sizeof(T)>;
 
-    template<typename From> constexpr nodisc
+    template<typename From> nodisc constexpr
     Bytes<From> to_bytes(From val) noexcept
     {
         using Rep = Bytes<From>;
@@ -23,7 +23,7 @@ namespace jot
         return bit_cast<Rep>(val);
     }
 
-    template<typename To> constexpr nodisc
+    template<typename To> nodisc constexpr
     To from_bytes(const Bytes<To>& bytes) noexcept 
     {
         return bit_cast<To>(bytes);
@@ -31,7 +31,7 @@ namespace jot
 
     //wrapper for byteswap func const& c++23
     // will const& most cases get compiled into bswap instruction
-    template <typename T> constexpr nodisc 
+    template <typename T> nodisc constexpr 
     T byteswap(T const& value) noexcept;
 
     enum class Endian
@@ -45,10 +45,10 @@ namespace jot
         Unknown     = 255
     };
 
-    constexpr nodisc 
+    nodisc constexpr 
     Endian get_local_endian()
     {
-        Bytes<u32> rep = {1, 2, 3, 4};
+        Bytes<u32> rep = {{1, 2, 3, 4}};
         u32 val = bit_cast<u32>(rep);
         switch (val)
         {
@@ -63,13 +63,13 @@ namespace jot
 
     static constexpr Endian LOCAL_ENDIAN = get_local_endian();
 
-    constexpr nodisc 
+    nodisc constexpr 
     bool is_common_endian(Endian endian)
     {
         return endian == Endian::Little || endian == Endian::Big;
     }
 
-    constexpr nodisc
+    nodisc constexpr
     isize offset_from_low_bytes(isize offset, isize field_size, Endian endian = LOCAL_ENDIAN)
     {
         assert(is_common_endian(endian) && "weird endian!");
@@ -79,7 +79,7 @@ namespace jot
             return field_size - offset;
     }
 
-    template <typename Int> constexpr nodisc
+    template <typename Int> nodisc constexpr
     Int from_endian(Slice<const u8> input, Endian endian, Endian local_endian = LOCAL_ENDIAN)
     {
         assert(is_common_endian(endian) && is_common_endian(local_endian) && "weird endian!");
@@ -99,7 +99,7 @@ namespace jot
             return byteswap(bit_cast<Int>(rep));
     }
 
-    template <typename Int> constexpr nodisc 
+    template <typename Int> nodisc constexpr 
     void to_endian(Int const& integer, Slice<u8>* output, Endian endian, Endian local_endian = LOCAL_ENDIAN)
     {
         assert(is_common_endian(endian) && is_common_endian(local_endian) && "weird endian!");
@@ -120,7 +120,7 @@ namespace jot
         copy_bytes(&sliced, rep_s);
     }
 
-    template <typename Int> constexpr nodisc
+    template <typename Int> nodisc constexpr
     Int change_endian(Int const& integer, Endian to_endian, Endian from_endian = LOCAL_ENDIAN)
     {
         assert(is_common_endian(to_endian) && is_common_endian(from_endian) && "weird endian!");
@@ -203,7 +203,7 @@ namespace jot
             std::swap(bytes[i], bytes[size - i - 1]);
     }
 
-    template <typename T> constexpr nodisc 
+    template <typename T> nodisc constexpr 
     T manual_byteswap(T const& value) noexcept
     {
         //Uses of bit_cast to enable consteval of this fn
@@ -212,7 +212,7 @@ namespace jot
         return bit_cast<T>(rep);
     }
 
-    template <typename T> constexpr nodisc 
+    template <typename T> nodisc constexpr 
     T byteswap(T const& value) noexcept
     {
         #ifdef __cpp_lib_byteswap 

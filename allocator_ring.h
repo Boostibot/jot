@@ -14,7 +14,7 @@ namespace jot
             return cast(T*) cast(void*) (address + by_bytes);
         }
 
-        static nodisc
+        nodisc static
         u8* u8_ptr(void* ptr)
         {
             return cast(u8*) ptr;
@@ -28,19 +28,19 @@ namespace jot
         static_assert(sizeof(Slot) == sizeof(u32) && alignof(Slot) == alignof(u32), "slot must be transparent");
 
         static constexpr u32 SLOT_PAD_VALUE = 0xffff'ffff;
-        static constexpr u32 STUB_BIT = 1 << 31;
-        static constexpr u32 USED_BIT = 1 << 31;
+        static constexpr u32 STUB_BIT = cast(u32) 1 << 31;
+        static constexpr u32 USED_BIT = cast(u32) 1 << 31;
         static constexpr isize SIZE_MULT = sizeof(isize) == 4 ? 1 : sizeof(Slot);
         static constexpr isize MAX_NOT_MULT_SIZE = (cast(u32) -1) & ~USED_BIT;
         static constexpr isize MAX_BYTE_SIZE = MAX_NOT_MULT_SIZE * SIZE_MULT;
 
-        static nodisc
+        nodisc static
         isize size(Slot* slot) 
         {
             return (slot->size & ~USED_BIT) * SIZE_MULT;
         }
 
-        static nodisc
+        nodisc static
         Slot* slot(void* ptr) 
         {
             u32* padding_ptr = cast(u32*) offset_ptr(ptr, -cast(isize) sizeof(Slot));
@@ -50,7 +50,7 @@ namespace jot
             return cast(Slot*) cast(void*) padding_ptr;
         }
 
-        static nodisc
+        nodisc static
         Slice<u8> data(Slot* slot, isize align) 
         {
             isize slot_size = size(slot); 
@@ -62,7 +62,7 @@ namespace jot
         static 
         void place_slot(Slot* at, u32 size, void* data_start, bool used)
         {
-            at->size = size / SIZE_MULT;
+            at->size = size / cast(u32) SIZE_MULT;
             if(used)
                 at->size |= USED_BIT;
 
@@ -118,7 +118,7 @@ namespace jot
             return p >= used_from || p < used_to;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Allocation_Result allocate(isize size, isize align) noexcept override 
         {
             using namespace detail;
@@ -201,7 +201,7 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual nodisc 
+        nodisc virtual 
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override 
         {
             using namespace detail;
@@ -246,12 +246,12 @@ namespace jot
                         return Allocation_Result{Allocator_State::NOT_RESIZABLE};
                 }
 
-                Slot* first_slot = cast(Slot*) used_from;
 
                 //Here we could check two times but we can actually just merge the two checks into 
                 // one. If the USED_BIT is set the size will be huge and we will probably 
                 // not pass the wrap test. If we still do we can still check even the USED_BIT.
 
+                //Slot* first_slot = cast(Slot*) used_from;
                 //if((first_slot->size & USED_BIT))
                 //return Allocation_Result{Allocator_State::NOT_RESIZABLE};
 
@@ -271,37 +271,38 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, Slice<u8>{ptr, new_size}};
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Nullable<Allocator*> parent_allocator() const noexcept override 
         {
             return {nullptr};
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize bytes_allocated() const noexcept override 
         {
             return current_alloced;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize bytes_used() const noexcept override 
         {
             return buffer_to - buffer_from;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize max_bytes_allocated() const noexcept override 
         {
             return max_alloced;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize max_bytes_used() const noexcept override 
         {
             return bytes_used();
         }
-
-        ~Ring_Allocator()
+        
+        virtual
+        ~Ring_Allocator() noexcept override
         {
             isize alloced = bytes_allocated();
             assert(alloced == 0);
@@ -342,7 +343,7 @@ namespace jot
             last_block_from = buffer_from;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Allocation_Result allocate(isize size, isize align) noexcept override 
         {
             using namespace detail;
@@ -424,7 +425,7 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual nodisc 
+        nodisc virtual 
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override 
         {
             using namespace detail;
@@ -435,37 +436,38 @@ namespace jot
             return Allocation_Result{Allocator_State::NOT_RESIZABLE};
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Nullable<Allocator*> parent_allocator() const noexcept override 
         {
             return {nullptr};
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize bytes_allocated() const noexcept override 
         {
             return current_alloced;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize bytes_used() const noexcept override 
         {
             return buffer_to - buffer_from;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize max_bytes_allocated() const noexcept override 
         {
             return max_alloced;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize max_bytes_used() const noexcept override 
         {
             return bytes_used();
         }
 
-        ~Intrusive_Stack_Simple()
+        virtual
+        ~Intrusive_Stack_Simple() noexcept override
         {
             isize alloced = bytes_allocated();
             assert(alloced == 0 && "tracked size must be zero (alloced size == free size)");
@@ -507,7 +509,7 @@ namespace jot
             last_block_from = buffer_from;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Allocation_Result allocate(isize size, isize align) noexcept override 
         {
             using namespace detail;
@@ -527,14 +529,14 @@ namespace jot
             Slot* slot = (cast(Slot*) aligned_from) - 1;
 
             isize slot_size = ptrdiff(aligned_to, aligned_from);
-            isize stub_size = ptrdiff(slot, stub) - sizeof(Slot);
+            isize stub_size = ptrdiff(slot, stub) - cast(isize) sizeof(Slot);
             isize slot_offset = stub_size;
             isize stub_offset = ptrdiff(stub, last_block_from);
 
-            u32 reduced_slot_size = cast(u32) slot_size / SIZE_MULT;
-            u32 reduced_stub_size = cast(u32) stub_size / SIZE_MULT;
+            u32 reduced_slot_size = cast(u32) (slot_size / SIZE_MULT);
+            u32 reduced_stub_size = cast(u32) (stub_size / SIZE_MULT);
             u32 reduced_slot_offset = reduced_stub_size;
-            u32 reduced_stub_offset = cast(u32) stub_offset / SIZE_MULT;
+            u32 reduced_stub_offset = cast(u32) (stub_offset / SIZE_MULT);
 
             u8 is_too_big  = reduced_slot_size >= USED_BIT;
             u8 is_past_end = aligned_to > buffer_to;
@@ -596,7 +598,7 @@ namespace jot
             bool sizes_match = slot_size * SIZE_MULT >= aligned_size;
             assert(sizes_match);
 
-            bool ret = is_front_in_slice && is_back_in_slice && is_aligned && sizes_match;
+            bool ret = is_front_in_slice && is_back_in_slice && is_aligned && sizes_match && is_used;
             assert(ret);
             return ret;
         }
@@ -641,7 +643,7 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual nodisc 
+        nodisc virtual 
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override 
         {
             using namespace detail;
@@ -699,37 +701,38 @@ namespace jot
             return Allocation_Result{Allocator_State::OK, output};
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Nullable<Allocator*> parent_allocator() const noexcept override 
         {
             return {nullptr};
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize bytes_allocated() const noexcept override 
         {
             return current_alloced;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize bytes_used() const noexcept override 
         {
             return buffer_to - buffer_from;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize max_bytes_allocated() const noexcept override 
         {
             return max_alloced;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize max_bytes_used() const noexcept override 
         {
             return bytes_used();
         }
 
-        ~Intrusive_Stack_Resize()
+        virtual
+        ~Intrusive_Stack_Resize() noexcept override
         {
             isize alloced = bytes_allocated();
             assert(alloced == 0 && "tracked size must be zero (alloced size == free size)");
@@ -757,7 +760,7 @@ namespace jot
         };
 
         //static constexpr isize SIZE_MULT = 1;
-        static constexpr u32 STUB_BIT = 1 << 31;
+        static constexpr u32 STUB_BIT = cast(u32) 1 << 31;
         static constexpr isize SIZE_MULT = sizeof(Slot);
 
         Intrusive_Stack_Scan(Slice<u8> buffer, Allocator* parent) 
@@ -773,7 +776,7 @@ namespace jot
             last_block_from = buffer_from;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Allocation_Result allocate(isize size, isize align) noexcept override 
         {
             using namespace detail;
@@ -809,12 +812,12 @@ namespace jot
             Slot* slot = (cast(Slot*) aligned_from) - 1;
 
             isize slot_size = ptrdiff(aligned_to, aligned_from);
-            isize stub_size = ptrdiff(slot, stub) - sizeof(Slot); //only the size of data in between headers => - sizeof(Slot)
+            isize stub_size = ptrdiff(slot, stub) - cast(isize) sizeof(Slot); //only the size of data in between headers => - sizeof(Slot)
             isize slot_offset = ptrdiff(slot, last_block_from);
 
-            u32 reduced_slot_size = cast(u32) slot_size / SIZE_MULT;
-            u32 reduced_stub_size = cast(u32) stub_size / SIZE_MULT;
-            u32 reduced_slot_offset = cast(u32) slot_offset / SIZE_MULT;
+            u32 reduced_slot_size = cast(u32) (slot_size / SIZE_MULT);
+            u32 reduced_stub_size = cast(u32) (stub_size / SIZE_MULT);
+            u32 reduced_slot_offset = cast(u32) (slot_offset / SIZE_MULT);
 
             //If is too big we use parent
             u8 is_too_big  = reduced_slot_size >= USED_BIT;
@@ -896,7 +899,7 @@ namespace jot
             return Allocator_State::OK;
         } 
 
-        virtual nodisc 
+        nodisc virtual 
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override 
         {
             using namespace detail;
@@ -996,40 +999,41 @@ namespace jot
             bool sizes_match = slot_size * SIZE_MULT >= aligned_size;
             assert(sizes_match);
 
-            return is_front_in_slice && is_back_in_slice && is_aligned && sizes_match;
+            return is_front_in_slice && is_used && is_back_in_slice && is_aligned && sizes_match;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         Nullable<Allocator*> parent_allocator() const noexcept override 
         {
             return {parent};
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize bytes_allocated() const noexcept override 
         {
             return current_alloced;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize bytes_used() const noexcept override 
         {
             return buffer_to - buffer_from;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize max_bytes_allocated() const noexcept override 
         {
             return max_alloced;
         }
 
-        virtual nodisc 
+        nodisc virtual 
         isize max_bytes_used() const noexcept override 
         {
             return bytes_used();
         }
 
-        ~Intrusive_Stack_Scan()
+        virtual
+        ~Intrusive_Stack_Scan() noexcept override
         {
             isize alloced = bytes_allocated();
             assert(alloced == 0 && "tracked size must be zero (alloced size == free size)");
