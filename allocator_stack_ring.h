@@ -23,7 +23,7 @@ namespace jot
     // 50% slower than arena allocator without touching the data. The fact that this reuses memory  
     // keeps the memory hot which makes it with touching data alot faster than 
     // arena would be particualrly for short term stack order allocations/frees.
-    struct Stack_Ring : Allocator
+    struct Stack_Ring_Allocator : Allocator
     {
         u8* buffer_from = nullptr;
         u8* buffer_to = nullptr;
@@ -51,7 +51,7 @@ namespace jot
         static constexpr isize MAX_BYTE_SIZE = MAX_NOT_MULT_SIZE * SIZE_MULT;
 
 
-        Stack_Ring(Slice<u8> buffer, Allocator* parent) 
+        Stack_Ring_Allocator(Slice<u8> buffer, Allocator* parent) 
             : parent(parent) 
         {
             Slice<u8> aligned = align_forward(buffer, alignof(Slot));
@@ -71,9 +71,8 @@ namespace jot
         }
         
         nodisc
-        Allocation_Result handle_resize_and_allocate(isize size, isize align, bool is_second_try) noexcept
+        Allocation_Result handle_wrap_around_and_allocate(isize size, isize align, bool is_second_try) noexcept
         {
-            //throw false;
             //if even on second try we failed we stop
             // to prevent recursive infinite loop
             //if its never possible to even store the desired size we simply stop
@@ -135,7 +134,7 @@ namespace jot
             u8* aligned_to = align_forward(aligned_from + size, sizeof(Slot));
             
             if(aligned_to > remainder_from || size > MAX_BYTE_SIZE)
-                return handle_resize_and_allocate(size, align, is_second_try);
+                return handle_wrap_around_and_allocate(size, align, is_second_try);
 
             //Get the adresses at which to place the headers
             // The headers might be 2 or 1 depending on if they share the same 
@@ -413,7 +412,7 @@ namespace jot
             return bytes_used();
         }
 
-        ~Stack_Ring()
+        ~Stack_Ring_Allocator()
         {
             isize alloced = bytes_allocated();
             assert(alloced == 0 && "tracked size must be zero (alloced size == free size)");

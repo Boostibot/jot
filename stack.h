@@ -141,7 +141,6 @@ namespace jot
         template<class T> nodisc
         Allocator_State_Type set_capacity(Stack<T>* stack, isize new_capacity)
         {
-            
             T* RESTRICT new_data = nullptr;
             T* RESTRICT old_data = stack->data;
 
@@ -503,8 +502,8 @@ namespace jot
     }
 
     template<class T> nodisc
-    T* last(Stack<T>* stack){
-        assert(is_invariant(*stack));
+    T* last(Stack<T>* stack)
+    {
         assert(stack->size > 0);
         return &stack->data[stack->size - 1];
     }
@@ -512,7 +511,6 @@ namespace jot
     template<class T> 
     T const& last(Stack<T> const& stack)
     {
-        assert(is_invariant(stack));
         assert(stack.size > 0);
         return stack.data[stack.size - 1];
     }
@@ -520,7 +518,6 @@ namespace jot
     template<class T> 
     T* first(Stack<T>* stack) 
     {
-        assert(is_invariant(*stack));
         assert(stack->size > 0);
         return &stack->data[0];
     }
@@ -528,7 +525,6 @@ namespace jot
     template<class T> 
     T const& first(Stack<T> const& stack)
     {
-        assert(is_invariant(stack));
         assert(stack.size > 0);
         return stack.data[0];
     }
@@ -594,7 +590,6 @@ namespace jot
     template<class T> nodisc 
     State insert(Stack<T>* stack, isize at, no_infer(T) what)
     {
-        assert(is_invariant(*stack));
         assert(0 <= at && at <= stack->size);
 
         Slice<T> view = {&what, 1};
@@ -604,9 +599,8 @@ namespace jot
     template<class T> 
     T remove(Stack<T>* stack, isize at)
     {
-        assert(is_invariant(*stack));
         assert(0 <= at && at < stack->size);
-        assert(0 < stack->size);
+        assert(stack->size > 0);
 
         T removed = move(&stack->data[at]);
         splice(stack, at, 1);
@@ -617,7 +611,7 @@ namespace jot
     T unordered_remove(Stack<T>* stack, isize at)
     {
         assert(0 <= at && at < stack->size);
-        assert(0 < stack->size);
+        assert(stack->size > 0);
 
         swap(&stack->data[at], back(stack));
         return pop(stack);

@@ -3,7 +3,7 @@
 
 #include "time.h"
 #include "memory.h"
-#include "allocator_stack.h"
+#include "allocator_arena.h"
 #include "allocator_stack_ring.h"
 #include "allocator_ring.h"
 #include "format.h"
@@ -59,7 +59,7 @@ namespace jot
     {
         u8 stack_ring_storage[400];
         {
-            Stack_Ring stack_ring = Stack_Ring(Slice{stack_ring_storage, 400}, &memory_globals::FAILING_ALLOCATOR);
+            Stack_Ring_Allocator stack_ring = Stack_Ring_Allocator(Slice{stack_ring_storage, 400}, &memory_globals::FAILING_ALLOCATOR);
             Slice<u8> first = stack_ring.allocate(10, 8).items;
             Slice<u8> second = stack_ring.allocate(20, 256).items;
             Slice<u8> third = stack_ring.allocate(30, 8).items;
@@ -78,7 +78,7 @@ namespace jot
         }
 
         {
-            Stack_Ring stack_ring = Stack_Ring(Slice{stack_ring_storage, 256}, &memory_globals::FAILING_ALLOCATOR);
+            Stack_Ring_Allocator stack_ring = Stack_Ring_Allocator(Slice{stack_ring_storage, 256}, &memory_globals::FAILING_ALLOCATOR);
             Slice<u8> a1 = stack_ring.allocate(64, 8).items;
             Slice<u8> a2 = stack_ring.allocate(64, 8).items;
             Slice<u8> a3 = stack_ring.allocate(64, 8).items;
@@ -135,7 +135,7 @@ namespace jot
         Ring_Allocator  ring = Ring_Allocator(slice(&ring_storage), def);
         Intrusive_Stack_Scan stack_scan = Intrusive_Stack_Scan(slice(&ring_storage), def);
         Intrusive_Stack_Resize stack_resi = Intrusive_Stack_Resize(slice(&ring_storage), def);
-        Stack_Ring stack_ring = Stack_Ring(slice(&ring_storage), def);
+        Stack_Ring_Allocator stack_ring = Stack_Ring_Allocator(slice(&ring_storage), def);
         Intrusive_Stack_Simple stack_simp = Intrusive_Stack_Simple(slice(&ring_storage), def);
         Arena_Allocator unbound = Arena_Allocator(def);
 
@@ -321,7 +321,7 @@ namespace jot
             return cast(f64) result.time_ns / (result.iters * 1'000'000 * iters);
         };
 
-        force(sizeof(Stack_Ring) == sizeof(Intrusive_Stack_Scan));
+        force(sizeof(Stack_Ring_Allocator) == sizeof(Intrusive_Stack_Scan));
 
         const auto run_tests_on = [&](Allocator* tested_, f64 tested_res[4]){
             tested = tested_;
