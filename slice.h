@@ -79,7 +79,11 @@ namespace jot
         constexpr bool operator ==(Slice const&) const noexcept = default;
         constexpr bool operator !=(Slice const&) const noexcept = default;
 
+        #define DATA data
+        #define SIZE size
         #include "slice_op_text.h"
+        #undef DATA
+        #undef SIZE
     };
 
     Slice(const char*) -> Slice<const char>;
@@ -137,7 +141,7 @@ namespace jot
 
     template<typename T> nodisc constexpr 
     isize byte_size(Slice<T> slice) {
-        return slice.size * sizeof(T);
+        return slice.size * cast(isize) sizeof(T);
     }
 
     template<typename To, typename From = int> nodisc constexpr

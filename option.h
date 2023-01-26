@@ -69,7 +69,6 @@ namespace jot
     template <failable T> nodisc constexpr 
     bool operator!=(T const& left, Error_Type) noexcept { return failed(left) == false; }
 
-
     template <failable T> 
     void force(T const& value)
     {
@@ -82,6 +81,26 @@ namespace jot
     {
         if(failed(value) == false)
             throw value;
+    }
+    
+    //the forcing operator (cause I am lazy)
+    template <failable T> nodisc constexpr 
+    void operator<<(Ok_Type, T const& left) noexcept { force(left); }
+
+    inline
+    State acumulate(State prev, State new_state)
+    {
+        if(prev == OK)
+            return new_state;
+        else
+            return prev;
+    }
+    
+    inline
+    void acumulate(State* into, State new_state)
+    {
+        if(*into == OK)
+            *into = new_state;
     }
 }
 

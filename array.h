@@ -22,7 +22,9 @@ namespace jot
 
         constexpr bool operator==(const Array&) const noexcept = default;
         constexpr auto operator<=>(const Array&) const noexcept = default;
-
+        
+        #define DATA data
+        #define SIZE size
         #include "slice_op_text.h"
     };
 
@@ -35,8 +37,10 @@ namespace jot
 
         constexpr bool operator==(const Array&) const noexcept   {return true;};
         constexpr auto operator<=>(const Array&) const noexcept  {return 0;};
-
+        
         #include "slice_op_text.h"
+        #undef DATA
+        #undef SIZE
     };
 
     //deduction guide

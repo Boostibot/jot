@@ -161,21 +161,21 @@ namespace jot
     }
 
     template <typename Key, typename Value, typename Fns> nodisc
-    isize find_key(Hash_Table<Key, Value, Fns> const& hash, Key key)
+    isize find_entry(Hash_Table<Key, Value, Fns> const& hash, no_infer(Key) const& key)
     {
         assert(is_invariant(hash));
 
         if(hash.size == 0)
             return -1;
 
-        u64 result = Fns::hash(key);
-        u64 mask = cast(u64) hash.size - 2;
+        hash_t result = Fns::hash(key);
+        hash_t mask = cast(hash_t) hash.size - 2;
 
-        u64 index = result & mask;
+        hash_t index = result & mask;
         isize contention = 0;
 
         assert(hash.size >= 3 && "size must not be smaller than 3 (2 regular size)");
-        for(u64 i = index;; contention++)
+        for(hash_t i = index;; contention++)
         {
             assert(contention != hash.size && "the contention must not be 100%");
 
@@ -195,6 +195,33 @@ namespace jot
         return -1;
     }
     
+    template <typename Key, typename Value, typename Hash> nodisc
+    bool has(Hash_Table<Key, Value, Hash> const& table, no_infer(Key) const& key) noexcept
+    {
+        return find_entry(table, key) != -1;
+    }
+
+    template <typename Key, typename Value, typename Hash> nodisc
+    Value const& get(Hash_Table<Key, Value, Hash>const& table, no_infer(Key) const& key, no_infer(Value) const& if_not_found) noexcept
+    {
+        isize index = find_entry(table, key);
+        if(index == -1)
+            return if_not_found;
+
+        return values(table)[index];
+    }
+
+    template <typename Key, typename Value, typename Hash> nodisc
+    Value move_out(Hash_Table<Key, Value, Hash>* table, no_infer(Key) const& key, no_infer(Value) if_not_found) noexcept
+    {
+        isize index = find_entry(table, key);
+        if(index == -1)
+            return if_not_found;
+
+        return move(&values(table)[index]);
+    }
+
+
     template <typename Key, typename Value, typename Fns> nodisc
     Allocator_State_Type rehash(Hash_Table<Key, Value, Fns>* hash, isize min_size)
     {
@@ -233,7 +260,7 @@ namespace jot
             Fns::set_null_state(current);
         }
         
-        u64 new_mask = new_size - 2;
+        hash_t new_mask = cast(hash_t) new_size - 2;
         for(isize i = 1; i < hash->size; i++)
         {
             Key& key = hash->keys[i];
@@ -243,10 +270,10 @@ namespace jot
             
             Value* val = &hash->values[i + 1];
 
-            u64 hashed = Fns::hash(key);
-            u64 index = hashed & new_mask;
-            new_keys[index + 1] = move(&key);
-            new (&new_vals[index + 1]) Value(move(val));
+            hash_t hashed = Fns::hash(key);
+            hash_t index = hashed & new_mask;
+            new_keys[cast(isize) index + 1] = move(&key);
+            new (&new_vals[cast(isize) index + 1]) Value(move(val));
         }
 
         if(hash->null_state_used)
@@ -269,7 +296,7 @@ namespace jot
     }
 
     template <typename Key, typename Value, typename Fns> nodisc
-    Allocator_State_Type add_or_set(Hash_Table<Key, Value, Fns>* hash, no_infer(Key) key, no_infer(Value) value)
+    Allocator_State_Type set(Hash_Table<Key, Value, Fns>* hash, no_infer(Key) key, no_infer(Value) value)
     {
         assert(is_invariant(*hash));
         if(hash->used * HASH_SET_MAX_UTILIZATIO_DEN >= hash->size * HASH_SET_MAX_UTILIZATIO_NUM)
@@ -279,19 +306,19 @@ namespace jot
                 return state;
         }
 
-        u64 result = Fns::hash(key);
-        u64 mask = cast(u64) hash->size - 2;
+        hash_t result = Fns::hash(key);
+        hash_t mask = cast(hash_t) hash->size - 2;
 
-        u64 index = result & mask;
+        hash_t index = result & mask;
         isize contention = 0;
         isize found_i = 0;
         bool first_used = false;
         
-        for(u64 i = index;; contention++)
+        for(hash_t i = index;; contention++)
         {
             assert(contention != hash->size && "the contention must not be 100%");
 
-            isize curr_i = i + 1;
+            isize curr_i = cast(isize) i + 1;
             Key const& current = hash->keys[curr_i];
             if(Fns::is_null_state(current))
             {
@@ -347,7 +374,7 @@ namespace jot
 
         static uint64_t hash(Int_Key const& key)
         {
-            u64 convreted = cast(u64) key;
+            hash_t convreted = cast(hash_t) key;
             return uint64_hash(convreted);
         }
 
@@ -397,130 +424,6 @@ namespace jot
             return std::data(key) == nullptr;
         }
     };
-
-    namespace tests
-    {
-        isize tracking_objects_alive = 0;
-        struct Tracking
-        {
-            isize val = 0;
-            
-            Tracking() noexcept 
-                : val(0) { tracking_objects_alive++; };
-
-            Tracking(isize val) noexcept 
-                : val(val) { tracking_objects_alive++; }
-
-            Tracking(Tracking && other) noexcept 
-                : val(other.val) { tracking_objects_alive++; }
-
-            Tracking(Tracking const& other) noexcept = delete;
-            //Tracking(Tracking const& other) noexcept 
-                //: val(other.val) { tracking_objects_alive++; }
-
-            ~Tracking() noexcept 
-                { tracking_objects_alive--; }
-
-            Tracking& operator =(Tracking &&) noexcept = default;
-            Tracking& operator =(Tracking const&) noexcept = default;
-
-            bool operator ==(Tracking const& other) const noexcept { return val == other.val; };
-            bool operator !=(Tracking const& other) const noexcept { return val != other.val; };
-
-            static isize alive_count() noexcept { return tracking_objects_alive; }
-        };
-    
-        template <typename Key>
-        struct Test_Int_Hash_Functions
-        {
-            static uint64_t hash(Key const& key) {return cast(u64) key;}
-            static bool is_equal(Key const& a, Key const& b) {return a == b;}
-            static void set_null_state(Key* key) { *key = 0; }
-            static bool is_null_state(Key const& key) {return key == 0; }
-        };
-        
-        struct Test_Tracking_Hash_Functions
-        {
-            static uint64_t hash(Tracking const& key) {return cast(u64) key.val;}
-            static bool is_equal(Tracking const& a, Tracking const& b) {return a.val == b.val;}
-            static void set_null_state(Tracking* key) { key->val = 0; }
-            static bool is_null_state(Tracking const& key) {return key.val == 0; }
-        };
-        
-        template <typename Key, typename Value, typename Fns> nodisc
-        bool value_matches_at(Hash_Table<Key, Value, Fns> const& hash, no_infer(Key) key, no_infer(Value) value)
-        {
-            isize found = find_key(hash, move(&key));
-            if(found == -1)
-                return false;
-
-            Value const& val = values(hash)[found];
-            return val == value;
-        }
-
-        template <typename Key, typename Value, typename Fns> nodisc
-        bool empty_at(Hash_Table<Key, Value, Fns> const& hash, no_infer(Key) key)
-        {
-            return find_key(hash, move(&key)) == -1;
-        }
-        
-        template <typename Key, typename Value, typename Fns> 
-        void test_hash_type()
-        {
-            isize alive_before = Tracking::alive_count();
-            {
-                Hash_Table<Key, Value, Fns> hash;
-
-                force(empty_at(hash, 1));
-                force(empty_at(hash, 101));
-                force(empty_at(hash, 0));
-
-                force(add_or_set(&hash, 1, 10));
-                force(empty_at(hash, 1) == false);
-                force(value_matches_at(hash, 1, 10));
-                force(value_matches_at(hash, 1, 100) == false);
-            
-                force(empty_at(hash, 101));
-                force(empty_at(hash, 0));
-
-                force(empty_at(hash, 0));
-                force(empty_at(hash, 2));
-                force(empty_at(hash, 133));
-
-                force(add_or_set(&hash, 3, 30));
-                force(add_or_set(&hash, 2, 20));
-
-                force(value_matches_at(hash, 1, 10));
-                force(empty_at(hash, 442120));
-                force(value_matches_at(hash, 2, 20));
-                force(empty_at(hash, 654351));
-                force(value_matches_at(hash, 3, 30));
-                force(empty_at(hash, 5));
-
-                force(add_or_set(&hash, 15, 15));
-                force(add_or_set(&hash, 31, 15));
-        
-                force(add_or_set(&hash, 0, 100));
-                force(value_matches_at(hash, 0, 100));
-                force(add_or_set(&hash, 0, 1000));
-                force(value_matches_at(hash, 0, 1000));
-                force(value_matches_at(hash, 0, 100) == false);
-                force(empty_at(hash, 5));
-            }
-            
-            isize alive_after = Tracking::alive_count();
-            force(alive_before == alive_after);
-        }
-        
-        void test_hash()
-        {
-            test_hash_type<u64, i32,            Test_Int_Hash_Functions<u64>>();
-            test_hash_type<u32, u32,            Default_Hash_Functions<u32>>();
-            test_hash_type<u32, Tracking,       Default_Hash_Functions<u32>>();
-            test_hash_type<Tracking, u32,       Test_Tracking_Hash_Functions>();
-            test_hash_type<Tracking, Tracking,  Test_Tracking_Hash_Functions>();
-        }
-    }
 }
 
 #include "undefs.h"

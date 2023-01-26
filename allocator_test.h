@@ -97,6 +97,77 @@ namespace jot
         }
     }
 
+    #if 0
+    TESTSMALL SIZES NO TOUCH
+    ===========
+    iters: 10
+    size:  16 - 256
+    align: 1 - 32
+                    fifo                      lifo                    temp                    resize                  read
+    unbound:       9.681e-05:2.324e+01       9.892e-05:9.209e-01     1.094e-04:1.501e+00     1.094e-04:1.501e+00     1.324e-04:4.324e+01
+    stack resi:    1.221e-04:2.824e+00       1.135e-04:2.624e+01     1.337e-04:5.588e+02     1.337e-04:5.588e+02     1.643e-04:2.997e+01
+    stack scan:    1.151e-04:5.759e+00       1.084e-04:1.503e+02     1.242e-04:9.506e+01     1.242e-04:9.506e+01     1.541e-04:3.581e+01
+    stack ring:    1.248e-04:8.334e+01       1.234e-04:2.424e+01     1.387e-04:6.222e+01     1.387e-04:6.222e+01     1.657e-04:2.363e+01
+    stack simp:    1.091e-04:5.375e+01       1.034e-04:1.456e+02     1.197e-04:5.541e+01     1.197e-04:5.541e+01     1.491e-04:2.669e+01
+
+
+    iters: 80
+    size:  16 - 256
+    align: 1 - 32
+                    fifo                      lifo                    temp                    resize                  read
+    unbound:       7.196e-04:6.842e+01       7.022e-04:1.408e+02     7.385e-04:1.044e+03     7.385e-04:1.044e+03     7.373e-04:1.162e+02
+    stack resi:    1.061e-03:1.522e+02       9.263e-04:7.156e+01     1.014e-03:5.717e+02     1.014e-03:5.717e+02     1.096e-03:1.698e+02
+    stack scan:    9.931e-04:3.857e+01       8.736e-04:7.723e+01     9.463e-04:4.021e+02     9.463e-04:4.021e+02     1.030e-03:1.771e+02
+    stack ring:    1.081e-03:3.978e+02       9.700e-04:3.589e+01     1.059e-03:6.915e+01     1.059e-03:6.915e+01     1.108e-03:7.872e+00
+    stack simp:    9.369e-04:2.597e+00       8.395e-04:8.754e+01     9.049e-04:2.282e+02     9.049e-04:2.282e+02     9.728e-04:2.596e+02
+
+
+    iters: 640
+    size:  16 - 256
+    align: 1 - 32
+                    fifo                      lifo                    temp                    resize                  read
+    unbound:       5.558e-03:5.186e+02       5.479e-03:3.446e+02     5.597e-03:2.732e+02     5.597e-03:2.732e+02     5.469e-03:3.003e+01
+    stack resi:    9.534e-03:2.011e+01       7.584e-03:1.316e+02     8.174e-03:1.518e+04     8.174e-03:1.518e+04     9.385e-03:3.568e+01
+    stack scan:    8.980e-03:1.202e+02       7.128e-03:1.374e+03     7.510e-03:2.508e+03     7.510e-03:2.508e+03     8.836e-03:1.327e+01
+    stack ring:    9.367e-03:1.017e+03       7.918e-03:1.420e+02     8.400e-03:3.169e+02     8.400e-03:3.169e+02     9.274e-03:3.714e+02
+    stack simp:    8.374e-03:5.738e+02       6.789e-03:5.177e+02     7.139e-03:1.055e+03     7.139e-03:1.055e+03     8.229e-03:1.448e+03
+
+
+    SMALL SIZES
+    ===========
+    iters: 10
+    size:  16 - 256
+    align: 1 - 32
+                    fifo                      lifo                    temp                    resize                  read
+    unbound:       2.125e-04:3.163e+02       2.115e-04:1.642e+02     2.025e-04:2.708e+02     2.025e-04:2.708e+02     1.322e-04:3.423e+01
+    stack resi:    2.174e-04:3.694e+02       2.161e-04:7.032e+02     2.064e-04:1.681e+02     2.064e-04:1.681e+02     4.508e-04:5.552e+01
+    stack scan:    2.196e-04:2.539e+01       2.188e-04:1.886e+02     2.064e-04:2.369e+02     2.064e-04:2.369e+02     1.540e-04:8.702e+00
+    stack ring:    2.291e-04:2.450e+02       2.283e-04:2.014e+02     2.235e-04:2.359e+02     2.235e-04:2.359e+02     1.658e-04:2.280e+01
+    stack simp:    2.100e-04:3.990e+01       2.094e-04:4.956e+01     1.976e-04:1.019e+02     1.976e-04:1.019e+02     1.494e-04:2.632e+01
+
+
+    iters: 80
+    size:  16 - 256
+    align: 1 - 32
+                    fifo                      lifo                    temp                    resize                  read
+    unbound:       2.816e-03:1.970e+02       2.783e-03:3.293e+02     1.463e-03:1.280e+03     1.463e-03:1.280e+03     7.377e-04:1.318e+02
+    stack resi:    5.337e-03:2.739e+02       5.275e-03:6.591e+01     2.564e-03:2.567e+02     2.564e-03:2.567e+02     3.681e-03:4.340e+02
+    stack scan:    2.450e-03:2.195e+01       2.335e-03:2.061e+01     1.698e-03:6.166e+02     1.698e-03:6.166e+02     1.033e-03:5.377e+02
+    stack ring:    2.527e-03:1.391e+01       2.427e-03:3.929e+02     1.841e-03:1.826e+02     1.841e-03:1.826e+02     1.107e-03:1.097e+02
+    stack simp:    2.367e-03:3.425e+02       2.264e-03:1.968e+02     1.623e-03:4.691e+01     1.623e-03:4.691e+01     9.700e-04:4.764e+02
+
+
+    iters: 640
+    size:  16 - 256
+    align: 1 - 32
+                    fifo                      lifo                    temp                    resize                  read
+    unbound:       2.312e-02:5.289e+00       2.299e-02:1.431e+02     1.124e-02:1.620e+02     1.124e-02:1.620e+02     5.461e-03:1.486e+02
+    stack resi:    7.738e-02:4.763e+05       7.533e-02:2.234e+03     2.623e-02:1.356e+03     2.623e-02:1.356e+03     5.295e-02:3.546e+03
+    stack scan:    2.057e-02:2.929e+02       1.887e-02:2.956e+02     1.349e-02:1.312e+03     1.349e-02:1.312e+03     8.677e-03:1.955e+02
+    stack ring:    2.096e-02:7.766e+01       1.966e-02:1.972e+02     1.451e-02:1.267e+03     1.451e-02:1.267e+03     9.165e-03:1.192e+02
+    stack simp:    2.016e-02:8.292e+02       1.851e-02:3.521e+01     1.279e-02:5.833e+02     1.279e-02:5.833e+02     8.284e-03:1.053e+02
+    #endif
+
     void test_allocators()
     {
         test_align();
@@ -171,7 +242,7 @@ namespace jot
             IRange size_log2,
             IRange align_log2,
             bool touch_,
-            isize max_time_ = 500,
+            isize max_time_ = 1000,
             isize warm_up_ = 100)
         {
             resize_size_tables(block_size_);
@@ -316,20 +387,28 @@ namespace jot
 
             unbound.reset();
         };
-        
-        const auto ms_per_iter = [&](Bench_Result result, isize iters) {
-            return cast(f64) result.time_ns / cast(f64) (result.iters * 1'000'000 * iters);
+
+        const auto format_benchmark_result = [](Bench_Result result){
+            String_Builder builder;
+            String_Appender appender = {&builder};
+            force(format_float_into(&appender, result.mean_ms, std::chars_format::scientific, 3));
+            force(format_into(&appender, ":"));
+            force(format_float_into(&appender, result.deviation_ms, std::chars_format::scientific, 3));
+
+            return builder;
         };
 
-        force(sizeof(Stack_Ring_Allocator) == sizeof(Intrusive_Stack_Scan));
-
-        const auto run_tests_on = [&](Allocator* tested_, f64 tested_res[4]){
+        const auto run_and_print_tests = [&](cstring text, Allocator* tested_){
             tested = tested_;
-            tested_res[0] = ms_per_iter(benchmark(max_time, test_allocs_fifo), block_size);
-            tested_res[1] = ms_per_iter(benchmark(max_time, test_allocs_lifo), block_size);
-            tested_res[2] = ms_per_iter(benchmark(max_time, test_allocs_temp), block_size);
-            tested_res[3] = ms_per_iter(benchmark(max_time, test_allocs_resi), block_size);
-            tested_res[4] = ms_per_iter(benchmark(max_time, test_allocs_read), block_size);
+
+            String_Builder res[5];
+            res[0] = format_benchmark_result(benchmark(max_time, test_allocs_fifo, block_size));
+            res[1] = format_benchmark_result(benchmark(max_time, test_allocs_lifo, block_size));
+            res[2] = format_benchmark_result(benchmark(max_time, test_allocs_temp, block_size));
+            res[3] = format_benchmark_result(benchmark(max_time, test_allocs_resi, block_size));
+            res[4] = format_benchmark_result(benchmark(max_time, test_allocs_read, block_size));
+
+            println("{} {}\t {}\t {}\t {}\t {}\t", text, res[0], res[1], res[2], res[2], res[4]);
         };
 
         const auto print_benchmark_for_block = [&](isize block_size_, IRange size_log2, IRange align_log2, bool touch = true){
@@ -337,31 +416,15 @@ namespace jot
             println("iters: {}", block_size);
             println("size:  {} - {}", 1ll << size_log2.from, 1ll << size_log2.to);
             println("align: {} - {}", 1ll << align_log2.from, 1ll << align_log2.to);
-
-            f64 new_del_res[5] = {0};
-            f64 unbound_res[5] = {0};
-            f64 ring_res[5] = {0};
-            f64 stack_simp_res[5] = {0};
-            f64 stack_scan_res[5] = {0};
-            f64 stack_resi_res[5] = {0};
-            f64 stack_ring_res[5] = {0};
-
-            //run_tests_on(&memory_globals::NEW_DELETE_ALLOCATOR, new_del_res);
-            run_tests_on(&unbound, unbound_res);
-            //run_tests_on(&ring, ring_res);
-            //run_tests_on(&stack_resi, stack_resi_res);
-            //run_tests_on(&stack_scan, stack_scan_res);
-            run_tests_on(&stack_ring, stack_ring_res);
-            run_tests_on(&stack_simp, stack_simp_res);
-
+            
             println("               fifo                 \t lifo              \t temp                 \t resize                \t read");
-            println("new delete:    {}\t {}\t {}\t {}\t {}\t", new_del_res[0], new_del_res[1], new_del_res[2], new_del_res[2], new_del_res[4]);
-            println("unbound:       {}\t {}\t {}\t {}\t {}\t", unbound_res[0], unbound_res[1], unbound_res[2], unbound_res[3], unbound_res[4]);
-            println("ring:          {}\t {}\t {}\t {}\t {}\t", ring_res[0], ring_res[1], ring_res[2], ring_res[3], ring_res[4]);
-            println("stack resi:    {}\t {}\t {}\t {}\t {}\t", stack_resi_res[0], stack_resi_res[1], stack_resi_res[2], stack_resi_res[3], stack_resi_res[4]);
-            println("stack scan:    {}\t {}\t {}\t {}\t {}\t", stack_scan_res[0], stack_scan_res[1], stack_scan_res[2], stack_scan_res[3], stack_scan_res[4]);
-            println("stack ring:    {}\t {}\t {}\t {}\t {}\t", stack_ring_res[0], stack_ring_res[1], stack_ring_res[2], stack_ring_res[3], stack_ring_res[4]);
-            println("stack simp:    {}\t {}\t {}\t {}\t {}\t", stack_simp_res[0], stack_simp_res[1], stack_simp_res[2], stack_simp_res[3], stack_simp_res[4]);
+            run_and_print_tests("new delete:   ", &memory_globals::NEW_DELETE_ALLOCATOR);
+            run_and_print_tests("unbound:      ", &unbound);
+            run_and_print_tests("ring:         ", &ring);
+            run_and_print_tests("stack resi:   ", &stack_resi);
+            run_and_print_tests("stack scan:   ", &stack_scan);
+            run_and_print_tests("stack ring:   ", &stack_ring);
+            run_and_print_tests("stack simp:   ", &stack_simp);
             println("\n");
         };
 
@@ -374,11 +437,11 @@ namespace jot
         test_allocs_fifo();
         test_allocs_resi();
 
-        println("SMALL SIZES NO TOUCH");
-        println("===========");
-        print_benchmark_for_block(10, {4, 8}, {0, 5}, false);
-        print_benchmark_for_block(80, {4, 8}, {0, 5}, false);
-        print_benchmark_for_block(640, {4, 8}, {0, 5}, false);
+        //println("SMALL SIZES NO TOUCH");
+        //println("===========");
+        //print_benchmark_for_block(10, {4, 8}, {0, 5}, false);
+        //print_benchmark_for_block(80, {4, 8}, {0, 5}, false);
+        //print_benchmark_for_block(640, {4, 8}, {0, 5}, false);
         
         println("SMALL SIZES");
         println("===========");

@@ -21,6 +21,24 @@ namespace jot
     template<class T>
     struct Is_Same<T, T> : Const<true, bool> {};
 
+    template<bool cond, class If_True, class If_False>
+    struct Conditional_
+    {
+        using type = If_False;
+    };
+
+    template<class If_True, class If_False>
+    struct Conditional_<true, If_True, If_False>
+    {
+        using type = If_True;
+    };
+
+    template<bool cond, class If_True, class If_False>
+    using Conditional = typename Conditional_<cond, If_True, If_False>::type;
+
+    template<bool cond, class Error>
+    using Enable_If = Conditional<cond, True, Error>;
+
     template <class T, class... Ts>
     concept same = (Is_Same<T, Ts>::value && ...); 
 

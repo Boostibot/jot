@@ -5,8 +5,10 @@
 namespace jot
 {
     #ifndef JOT_SIZE_T
-        using isize = ptrdiff_t;
+        typedef ptrdiff_t isize;
     #endif
+
+    typedef uint64_t hash_t;
 
     uint64_t uint64_hash(uint64_t value) 
     {

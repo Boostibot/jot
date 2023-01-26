@@ -19,36 +19,37 @@ using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 [[nodiscard]] constexpr 
 iterator begin() noexcept 
 {
-    return this->data;
+    return this->DATA;
 }
 
 [[nodiscard]] constexpr 
 const_iterator begin() const noexcept 
 {
-    return this->data;
+    return this->DATA;
 }
 
 [[nodiscard]] constexpr 
 iterator end() noexcept 
 {
-    return this->data + this->size;
+    return this->DATA + this->SIZE;
 }
 
 [[nodiscard]] constexpr 
 const_iterator end() const noexcept
 {
-    return this->data + this->size;
+    return this->DATA + this->SIZE;
 }
 
+//for isize
 [[nodiscard]] constexpr  
 T const& operator[](isize index) const noexcept  
 { 
-    assert(0 <= index && index < this->size && "index out of range"); 
-    return this->data[index]; 
+    assert(0 <= index && index < this->SIZE && "index out of range"); 
+    return this->DATA[index]; 
 }
 [[nodiscard]] constexpr  
 T& operator[](isize index) noexcept 
 { 
-    assert(0 <= index && index < this->size && "index out of range"); 
-    return this->data[index]; 
+    assert(0 <= index && index < this->SIZE && "index out of range"); 
+    return this->DATA[index]; 
 }

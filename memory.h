@@ -113,7 +113,7 @@ namespace jot
         }
 
         virtual
-        ~Allocator() noexcept = 0;
+        ~Allocator() noexcept {}
     };
 
     //Fails on every allocation/deallocation
