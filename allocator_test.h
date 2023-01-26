@@ -6,6 +6,7 @@
 #include "allocator_arena.h"
 #include "allocator_stack_ring.h"
 #include "allocator_ring.h"
+#include "types.h"
 #include "format.h"
 
 #define cast(...) (__VA_ARGS__)
@@ -242,7 +243,7 @@ namespace jot
             IRange size_log2,
             IRange align_log2,
             bool touch_,
-            isize max_time_ = 1000,
+            isize max_time_ = 250,
             isize warm_up_ = 100)
         {
             resize_size_tables(block_size_);
@@ -391,11 +392,16 @@ namespace jot
         const auto format_benchmark_result = [](Bench_Result result){
             String_Builder builder;
             String_Appender appender = {&builder};
-            force(format_float_into(&appender, result.mean_ms, std::chars_format::scientific, 3));
-            force(format_into(&appender, ":"));
-            force(format_float_into(&appender, result.deviation_ms, std::chars_format::scientific, 3));
+            force(format_float_into(&appender, result.mean_ms));
+            force(format_into(&appender, " : "));
+            force(format_float_into(&appender, result.deviation_ms));
 
             return builder;
+        };
+
+        
+        const auto print_benchmark = [&](Bench_Result result){
+            println(format_benchmark_result(result));
         };
 
         const auto run_and_print_tests = [&](cstring text, Allocator* tested_){
@@ -427,15 +433,36 @@ namespace jot
             run_and_print_tests("stack simp:   ", &stack_simp);
             println("\n");
         };
+        
+        tested = &unbound;
 
+        println("\nclock accuarcy: {}", time_consts::CLOCK_ACCURACY / cast(double) time_consts::MILISECOND_NANOSECONDS);
+        println("\nnoop");
+        print_benchmark(benchmark(1000, []{}));
 
-        set_up_test(80, {4, 8}, {0, 5}, false);
-        tested = &stack_ring;
-        test_allocs_fifo();
-        test_allocs_resi();
-        set_up_test(160, {4, 8}, {0, 5}, false);
-        test_allocs_fifo();
-        test_allocs_resi();
+        println("\nunbound");
+        set_up_test(1000, {4, 8}, {0, 5}, false);
+        print_benchmark(benchmark(1000, test_allocs_fifo));
+        set_up_test(100, {4, 8}, {0, 5}, false);
+        print_benchmark(benchmark(1000, test_allocs_fifo));
+        set_up_test(10, {4, 8}, {0, 5}, false);
+        print_benchmark(benchmark(1000, test_allocs_fifo));
+        set_up_test(1, {4, 8}, {0, 5}, false);
+        print_benchmark(benchmark(1000, test_allocs_fifo));
+
+        tested = &memory_globals::NEW_DELETE_ALLOCATOR;
+        
+        println("\nnew delete");
+        set_up_test(1000, {4, 8}, {0, 5}, false);
+        print_benchmark(benchmark(1000, test_allocs_fifo));
+        set_up_test(100, {4, 8}, {0, 5}, false);
+        print_benchmark(benchmark(1000, test_allocs_fifo));
+        set_up_test(10, {4, 8}, {0, 5}, false);
+        print_benchmark(benchmark(1000, test_allocs_fifo));
+        set_up_test(1, {4, 8}, {0, 5}, false);
+        print_benchmark(benchmark(1000, test_allocs_fifo));
+
+        return;
 
         //println("SMALL SIZES NO TOUCH");
         //println("===========");

@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <charconv>
 
+#include "array.h"
+#include "traits.h"
 #include "string.h"
 #include "defines.h"
 

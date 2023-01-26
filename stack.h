@@ -11,7 +11,7 @@
 namespace jot
 {
     namespace stdr = std::ranges;
-    namespace stdv = std::views; 
+    //namespace stdv = std::views; 
 
     template <typename T>
     struct Stack
