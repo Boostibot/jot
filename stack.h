@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ranges>
-
 #include "utils.h"
 #include "types.h"
 #include "slice.h"
@@ -10,9 +8,6 @@
 
 namespace jot
 {
-    namespace stdr = std::ranges;
-    //namespace stdv = std::views; 
-
     template <typename T>
     struct Stack
     {   
@@ -111,10 +106,10 @@ namespace jot
     }
 
     template <typename T>
-    concept memcpyable = std::is_scalar_v<T> || std::is_trivially_copy_constructible_v<T>;
+    static constexpr bool memcpyable = std::is_scalar_v<T> || std::is_trivially_copy_constructible_v<T>;
     
     template <typename T>
-    concept memsetable = std::is_scalar_v<T>;
+    static constexpr bool memsetable = std::is_scalar_v<T>;
 
     template<class T>
     struct Set_Capacity_Result
@@ -132,7 +127,7 @@ namespace jot
         {
             result.state = Allocator_State::OK;
             result.items = Slice<T>();
-            result.adress_changed = true;
+            result.adress_changed = false;
             return result;
         }
 
@@ -200,6 +195,19 @@ namespace jot
             allocator->deallocate(cast_slice<u8>(*old_slice), align);
     }
         
+    template<class T>
+    Allocator_State_Type destroy_and_deallocate(Allocator* allocator, Slice<T>* old_slice, isize filled_to, isize align) noexcept
+    {
+        if constexpr(std::is_trivially_destructible_v<T> == false)
+            for(isize i = 0; i < filled_to; i++)
+                (*old_slice)[i].~T();
+
+        if(old_slice->data != nullptr)
+            return allocator->deallocate(cast_slice<u8>(*old_slice), align);
+
+        return Allocator_State::OK;
+    }
+
     // Can be used for arbitrary growing/shrinking of data
     // When old_slice is null only allocates the data
     // When new_capacity is 0 only deallocates the data
@@ -263,7 +271,7 @@ namespace jot
 
         //destroy extra
         stack_internal::destroy_items(to, from.size, to->size);
-        if(has_bit_by_bit_assign<T> && is_const_eval() == false)
+        if(has_bit_by_bit_assign<T> == false)
         {
             //construct missing
             if(to->size < from.size)
@@ -301,7 +309,9 @@ namespace jot
     template<typename T>
     Stack<T>::~Stack() noexcept 
     {
-        cast(void) stack_internal::set_capacity(this, cast(isize) 0);
+        Slice<T> old_slice = {_data, _capacity};
+        destroy_and_deallocate(_allocator, &old_slice, _size, DEF_ALIGNMENT<T>);
+        //cast(void) stack_internal::set_capacity(this, cast(isize) 0);
     }
     
     template<class T> 
@@ -364,10 +374,9 @@ namespace jot
         return stack._size == 0;
     }
 
-    template <class T, stdr::forward_range Inserted> nodisc
+    template <class T, class Inserted> nodisc
     State splice(Stack<T>* stack, isize at, isize replace_size, Inserted && inserted)
     {       
-        static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
         State state = OK_STATE;
 
         Slice<T> items = slice(stack); //for bounds checks
@@ -376,7 +385,7 @@ namespace jot
         constexpr bool do_move_construct = std::is_rvalue_reference_v<decltype(inserted)>;
         constexpr bool do_copy_construct = std::is_trivially_copy_constructible_v<T>;
 
-        const isize inserted_size = cast(isize) stdr::size(inserted);
+        const isize inserted_size = cast(isize) std::size(inserted);
         const isize insert_to = at + inserted_size;
         const isize replace_to = at + replace_size;
         const isize remaining = items.size - replace_to;
@@ -432,7 +441,7 @@ namespace jot
         stack->_size = final_size;
 
         //insert the added elems into constructed slots
-        auto it = stdr::begin(inserted);
+        auto it = std::begin(inserted);
         const isize move_assign_to = at + move_inserted_size;
         for (isize i = at; i < move_assign_to; i++, ++it)
         {
@@ -460,15 +469,13 @@ namespace jot
         return state;
     }
 
-    template <class T, stdr::forward_range Removed, stdr::forward_range Inserted> nodisc
+    template <class T, class Removed, class Inserted> nodisc
     State splice(Stack<T>* stack, isize at, Removed* removed, Inserted && inserted)
     {       
-        static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
-        static_assert(std::convertible_to<stdr::range_value_t<Removed>, T>, "the types must be comaptible");
         Stack<T>& stack_ref = *stack; //for bounds checks
 
-        auto it = stdr::begin(*removed);
-        const auto end = stdr::end(*removed);
+        auto it = std::begin(*removed);
+        const auto end = std::end(*removed);
         isize i = at;
         for (; it != end; i++, ++it)
             *it = move(&stack_ref[i]);
@@ -514,10 +521,9 @@ namespace jot
         return ret;
     }
 
-    template <class T, stdr::forward_range Inserted> nodisc
+    template <class T, class Inserted> nodisc
     State push_multiple(Stack<T>* stack, Inserted && inserted)
     {
-        static_assert(std::convertible_to<stdr::range_value_t<Inserted>, T>, "the types must be comaptible");
         return splice(stack, stack->_size, 0, std::forward<Inserted>(inserted));
     }
 
@@ -566,7 +572,7 @@ namespace jot
         if(ret_state == ERROR)
             return ret_state;
 
-        if(memsetable<T> && is_zero && is_const_eval() == false)
+        if(memsetable<T> && is_zero == false)
         {
             if(stack->_size < to)
                 memset(stack->_data + stack->_size, 0, (to - stack->_size)*sizeof(T));
@@ -705,7 +711,7 @@ namespace jot
         return slice(slice(appender->_stack), appender->_from_index);
     }
 
-    template <class T, stdr::forward_range Inserted> nodisc
+    template <class T, class Inserted> nodisc
     State push_multiple(Stack_Appender<T>* appender, Inserted && inserted)
     {
         return push_multiple(appender->_stack, cast(Inserted&&) inserted);

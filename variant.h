@@ -9,7 +9,7 @@
 namespace jot
 {
     template<typename T>
-    concept variant_compatible = 
+    static constexpr bool variant_compatible = 
         regular_type<T> &&
         std::is_trivially_copyable_v<T> && 
         std::is_trivially_destructible_v<T>;

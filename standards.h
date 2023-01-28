@@ -20,11 +20,13 @@ namespace jot
         OPEN_ENUM_DECLARE_DERIVED(Name, ::jot::State_Holder); \
         static constexpr Type OK = nullptr;                   \
 
+    struct No_Default {};
+
     template <typename T, typename Enable = True>
     struct Assignable
     {
         nodisc static constexpr
-        State perform(T* to, T const& from) noexcept
+        State assign(T* to, T const& from) noexcept
         {
             static_assert(std::is_nothrow_copy_assignable_v<T>, "must be nothrow copyable! If not provide a custom overload of this function");
             *to = from;
@@ -36,8 +38,8 @@ namespace jot
     template <typename T, typename Enable = True>
     struct Swappable
     {
-        static constexpr void 
-        perform(T* left, T* right) noexcept
+        static constexpr 
+        void swap(T* left, T* right) noexcept
         {
             T temp = move(left);
             *left = move(right);
@@ -45,16 +47,13 @@ namespace jot
         };
     };
 
-    struct No_Default {};
     template <typename T, typename Enable = True>
     struct Failable : No_Default
     {
-        #if 0
         nodisc static constexpr
-        bool perform(T const& flag) noexcept {
+        bool failed(T const& flag) noexcept {
             return false;
         }
-        #endif
     };
 
     template<typename T>
@@ -63,19 +62,19 @@ namespace jot
     template <typename T> nodisc constexpr 
     State assign(T* to, T const& from) noexcept 
     {
-        return Assignable<T>::perform(to, from);
+        return Assignable<T>::assign(to, from);
     }
 
     template <typename T> constexpr 
     void swap(T* left, T* right) noexcept 
     {
-        return Swappable<T>::perform(left, right);
+        return Swappable<T>::swap(left, right);
     }
 
     template <failable T> nodisc constexpr 
     bool failed(T const& flag) noexcept 
     {
-        return Failable<T>::perform(flag);
+        return Failable<T>::failed(flag);
     }
 
     template<typename T> nodisc constexpr 

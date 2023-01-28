@@ -1,18 +1,16 @@
 #pragma once
 #include <random>
 
-#include "time.h"
 #include "memory.h"
 #include "allocator_arena.h"
 #include "allocator_stack_ring.h"
 #include "allocator_ring.h"
-#include "types.h"
-#include "format.h"
+#include "stack.h"
+#include "_test.h"
+#include "defines.h"
 
-#define cast(...) (__VA_ARGS__)
-#define nodisc [[nodiscard]]
 
-namespace jot
+namespace jot::tests::allocator
 {
     template<typename T>
     struct Range 
@@ -22,26 +20,6 @@ namespace jot
     };
 
     using IRange = Range<isize>;
-
-    nodisc constexpr 
-    bool is_invarinat(IRange range) {
-        return range.from <= range.to;
-    }
-
-    nodisc constexpr 
-    bool in_range(IRange range, isize index) {
-        return (range.from <= index && index < range.to);
-    }
-
-    nodisc constexpr 
-    bool in_inclusive_range(IRange range, isize index) {
-        return (range.from <= index && index <= range.to);
-    }
-
-    nodisc constexpr 
-    IRange sized_range(isize from, isize size) {
-        return IRange{from, from + size};
-    }
 
     void test_align()
     {
@@ -97,77 +75,6 @@ namespace jot
             force(stack_ring.deallocate(a5, 8));
         }
     }
-
-    #if 0
-    TESTSMALL SIZES NO TOUCH
-    ===========
-    iters: 10
-    size:  16 - 256
-    align: 1 - 32
-                    fifo                      lifo                    temp                    resize                  read
-    unbound:       9.681e-05:2.324e+01       9.892e-05:9.209e-01     1.094e-04:1.501e+00     1.094e-04:1.501e+00     1.324e-04:4.324e+01
-    stack resi:    1.221e-04:2.824e+00       1.135e-04:2.624e+01     1.337e-04:5.588e+02     1.337e-04:5.588e+02     1.643e-04:2.997e+01
-    stack scan:    1.151e-04:5.759e+00       1.084e-04:1.503e+02     1.242e-04:9.506e+01     1.242e-04:9.506e+01     1.541e-04:3.581e+01
-    stack ring:    1.248e-04:8.334e+01       1.234e-04:2.424e+01     1.387e-04:6.222e+01     1.387e-04:6.222e+01     1.657e-04:2.363e+01
-    stack simp:    1.091e-04:5.375e+01       1.034e-04:1.456e+02     1.197e-04:5.541e+01     1.197e-04:5.541e+01     1.491e-04:2.669e+01
-
-
-    iters: 80
-    size:  16 - 256
-    align: 1 - 32
-                    fifo                      lifo                    temp                    resize                  read
-    unbound:       7.196e-04:6.842e+01       7.022e-04:1.408e+02     7.385e-04:1.044e+03     7.385e-04:1.044e+03     7.373e-04:1.162e+02
-    stack resi:    1.061e-03:1.522e+02       9.263e-04:7.156e+01     1.014e-03:5.717e+02     1.014e-03:5.717e+02     1.096e-03:1.698e+02
-    stack scan:    9.931e-04:3.857e+01       8.736e-04:7.723e+01     9.463e-04:4.021e+02     9.463e-04:4.021e+02     1.030e-03:1.771e+02
-    stack ring:    1.081e-03:3.978e+02       9.700e-04:3.589e+01     1.059e-03:6.915e+01     1.059e-03:6.915e+01     1.108e-03:7.872e+00
-    stack simp:    9.369e-04:2.597e+00       8.395e-04:8.754e+01     9.049e-04:2.282e+02     9.049e-04:2.282e+02     9.728e-04:2.596e+02
-
-
-    iters: 640
-    size:  16 - 256
-    align: 1 - 32
-                    fifo                      lifo                    temp                    resize                  read
-    unbound:       5.558e-03:5.186e+02       5.479e-03:3.446e+02     5.597e-03:2.732e+02     5.597e-03:2.732e+02     5.469e-03:3.003e+01
-    stack resi:    9.534e-03:2.011e+01       7.584e-03:1.316e+02     8.174e-03:1.518e+04     8.174e-03:1.518e+04     9.385e-03:3.568e+01
-    stack scan:    8.980e-03:1.202e+02       7.128e-03:1.374e+03     7.510e-03:2.508e+03     7.510e-03:2.508e+03     8.836e-03:1.327e+01
-    stack ring:    9.367e-03:1.017e+03       7.918e-03:1.420e+02     8.400e-03:3.169e+02     8.400e-03:3.169e+02     9.274e-03:3.714e+02
-    stack simp:    8.374e-03:5.738e+02       6.789e-03:5.177e+02     7.139e-03:1.055e+03     7.139e-03:1.055e+03     8.229e-03:1.448e+03
-
-
-    SMALL SIZES
-    ===========
-    iters: 10
-    size:  16 - 256
-    align: 1 - 32
-                    fifo                      lifo                    temp                    resize                  read
-    unbound:       2.125e-04:3.163e+02       2.115e-04:1.642e+02     2.025e-04:2.708e+02     2.025e-04:2.708e+02     1.322e-04:3.423e+01
-    stack resi:    2.174e-04:3.694e+02       2.161e-04:7.032e+02     2.064e-04:1.681e+02     2.064e-04:1.681e+02     4.508e-04:5.552e+01
-    stack scan:    2.196e-04:2.539e+01       2.188e-04:1.886e+02     2.064e-04:2.369e+02     2.064e-04:2.369e+02     1.540e-04:8.702e+00
-    stack ring:    2.291e-04:2.450e+02       2.283e-04:2.014e+02     2.235e-04:2.359e+02     2.235e-04:2.359e+02     1.658e-04:2.280e+01
-    stack simp:    2.100e-04:3.990e+01       2.094e-04:4.956e+01     1.976e-04:1.019e+02     1.976e-04:1.019e+02     1.494e-04:2.632e+01
-
-
-    iters: 80
-    size:  16 - 256
-    align: 1 - 32
-                    fifo                      lifo                    temp                    resize                  read
-    unbound:       2.816e-03:1.970e+02       2.783e-03:3.293e+02     1.463e-03:1.280e+03     1.463e-03:1.280e+03     7.377e-04:1.318e+02
-    stack resi:    5.337e-03:2.739e+02       5.275e-03:6.591e+01     2.564e-03:2.567e+02     2.564e-03:2.567e+02     3.681e-03:4.340e+02
-    stack scan:    2.450e-03:2.195e+01       2.335e-03:2.061e+01     1.698e-03:6.166e+02     1.698e-03:6.166e+02     1.033e-03:5.377e+02
-    stack ring:    2.527e-03:1.391e+01       2.427e-03:3.929e+02     1.841e-03:1.826e+02     1.841e-03:1.826e+02     1.107e-03:1.097e+02
-    stack simp:    2.367e-03:3.425e+02       2.264e-03:1.968e+02     1.623e-03:4.691e+01     1.623e-03:4.691e+01     9.700e-04:4.764e+02
-
-
-    iters: 640
-    size:  16 - 256
-    align: 1 - 32
-                    fifo                      lifo                    temp                    resize                  read
-    unbound:       2.312e-02:5.289e+00       2.299e-02:1.431e+02     1.124e-02:1.620e+02     1.124e-02:1.620e+02     5.461e-03:1.486e+02
-    stack resi:    7.738e-02:4.763e+05       7.533e-02:2.234e+03     2.623e-02:1.356e+03     2.623e-02:1.356e+03     5.295e-02:3.546e+03
-    stack scan:    2.057e-02:2.929e+02       1.887e-02:2.956e+02     1.349e-02:1.312e+03     1.349e-02:1.312e+03     8.677e-03:1.955e+02
-    stack ring:    2.096e-02:7.766e+01       1.966e-02:1.972e+02     1.451e-02:1.267e+03     1.451e-02:1.267e+03     9.165e-03:1.192e+02
-    stack simp:    2.016e-02:8.292e+02       1.851e-02:3.521e+01     1.279e-02:5.833e+02     1.279e-02:5.833e+02     8.284e-03:1.053e+02
-    #endif
 
     void test_allocators()
     {
@@ -300,7 +207,6 @@ namespace jot
             for(isize i = 0; i < block_size; i++)
             {
                 Allocation_Result result = tested->allocate(size_table[i], align_table[i]);
-                do_no_optimize(result);
                 force(result.state);
                 fill_slice(result.items);
                 force(tested->deallocate(result.items, align_table[i]));
@@ -389,6 +295,7 @@ namespace jot
             unbound.reset();
         };
 
+        #if 0
         const auto format_benchmark_result = [](Bench_Result result){
             String_Builder builder;
             String_Appender appender = {&builder};
@@ -433,36 +340,7 @@ namespace jot
             run_and_print_tests("stack simp:   ", &stack_simp);
             println("\n");
         };
-        
         tested = &unbound;
-
-        println("\nclock accuarcy: {}", time_consts::CLOCK_ACCURACY / cast(double) time_consts::MILISECOND_NANOSECONDS);
-        println("\nnoop");
-        print_benchmark(benchmark(1000, []{}));
-
-        println("\nunbound");
-        set_up_test(1000, {4, 8}, {0, 5}, false);
-        print_benchmark(benchmark(1000, test_allocs_fifo));
-        set_up_test(100, {4, 8}, {0, 5}, false);
-        print_benchmark(benchmark(1000, test_allocs_fifo));
-        set_up_test(10, {4, 8}, {0, 5}, false);
-        print_benchmark(benchmark(1000, test_allocs_fifo));
-        set_up_test(1, {4, 8}, {0, 5}, false);
-        print_benchmark(benchmark(1000, test_allocs_fifo));
-
-        tested = &memory_globals::NEW_DELETE_ALLOCATOR;
-        
-        println("\nnew delete");
-        set_up_test(1000, {4, 8}, {0, 5}, false);
-        print_benchmark(benchmark(1000, test_allocs_fifo));
-        set_up_test(100, {4, 8}, {0, 5}, false);
-        print_benchmark(benchmark(1000, test_allocs_fifo));
-        set_up_test(10, {4, 8}, {0, 5}, false);
-        print_benchmark(benchmark(1000, test_allocs_fifo));
-        set_up_test(1, {4, 8}, {0, 5}, false);
-        print_benchmark(benchmark(1000, test_allocs_fifo));
-
-        return;
 
         //println("SMALL SIZES NO TOUCH");
         //println("===========");
@@ -481,6 +359,7 @@ namespace jot
         print_benchmark_for_block(10, {8, 16}, {0, 5});
         print_benchmark_for_block(80, {8, 16}, {0, 5});
         print_benchmark_for_block(640, {8, 16}, {0, 5});
+        #endif
     }
 
 }

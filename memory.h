@@ -1,6 +1,5 @@
 #pragma once
 
-#include <memory>
 #include "open_enum.h"
 #include "option.h"
 #include "utils.h"
@@ -47,7 +46,7 @@ namespace jot
     struct Failable<Allocator_State_Type>
     {
         nodisc static constexpr 
-        bool perform(Allocator_State_Type state) noexcept 
+        bool failed(Allocator_State_Type state) noexcept 
         {
             return state != Allocator_State::OK;
         }
@@ -57,7 +56,7 @@ namespace jot
     struct Failable<Allocation_Result>
     {
         nodisc static constexpr 
-        bool perform(Allocation_Result result) noexcept 
+        bool failed(Allocation_Result result) noexcept 
         {
             return result.state != Allocator_State::OK;
         }

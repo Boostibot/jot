@@ -396,6 +396,7 @@ namespace jot
 
     struct Not_Direct_Container {};
 
+    #if 0
     //can be used for Slice, String, String_Builder and others
     template <typename Container>
     struct Default_Hash_Functions<Container, std::conditional_t<direct_container<Container>, True, Not_Direct_Container>>
@@ -424,6 +425,7 @@ namespace jot
             return std::data(key) == nullptr;
         }
     };
+    #endif
 }
 
 #include "undefs.h"

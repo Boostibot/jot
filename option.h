@@ -19,7 +19,7 @@ namespace jot
     struct Failable<State>
     {
         nodisc static constexpr 
-        bool perform(State state) 
+        bool failed(State state) 
         {
             return state != OK_STATE;
         }
@@ -29,7 +29,7 @@ namespace jot
     struct Failable<bool>
     {
         nodisc static constexpr 
-        bool perform(bool state) 
+        bool failed(bool state) 
         {
             return state == false;
         }
@@ -45,7 +45,7 @@ namespace jot
     struct Failable<Nullable<T>>
     {
         nodisc static constexpr 
-        bool perform(Nullable<T> ptr) noexcept
+        bool failed(Nullable<T> ptr) noexcept
         {
             return ptr.value == nullptr;
         }

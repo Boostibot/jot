@@ -2,59 +2,12 @@
 
 #include "hash_table.h"
 #include "hash_table2.h"
+#include "_test.h"
 #include "defines.h"
 
-
-namespace jot::tests
+namespace jot::tests::hash_table
 {
-    isize tracking_objects_alive = 0;
-    struct Tracking
-    {
-        isize val = 0;
-            
-        Tracking() noexcept 
-            : val(0) { tracking_objects_alive++; };
-
-        Tracking(isize val) noexcept 
-            : val(val) { tracking_objects_alive++; }
-
-        Tracking(Tracking && other) noexcept 
-            : val(other.val) { tracking_objects_alive++; }
-
-        Tracking(Tracking const& other) noexcept = delete;
-        //Tracking(Tracking const& other) noexcept 
-            //: val(other.val) { tracking_objects_alive++; }
-
-        ~Tracking() noexcept 
-            { tracking_objects_alive--; }
-
-        Tracking& operator =(Tracking &&) noexcept = default;
-        Tracking& operator =(Tracking const&) noexcept = default;
-
-        bool operator ==(Tracking const& other) const noexcept { return val == other.val; };
-        bool operator !=(Tracking const& other) const noexcept { return val != other.val; };
-
-        static isize alive_count() noexcept { return tracking_objects_alive; }
-    };
-    
-    template <typename Key>
-    struct Test_Int_Hash_Functions
-    {
-        static uint64_t hash(Key const& key) {return cast(hash_t) key;}
-        static bool is_equal(Key const& a, Key const& b) {return a == b;}
-        static void set_null_state(Key* key) { *key = 0; }
-        static bool is_null_state(Key const& key) {return key == 0; }
-    };
-        
-    struct Test_Tracking_Hash_Functions
-    {
-        static uint64_t hash(Tracking const& key) {return cast(hash_t) key.val;}
-        static bool is_equal(Tracking const& a, Tracking const& b) {return a.val == b.val;}
-        static void set_null_state(Tracking* key) { key->val = 0; }
-        static bool is_null_state(Tracking const& key) {return key.val == 0; }
-    };
-        
-    template <typename Key, typename Value, typename Hash, template<typename, typename, typename> typename Table> nodisc
+    template <typename Key, typename Value, typename Hash, template<typename, typename, typename> typename Table> 
     bool value_matches_at(Table<Key, Value, Hash> const& table, no_infer(Key) const& key, no_infer(Value) const& value)
     {
         isize found = find_entry(table, move(&key));
@@ -68,7 +21,7 @@ namespace jot::tests
         return manual == value;
     }
 
-    template <typename Key, typename Value, typename Hash, template<typename, typename, typename> typename Table> nodisc
+    template <typename Key, typename Value, typename Hash, template<typename, typename, typename> typename Table> 
     bool empty_at(Table<Key, Value, Hash> const& table, no_infer(Key) const& key)
     {
         bool manual = find_entry(table, key) == -1;
@@ -81,7 +34,7 @@ namespace jot::tests
     template <typename Table> 
     void test_table_add_find()
     {
-        isize alive_before = Tracking::alive_count();
+        isize alive_before = trackers_alive();
         {
             Table table;
 
@@ -118,14 +71,14 @@ namespace jot::tests
             force(empty_at(table, 5));
         }
             
-        isize alive_after = Tracking::alive_count();
+        isize alive_after = trackers_alive();
         force(alive_before == alive_after);
     }
         
     template <typename Table> 
     void test_table_mark_remove()
     {
-        isize alive_before = Tracking::alive_count();
+        isize alive_before = trackers_alive();
         {
             Table table;
 
@@ -187,14 +140,14 @@ namespace jot::tests
             force(value_matches_at(table, 4, 10));
         }
             
-        isize alive_after = Tracking::alive_count();
+        isize alive_after = trackers_alive();
         force(alive_before == alive_after);
     }
     
     template <typename Table> 
     void test_table_remove()
     {
-        isize alive_before = Tracking::alive_count();
+        isize alive_before = trackers_alive();
         {
             Table table;
                 
@@ -271,37 +224,53 @@ namespace jot::tests
             force(value_matches_at(table, 4, 40));
         }
             
-        isize alive_after = Tracking::alive_count();
+        isize alive_after = trackers_alive();
         force(alive_before == alive_after);
     }
     
+    template <typename Key>
+    struct Test_Int_Hash_Functions
+    {
+        static uint64_t hash(Key const& key) {return cast(hash_t) key;}
+        static bool is_equal(Key const& a, Key const& b) {return a == b;}
+        static void set_null_state(Key* key) { *key = 0; }
+        static bool is_null_state(Key const& key) {return key == 0; }
+    };
+        
+    struct Test_Tracker_Hash_Functions
+    {
+        static uint64_t hash(Tracker<i32> const& key) {return cast(hash_t) key.val;}
+        static bool is_equal(Tracker<i32> const& a, Tracker<i32> const& b) {return a.val == b.val;}
+        static void set_null_state(Tracker<i32>* key) { key->val = 0; }
+        static bool is_null_state(Tracker<i32> const& key) {return key.val == 0; }
+    };
 
     void test_hash()
     {
-        using Trc = Tracking;
+        using Trc = Tracker<i32>;
         test_table_add_find<Hash_Table<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
         test_table_add_find<Hash_Table<u32, u32, Default_Hash_Functions<u32>>>();
         test_table_add_find<Hash_Table<u32, Trc, Default_Hash_Functions<u32>>>();
-        test_table_add_find<Hash_Table<Trc, u32, Test_Tracking_Hash_Functions>>();
-        test_table_add_find<Hash_Table<Trc, Trc, Test_Tracking_Hash_Functions>>();
+        test_table_add_find<Hash_Table<Trc, u32, Test_Tracker_Hash_Functions>>();
+        test_table_add_find<Hash_Table<Trc, Trc, Test_Tracker_Hash_Functions>>();
 
         test_table_add_find<Hash_Table2<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
         test_table_add_find<Hash_Table2<u32, u32, Default_Hash_Functions<u32>>>();
         test_table_add_find<Hash_Table2<u32, Trc, Default_Hash_Functions<u32>>>();
-        test_table_add_find<Hash_Table2<Trc, u32, Test_Tracking_Hash_Functions>>();
-        test_table_add_find<Hash_Table2<Trc, Trc, Test_Tracking_Hash_Functions>>();
+        test_table_add_find<Hash_Table2<Trc, u32, Test_Tracker_Hash_Functions>>();
+        test_table_add_find<Hash_Table2<Trc, Trc, Test_Tracker_Hash_Functions>>();
 
         test_table_mark_remove<Hash_Table2<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
         test_table_mark_remove<Hash_Table2<u32, u32, Default_Hash_Functions<u32>>>();
         test_table_mark_remove<Hash_Table2<u32, Trc, Default_Hash_Functions<u32>>>();
-        test_table_mark_remove<Hash_Table2<Trc, u32, Test_Tracking_Hash_Functions>>();
-        test_table_mark_remove<Hash_Table2<Trc, Trc, Test_Tracking_Hash_Functions>>();
+        test_table_mark_remove<Hash_Table2<Trc, u32, Test_Tracker_Hash_Functions>>();
+        test_table_mark_remove<Hash_Table2<Trc, Trc, Test_Tracker_Hash_Functions>>();
 
         test_table_remove<Hash_Table2<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
         test_table_remove<Hash_Table2<u32, u32, Default_Hash_Functions<u32>>>();
         test_table_remove<Hash_Table2<u32, Trc, Default_Hash_Functions<u32>>>();
-        test_table_remove<Hash_Table2<Trc, u32, Test_Tracking_Hash_Functions>>();
-        test_table_remove<Hash_Table2<Trc, Trc, Test_Tracking_Hash_Functions>>();
+        test_table_remove<Hash_Table2<Trc, u32, Test_Tracker_Hash_Functions>>();
+        test_table_remove<Hash_Table2<Trc, Trc, Test_Tracker_Hash_Functions>>();
     }
 }
 

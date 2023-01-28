@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdio>
-#include <charconv>
+#include <charconv> //get rid of this!
 
 #include "array.h"
 #include "traits.h"
@@ -265,16 +265,15 @@ namespace jot
     };
     
     template <typename T> 
-    struct Formattable<T, 
-        Enable_If<stdr::forward_range<T> && is_formattable<stdr::range_value_t<T>>, Not_Formattable_Range>>
+    struct Formattable_Range
     {
         nodisc static
         State format(String_Appender* appender, T const& range) noexcept
         {
             State state = push(appender, '[');
 
-            auto it = stdr::begin(range);
-            const auto end = stdr::end(range);
+            auto it = std::begin(range);
+            const auto end = std::end(range);
             if(it != end)
             {
                 acumulate(&state, format_into(appender, *it));
@@ -291,6 +290,10 @@ namespace jot
             return state;
         }
     };
+
+    
+    template <typename T> 
+    struct Formattable<Slice<T>> : Formattable_Range<Slice<T>> {};
 
     open_enum Format_State
     {

@@ -6,44 +6,16 @@
 
 //I dont know how to get rid of the dependency on these two:
 #include <type_traits>
-#include <concepts>
-#include <iterator>
 
 #define cast(...) (__VA_ARGS__)
 #define nodisc [[nodiscard]]
 
 namespace jot
-{ 
+{
     #ifndef JOT_SIZE_T
         using isize = ptrdiff_t;
     #endif
 
-    template<typename Container>
-    concept direct_container = requires(Container container)
-    {
-        { container.data } -> std::convertible_to<void*>;
-        { container.size } -> std::convertible_to<size_t>;
-        requires(!std::is_same_v<decltype(container.data), void*>);
-    };
-}
-
-namespace std 
-{
-    nodisc constexpr auto begin(jot::direct_container auto& arr)        noexcept {return arr.data;}
-    nodisc constexpr auto begin(const jot::direct_container auto& arr)  noexcept {return arr.data;}
-
-    nodisc constexpr auto end(jot::direct_container auto& arr)          noexcept {return arr.data + arr.size;}
-    nodisc constexpr auto end(const jot::direct_container auto& arr)    noexcept {return arr.data + arr.size;}
-
-    nodisc constexpr auto cbegin(const jot::direct_container auto& arr) noexcept {return arr.data;}
-    nodisc constexpr auto cend(const jot::direct_container auto& arr)   noexcept {return arr.data + arr.size;}
-
-    nodisc constexpr auto size(const jot::direct_container auto& arr)   noexcept {return arr.size;}
-    nodisc constexpr auto data(const jot::direct_container auto& arr)   noexcept {return arr.data;}
-}
-
-namespace jot
-{
     using ::std::begin;
     using ::std::end;
     using ::std::size;
@@ -94,7 +66,7 @@ namespace jot
         return {str, strlen(str)};
     }
 
-    template<direct_container Cont> nodisc constexpr 
+    template<typename Cont> nodisc constexpr 
     auto slice(Cont const& sliced) 
     {
         using T_ref = decltype(*sliced.data);
@@ -102,7 +74,7 @@ namespace jot
         return Slice<T>{sliced.data, sliced.size};
     }
 
-    template<direct_container Cont> nodisc constexpr 
+    template<typename Cont> nodisc constexpr 
     auto slice(Cont* sliced) 
     {
         using T_ref = decltype(*sliced->data);
@@ -265,6 +237,15 @@ namespace jot
                 to->data[i] = from.data[i];
         }
     }
+}
+
+namespace std
+{
+    template<typename T> nodisc constexpr 
+    size_t size(jot::Slice<T> const& slice)   noexcept {return cast(size_t) slice.size;}
+
+    template<typename T> nodisc constexpr 
+    auto data(jot::Slice<T> const& slice)   noexcept {return slice.data;}
 }
 
 #undef nodisc

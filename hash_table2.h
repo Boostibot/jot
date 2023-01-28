@@ -17,6 +17,17 @@ namespace jot
             return uint64_hash(val);
         }
     };
+    
+    template <typename T, typename Enable = True>
+    struct Key_Comparable
+    {
+        static
+        bool are_equal(T const& a, T const& b) noexcept
+        {
+            return a == b;
+        }
+    };
+
 
     #define HASH_TABLE_ENTRIES_ALIGN 32
     #define HASH_TABLE_LINKER_ALIGN 32
@@ -27,8 +38,8 @@ namespace jot
     #define HASH_TABLE_MAX_GRAVESTONES_NUM 1
     #define HASH_TABLE_MAX_GRAVESTONES_DEN 4
 
-    template<typename T>
-    concept hashable = !std::is_base_of_v<No_Default, Hashable<T>>;
+    // template<typename T>
+    // concept hashable = !std::is_base_of_v<No_Default, Hashable<T>>;
     
     template<typename Key, typename Value>
     struct Hash_Table_Entry
@@ -40,12 +51,19 @@ namespace jot
     template<typename Key, typename Value>
     using Hash_Table_Link = std::conditional_t<(sizeof(Hash_Table_Entry<Key, Value>) >= 8), u32, u64>;
 
-    template<typename Key_, typename Value_, typename Hash_ = Hashable<Key_>>
+    template<
+        typename Key_, 
+        typename Value_, 
+        typename Hash_ = Hashable<Key_>
+        //,
+        //typename Compare_ = Key_Comparable<Key_>
+        >
     struct Hash_Table2
     {
         using Key = Key_;
         using Value = Value_;
         using Hash = Hash_;
+        //using Compare = Compare_;
         using Entry = Hash_Table_Entry<Key, Value>;
         
         //we assume that if the entry size is equal or greater than 8 (which is usually the case) 

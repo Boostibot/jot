@@ -48,4 +48,13 @@ namespace jot
     Array(First, Rest...) -> Array<First, 1 + sizeof...(Rest)>;
 }
 
+namespace std
+{
+    template<typename T, size_t N> [[nodiscard]] constexpr 
+    size_t size(jot::Array<T, N> const& arr)   noexcept {return (size_t) arr.size;}
+
+    template<typename T, size_t N> [[nodiscard]] constexpr 
+    auto data(jot::Array<T, N> const& arr)     noexcept {return arr.data;}
+}
+
 #include "undefs.h"
