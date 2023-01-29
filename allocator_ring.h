@@ -112,7 +112,7 @@ namespace jot
             if (used_to > used_from)
                 return p >= used_from && p < used_to;
 
-            if (used_from == used_to) [[unlikely]]
+            if (used_from == used_to) 
                 return false;
 
             return p >= used_from || p < used_to;
@@ -134,7 +134,7 @@ namespace jot
             u8* aligned_to = align_forward(aligned_from + size, alignof(Slot));
 
             //if past end wrap
-            if(aligned_to > buffer_to) [[unlikely]]
+            if(aligned_to > buffer_to) 
             {
                 Slot* fill_rest = cast(Slot*) slot_from;
                 fill_rest->size = cast(u32) ptrdiff(buffer_to, fill_rest) & ~USED_BIT;
@@ -150,7 +150,7 @@ namespace jot
             u8 is_free = in_use(aligned_to);
             u8 is_allowed = aligned_size > MAX_BYTE_SIZE;
             u8 did_overflow_twice = aligned_to > buffer_to;
-            if(is_allowed | did_overflow_twice | is_free) [[unlikely]]
+            if(is_allowed | did_overflow_twice | is_free) 
                 return parent->allocate(size, align);
 
             place_slot(cast(Slot*) slot_from, cast(u32) aligned_size, aligned_from, true);
@@ -168,7 +168,7 @@ namespace jot
             using namespace detail;
             u8* ptr = allocated.data;
 
-            if(ptr < buffer_from || buffer_to <= ptr) [[unlikely]]
+            if(ptr < buffer_from || buffer_to <= ptr) 
                 return parent->deallocate(allocated, align);
 
             // Mark this slot as free
@@ -206,7 +206,7 @@ namespace jot
         {
             using namespace detail;
             u8* ptr = allocated.data;
-            if(ptr < buffer_from || ptr <= buffer_to) [[unlikely]]
+            if(ptr < buffer_from || ptr <= buffer_to) 
                 return parent->resize(allocated, align, new_size);
 
             u8* first_stub_u8 = align_forward(allocated.data + allocated.size, alignof(Slot));
@@ -362,7 +362,7 @@ namespace jot
 
             u8 is_allowed  = aligned_size >= USED_BIT;
             u8 is_past_end = aligned_to > buffer_to;
-            if(is_allowed | is_past_end) [[unlikely]]
+            if(is_allowed | is_past_end) 
                 return parent->allocate(size, align);
 
             Slot* slot = (cast(Slot*) aligned_from) - 1;
@@ -391,7 +391,7 @@ namespace jot
             using namespace detail;
             u8* ptr = allocated.data;
 
-            if(ptr < buffer_from || buffer_to <= ptr) [[unlikely]]
+            if(ptr < buffer_from || buffer_to <= ptr) 
                 return parent->deallocate(allocated, align);
 
             Slice<u8> used = {buffer_from, buffer_to - buffer_from};
@@ -430,7 +430,7 @@ namespace jot
         {
             using namespace detail;
             u8* ptr = allocated.data;
-            if(ptr < buffer_from || buffer_to <= ptr) [[unlikely]]
+            if(ptr < buffer_from || buffer_to <= ptr) 
                 return parent->resize(allocated, align, new_size);
 
             return Allocation_Result{Allocator_State::NOT_RESIZABLE};
@@ -540,7 +540,7 @@ namespace jot
 
             u8 is_too_big  = reduced_slot_size >= USED_BIT;
             u8 is_past_end = aligned_to > buffer_to;
-            if(is_too_big | is_past_end) [[unlikely]]
+            if(is_too_big | is_past_end) 
                 return parent->allocate(size, align);
 
             assert(slot_size >= 0 && "slot size should never be negative");
@@ -611,7 +611,7 @@ namespace jot
 
             u8* ptr = allocated.data;
 
-            if(ptr < buffer_from || buffer_to <= ptr) [[unlikely]]
+            if(ptr < buffer_from || buffer_to <= ptr) 
                 return parent->deallocate(allocated, align);
 
             assert(check_allocated(allocated, align) 
@@ -650,7 +650,7 @@ namespace jot
             assert(is_invariant());
 
             u8* ptr = allocated.data;
-            if(ptr < buffer_from || buffer_to <= ptr) [[unlikely]]
+            if(ptr < buffer_from || buffer_to <= ptr) 
                 return parent->resize(allocated, align, new_size);
 
             assert(check_allocated(allocated, align) 
@@ -822,7 +822,7 @@ namespace jot
             //If is too big we use parent
             u8 is_too_big  = reduced_slot_size >= USED_BIT;
             u8 is_past_end = aligned_to > buffer_to;
-            if(is_too_big | is_past_end) [[unlikely]]
+            if(is_too_big | is_past_end) 
                 return parent->allocate(size, align);
 
             assert(slot_size >= 0 && "slot size should never be negative");
@@ -860,7 +860,7 @@ namespace jot
 
             u8* ptr = allocated.data;
 
-            if(ptr < buffer_from || buffer_to <= ptr) [[unlikely]]
+            if(ptr < buffer_from || buffer_to <= ptr) 
                 return parent->deallocate(allocated, align);
 
             assert(check_allocated(allocated, align) 
@@ -906,7 +906,7 @@ namespace jot
             assert(is_invariant());
 
             u8* ptr = allocated.data;
-            if(ptr < buffer_from || buffer_to <= ptr) [[unlikely]]
+            if(ptr < buffer_from || buffer_to <= ptr) 
                 return parent->resize(allocated, align, new_size);
 
             assert(check_allocated(allocated, align) 

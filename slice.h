@@ -6,6 +6,7 @@
 
 //I dont know how to get rid of the dependency on these two:
 #include <type_traits>
+#include <iterator>
 
 #define cast(...) (__VA_ARGS__)
 #define nodisc [[nodiscard]]
@@ -15,10 +16,6 @@ namespace jot
     #ifndef JOT_SIZE_T
         using isize = ptrdiff_t;
     #endif
-
-    using ::std::begin;
-    using ::std::end;
-    using ::std::size;
 
     nodisc constexpr 
     isize strlen(const char* str)
@@ -41,15 +38,24 @@ namespace jot
         constexpr Slice(T* data, isize size) 
             : data(data), size(size) {}
 
-        constexpr Slice(const char* strl) requires std::is_same_v<T, const char> 
-            : data(strl), size(strlen(strl)) {}
+        template<typename T, std::enable_if_t<std::is_same_v<T, const char>, bool> = true>
+        constexpr Slice(T* str)
+            : data(str), size(strlen(str)) {}
 
-        constexpr operator Slice<const T>() const noexcept { 
+        template<typename T>
+        constexpr operator Slice<const T>() const noexcept 
+        { 
             return Slice<const T>{this->data, this->size}; 
         }
-
-        constexpr bool operator ==(Slice const&) const noexcept = default;
-        constexpr bool operator !=(Slice const&) const noexcept = default;
+        
+        constexpr bool operator ==(Slice const& other) const noexcept 
+        {
+            return other.data == this->data && other.size == this->size;
+        }
+        constexpr bool operator !=(Slice const& other) const noexcept
+        {
+            return !(other == *this);
+        }
 
         #define DATA data
         #define SIZE size
@@ -82,7 +88,16 @@ namespace jot
         return Slice<T>{sliced->data, sliced->size};
     }
 
-    #define constexpr_assert(a) (std::is_constant_evaluated() ? (void)0 : assert(a))
+    
+    constexpr bool is_const_eval(bool if_not_present = false) noexcept {
+        #ifdef __cpp_lib_is_constant_evaluated
+            return std::is_constant_evaluated();
+        #else
+            return if_not_present;
+        #endif
+    }
+
+    #define constexpr_assert(a) (is_const_eval(true) ? (void)0 : assert(a))
 
     template<typename T> nodisc constexpr  
     bool is_invarinat(Slice<T> slice) {
@@ -158,7 +173,7 @@ namespace jot
     template<typename T> constexpr 
     void null_bytes(Slice<T>* to) noexcept
     {
-        if(std::is_constant_evaluated() == false)
+        if(is_const_eval() == false)
         {
             memset(to->data, 0, to->size * sizeof(T));
             return;
@@ -176,7 +191,7 @@ namespace jot
         if(a.size > b.size)
             return 1;
 
-        if(byte_by_byte && std::is_constant_evaluated() == false)
+        if(byte_by_byte && is_const_eval() == false)
             return memcmp(a.data, b.data, a.size * sizeof(T));
 
         for(isize i = 0; i < a.size; i++)
@@ -202,7 +217,7 @@ namespace jot
     {
         //we by default use memmove since its safer
         // (memcpy is still availible though under longer, uglier name)
-        if(std::is_constant_evaluated() == false)
+        if(is_const_eval() == false)
         {
             assert(to->size >= from.size && "size must be big enough");
             memmove(to->data, from.data, from.size * sizeof(T));
@@ -224,7 +239,7 @@ namespace jot
     template<typename T> constexpr 
     void copy_bytes_no_alias(Slice<T>* to, Slice<const T> from) noexcept
     {
-        if(std::is_constant_evaluated() == false)
+        if(is_const_eval() == false)
         {
             assert(are_aliasing(*to, from) == false && "must not alias");
             assert(to->size >= from.size && "size must be big enough");

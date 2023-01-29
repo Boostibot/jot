@@ -10,7 +10,7 @@
 
 namespace jot
 {
-    template <typename T, typename Enable = True>
+    template <typename T, typename Enable = Enabled>
     struct Formattable : No_Default
     {
         nodisc static
@@ -174,7 +174,7 @@ namespace jot
     struct Not_Formattable_Range {};
     struct Not_Formattable_Array {};
 
-    template <typename T> struct Formattable<T, Enable_If<std::is_integral_v<T>, Not_Integral>>
+    template <typename T> struct Formattable<T, Enable_If<std::is_integral_v<T>>>
     {
         nodisc static
         State format(String_Appender* appender, T const& val) noexcept
@@ -183,7 +183,7 @@ namespace jot
         }
     };
 
-    template <typename T> struct Formattable<T, Enable_If<std::is_floating_point_v<T>, Not_Floating_Point>>
+    template <typename T> struct Formattable<T, Enable_If<std::is_floating_point_v<T>>>
     {
         nodisc static
         State format(String_Appender* appender, T const& val) noexcept
@@ -192,7 +192,7 @@ namespace jot
         }
     };
 
-    template <typename T> struct Formattable<T, Enable_If<std::is_pointer_v<T>, Not_Pointer>>
+    template <typename T> struct Formattable<T, Enable_If<std::is_pointer_v<T>>>
     {
         nodisc static
         State format(String_Appender* appender, T const& val) noexcept

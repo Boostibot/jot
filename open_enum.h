@@ -33,9 +33,11 @@ open_enum Open_Enum
 
 
 #define OPEN_ENUM_ENTRY(Name)                                       \
-    namespace open_enum_info {                                      \
-        static constexpr Holder Name = Holder(                      \
-            ::Open_Enum::Holder{PP_STRINGIFY(Name), TYPE_NAME});    \
+    namespace open_enum_info                                        \
+    {                                                               \
+        static constexpr Holder Name = Holder{                      \
+            ::Open_Enum::Holder{PP_STRINGIFY(Name), TYPE_NAME}      \
+        };                                                          \
     }                                                               \
     static constexpr const Holder* Name = &open_enum_info::Name;    \
 

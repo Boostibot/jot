@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils.h"
+#include "array.h"
 #include "types.h"
 #include "slice.h"
 #include "memory.h"
@@ -105,6 +106,7 @@ namespace jot
         return size;
     }
 
+
     template <typename T>
     static constexpr bool memcpyable = std::is_scalar_v<T> || std::is_trivially_copy_constructible_v<T>;
     
@@ -177,7 +179,7 @@ namespace jot
             else
             {
                 for (isize i = 0; i < copy_to; i++)
-                    std::construct_at(new_data + i, move(old_data + i));
+                    construct_at(new_data + i, move(old_data + i));
             }
             
             if constexpr(std::is_trivially_destructible_v<T> == false)
@@ -254,39 +256,39 @@ namespace jot
     }
 
     template<class T> nodisc
-    State assign(Stack<T>* to, Stack<T> const& from) noexcept
+    State assign(Stack<T>* to, Slice<const T> from) noexcept
     {
         State ret_state = OK_STATE;
-        if(to == &from)
+        if(data(to) == from.data)
             return ret_state;
 
-        if(to->capacity < from.size)
+        if(to->_capacity < from.size)
         {
             const auto res = stack_internal::set_capacity(to, from.size);
             if(res == ERROR)
                 return res;
         }
 
-        isize to_size = min(to->size, from.size);
+        isize to_size = min(to->_size, from.size);
 
         //destroy extra
-        stack_internal::destroy_items(to, from.size, to->size);
-        if(has_bit_by_bit_assign<T> == false)
+        stack_internal::destroy_items(to, from.size, to->_size);
+        if(memcpyable<T>)
         {
             //construct missing
-            if(to->size < from.size)
-                memcpy(to->data + to->size, from.data + to->size, (from.size - to->size) * sizeof(T));
+            if(to->_size < from.size)
+                memcpy(to->_data + to->_size, from.data + to->_size, (from.size - to->_size) * sizeof(T));
 
             //copy rest
-            memcpy(to->data, from.data, to_size * sizeof(T));
+            memcpy(to->_data, from.data, to_size * sizeof(T));
         }
         else
         {
-            T* RESTRICT to_data = to->data;
+            T* RESTRICT to_data = to->_data;
             const T* RESTRICT from_data = from.data;
 
             //construct missing
-            for (isize i = to->size; i < from.size; i++)
+            for (isize i = to->_size; i < from.size; i++)
             {
                 State state = construct_assign_at(to_data + i, from_data[i]);
                 if(state == ERROR)
@@ -302,8 +304,14 @@ namespace jot
             }
         }
             
-        to->size = from.size;
+        to->_size = from.size;
         return ret_state;
+    }
+
+    template<class T> nodisc
+    State assign(Stack<T>* to, Stack<T> const& from) noexcept
+    {
+        return assign<T>(to, slice(from));
     }
 
     template<typename T>
@@ -414,9 +422,9 @@ namespace jot
             for (isize i = final_size; i-- > to; )
             {
                 if constexpr(do_move_construct)
-                    std::construct_at(items.data + i, move(&items[i - constructed]));
+                    construct_at(items.data + i, move(&items[i - constructed]));
                 else if(do_copy_construct)
-                    std::construct_at(items.data + i, items[i - constructed]);
+                    construct_at(items.data + i, items[i - constructed]);
                 else
                     acumulate(&state, construct_assign_at(items.data + i, items[i - constructed]));
             }
@@ -458,9 +466,9 @@ namespace jot
         {
             //T* prev = items.data + i;
             if constexpr(do_move_construct)
-                std::construct_at(items.data + i, move(&*it));
+                construct_at(items.data + i, move(&*it));
             else if(do_copy_construct)
-                std::construct_at(items.data + i, *it);
+                construct_at(items.data + i, *it);
             else
                 acumulate(&state, construct_assign_at(items.data + i, *it));
         }
@@ -500,7 +508,7 @@ namespace jot
             return reserve_res;
         
         T* ptr = stack->_data + stack->_size;
-        std::construct_at(ptr, move(&what));
+        construct_at(ptr, move(&what));
         stack->_size++;
 
         assert(is_invariant(*stack));
@@ -626,7 +634,7 @@ namespace jot
         assert(0 <= at && at <= stack->_size);
 
         Slice<T> view = {&what, 1};
-        return splice(stack, at, 0, move(*view));
+        return splice(stack, at, 0, move(&view));
     }
 
     template<class T> 
@@ -636,7 +644,7 @@ namespace jot
         assert(stack->_size > 0);
 
         T removed = move(&stack->_data[at]);
-        splice(stack, at, 1);
+        cast(void) splice(stack, at, 1, Slice<T>{});
         return removed;
     }
 

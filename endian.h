@@ -1,5 +1,5 @@
 #pragma once
-
+#if __cplusplus >= 202002L
 #include <bit>
 
 #include "array.h"
@@ -233,3 +233,4 @@ namespace jot
     }
 }
 #include "undefs.h"
+#endif

@@ -15,7 +15,7 @@ namespace jot
     constexpr isize HASH_SET_MAX_UTILIZATIO_NUM = 32;
     constexpr isize HASH_SET_MAX_UTILIZATIO_DEN = 128;
     
-    template <typename Key, typename Enable = True>
+    template <typename Key, typename Enable = Enabled>
     struct Default_Hash_Functions
     {
         static uint64_t hash(Key const& key);
@@ -366,7 +366,7 @@ namespace jot
     struct Not_Integral_Hash {};
 
     template <typename Int_Key>
-    struct Default_Hash_Functions<Int_Key, std::conditional_t<std::is_integral_v<Int_Key>, True, Not_Integral_Hash>>
+    struct Default_Hash_Functions<Int_Key, Enable_If<std::is_integral_v<Int_Key>>>
     {
         static constexpr Int_Key NULL_STATE = std::is_unsigned_v<Int_Key> 
             ? std::numeric_limits<Int_Key>::max() 
@@ -399,7 +399,7 @@ namespace jot
     #if 0
     //can be used for Slice, String, String_Builder and others
     template <typename Container>
-    struct Default_Hash_Functions<Container, std::conditional_t<direct_container<Container>, True, Not_Direct_Container>>
+    struct Default_Hash_Functions<Container, Enable_If<std::is_integral_v<Int_Key>>>
     {
         static uint64_t hash(Container const& key)
         {

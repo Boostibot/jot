@@ -21,10 +21,10 @@ namespace jot
     constexpr static isize BYTE_BITS = CHAR_BIT;
 
     template <typename T>
-    constexpr static isize BIT_COUNT = sizeof(T) * BYTE_BITS;
+    constexpr static isize BIT_SIZE = sizeof(T) * BYTE_BITS;
 
     template <typename T>
-    constexpr static isize HALF_BIT_COUNT = sizeof(T) * BYTE_BITS / 2;
+    constexpr static isize HALF_BIT_SIZE = sizeof(T) * BYTE_BITS / 2;
 
     template <typename T = Max_Field> nodisc constexpr
     T dirty_bit(isize bit_offset, T value = 1) noexcept 
@@ -58,14 +58,14 @@ namespace jot
     }
 
     template <typename T> nodisc constexpr
-    T high_mask(size_t index = HALF_BIT_COUNT<T>) noexcept 
+    T high_mask(size_t index = HALF_BIT_SIZE<T>) noexcept 
     {
         assert(index < BIT_SIZE<T>);
         return cast(T) (cast(T)(-1) << index);
     }
 
     template <typename T> nodisc constexpr
-    T low_mask(size_t index = HALF_BIT_COUNT<T>) noexcept 
+    T low_mask(size_t index = HALF_BIT_SIZE<T>) noexcept 
     {
         return cast(T) ~high_mask<T>(index);
     }
@@ -77,14 +77,14 @@ namespace jot
     }
 
     template <typename T> nodisc constexpr
-    T high_bits(T value, size_t index = HALF_BIT_COUNT<T>) noexcept 
+    T high_bits(T value, size_t index = HALF_BIT_SIZE<T>) noexcept 
     {
         assert(index < BIT_SIZE<T>);
         return cast(T) (value >> index);
     }
 
     template <typename T> nodisc constexpr
-    T low_bits(T value, size_t index = HALF_BIT_COUNT<T>) noexcept 
+    T low_bits(T value, size_t index = HALF_BIT_SIZE<T>) noexcept 
     {
         auto mask = low_mask<T>(index);
         return cast(T) (value & mask);
@@ -97,14 +97,14 @@ namespace jot
     }
 
     template <typename T> nodisc constexpr
-    T combine_bits(T low, T high, size_t index = HALF_BIT_COUNT<T>) noexcept 
+    T combine_bits(T low, T high, size_t index = HALF_BIT_SIZE<T>) noexcept 
     {
         assert(index < BIT_SIZE<T>);
         return low_bits(low, index) | (high << index);
     };
 
     template <typename T> nodisc constexpr
-    T dirty_combine_bits(T low, T high, size_t index = HALF_BIT_COUNT<T>) noexcept 
+    T dirty_combine_bits(T low, T high, size_t index = HALF_BIT_SIZE<T>) noexcept 
     {
         assert(index < BIT_SIZE<T>);
         assert(high_bits(low, index) == 0 && "low must not have high bits use combine_bits instead");

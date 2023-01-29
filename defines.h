@@ -32,13 +32,3 @@
 #else
     #define NO_UNIQUE_ADDRESS [[no_unique_address]]
 #endif
-
-#ifndef MOVE_DEFINED
-#define MOVE_DEFINED
-
-    template <typename T> nodisc constexpr 
-    T && move(T* val) { return cast(T &&) *val; };
-
-#endif
-
-#define forward(T, ...) (T &&) (__VA_ARGS__)

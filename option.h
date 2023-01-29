@@ -56,27 +56,28 @@ namespace jot
     {
         return ptr.value;
     }
+    
 
-    template <failable T> nodisc constexpr 
+    template <typename T, Enable_If<failable<T>> = ENABLED> nodisc constexpr 
     bool operator==(T const& left, Ok_Type) noexcept { return failed(left) == false; }
     
-    template <failable T> nodisc constexpr 
+    template <typename T, Enable_If<failable<T>> = ENABLED> nodisc constexpr 
     bool operator!=(T const& left, Ok_Type) noexcept { return failed(left); }
     
-    template <failable T> nodisc constexpr 
+    template <typename T, Enable_If<failable<T>> = ENABLED> nodisc constexpr 
     bool operator==(T const& left, Error_Type) noexcept { return failed(left); }
     
-    template <failable T> nodisc constexpr 
+    template <typename T, Enable_If<failable<T>> = ENABLED> nodisc constexpr 
     bool operator!=(T const& left, Error_Type) noexcept { return failed(left) == false; }
 
-    template <failable T> 
+    template <typename T> constexpr
     void force(T const& value)
     {
         if(failed(value))
             throw value;
     }
 
-    template <failable T> 
+    template <typename T> constexpr
     void force_error(T const& value)
     {
         if(failed(value) == false)
@@ -84,22 +85,22 @@ namespace jot
     }
     
     //the forcing operator (cause I am lazy)
-    template <failable T> nodisc constexpr 
+    template <typename T, Enable_If<failable<T>> = ENABLED> nodisc constexpr 
     void operator<<(Ok_Type, T const& left) noexcept { force(left); }
 
-    inline
+    inline constexpr
     State acumulate(State prev, State new_state)
     {
-        if(prev == OK)
-            return new_state;
-        else
+        if(failed(prev))
             return prev;
+        else
+            return new_state;
     }
     
-    inline
+    inline constexpr
     void acumulate(State* into, State new_state)
     {
-        if(*into == OK)
+        if(failed(*into) == false)
             *into = new_state;
     }
 }

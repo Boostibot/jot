@@ -1,11 +1,12 @@
 #pragma once
 
+
 #include "utils.h"
 #include "type_id.h"
 #include "types.h"
 #include "slice.h"
-#include "bits.h"
 #include "defines.h"
+
 namespace jot
 {
     template<typename T>
@@ -17,18 +18,18 @@ namespace jot
     //Type erased POD variant using type_id as tag
     // Can store any type that fits inside its data and align
     template<isize byte_size_, isize align_>
-    struct alignas(align_) Variant
+    struct Variant
     {
         static constexpr isize byte_size = byte_size_;
         static constexpr isize align = align_;
 
         type_id which = type_id_of(void);
-        u8 bytes[byte_size];
+        alignas(align) u8 bytes[byte_size];
 
         constexpr 
         Variant() noexcept = default;
 
-        template<typename T> constexpr 
+        template<typename T> 
         Variant(T value) noexcept
         {
             static_assert(variant_compatible<T>, "must be variant comaptible");
@@ -39,7 +40,7 @@ namespace jot
         }
     };
 
-    template<typename... Ts> nodisc constexpr 
+    template<typename... Ts> nodisc constexpr
     isize max_size(Ts... sizes) noexcept
     {
         isize count = sizeof...(Ts);
@@ -53,7 +54,6 @@ namespace jot
     }
 
     //This is very ugly. I appologize
-
     template<typename... Ts>
     using Variant_Of = Variant<
         max_size(sizeof(Ts)...), 
@@ -64,19 +64,19 @@ namespace jot
         max_size(prev_size, sizeof(Added)...), 
         max_size(prev_align, alignof(Added)...)>;
 
-    template<typename First, typename... Ts> nodisc constexpr 
+    template<typename First, typename... Ts> nodisc 
     auto make_variant(First const& data) noexcept -> Variant_Of<First, Ts...>
     {
         static_assert(variant_compatible<First> && (variant_compatible<Ts> && ...), "all types must be variant compatible");
 
         Variant_Of<First, Ts...> variant;
         variant.which = type_id_of(First);
-        std::construct_at(variant.bytes, data);
+        construct_at(variant.bytes, data);
 
         return variant;
     }
 
-    template<typename Added, isize prev_size, isize prev_align> nodisc constexpr 
+    template<typename Added, isize prev_size, isize prev_align> nodisc 
     auto expand_variant(Variant<prev_size, prev_align> const& variant) -> Expanded_Variant<prev_size, prev_align, Added>
     {
         static_assert(variant_compatible<Added>, "must be variant compatible");
@@ -89,35 +89,22 @@ namespace jot
         return out;
     }
 
-    template<isize byte_size, isize align> nodisc constexpr 
+    template<isize byte_size, isize align> nodisc 
     Slice<u8> slice(Variant<byte_size, align>* variant) 
     {
         return Slice<u8>{variant->bytes, variant->byte_size};
     }
 
-    template<isize byte_size, isize align> nodisc constexpr 
+    template<isize byte_size, isize align> nodisc 
     Slice<const u8> slice(Variant<byte_size, align> const& variant) 
     {
         return Slice<const u8>{variant->bytes, variant->byte_size};
     }
 
-    template<typename Which, isize byte_size, isize align> nodisc constexpr 
+    template<typename Which, isize byte_size, isize align> nodisc 
     bool has(Variant<byte_size, align> const& variant) noexcept 
     {
-        return variant.which = type_id_of(Which);
-    }
-
-    template<typename Which, isize byte_size, isize align> nodisc constexpr 
-    Which get(Variant<byte_size, align> variant) noexcept 
-    {
-        assert(has<Which>(Variant));
-
-        constexpr isize size = sizeof(Which);
-        Array<u8, size> out_bytes;
-        for(isize i = 0; i < size; i++)
-            out_bytes[i] = variant.bytes[i];
-
-        return bit_cast<Which>(out_bytes);
+        return variant.which == type_id_of(Which);
     }
 
     template<typename Which, isize byte_size, isize align> nodisc 
@@ -127,6 +114,12 @@ namespace jot
         return cast(Which*) cast(void*) variant->bytes;
     }
 
+    template<typename Which, isize byte_size, isize align> nodisc 
+    const Which& get(Variant<byte_size, align> const& variant) noexcept 
+    {
+        assert(has<Which>(Variant));
+        return *cast(Which*) cast(void*) variant->bytes;
+    }
 }
 
 #include "undefs.h"

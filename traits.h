@@ -13,33 +13,17 @@ namespace jot
 
     using True = Const<true, bool>;
     using False = Const<false, bool>;
+    
+    enum Enabled { ENABLED = 0 };
 
-    template<class T, class U>
-    struct Is_Same : Const<false, bool> {};
-
+    template<bool cond, class T>
+    struct _Enable_If {};
+    
     template<class T>
-    struct Is_Same<T, T> : Const<true, bool> {};
+    struct _Enable_If<true, T> { typedef T type; };
 
-    template<bool cond, class If_True, class If_False>
-    struct Conditional_
-    {
-        using type = If_False;
-    };
-
-    template<class If_True, class If_False>
-    struct Conditional_<true, If_True, If_False>
-    {
-        using type = If_True;
-    };
-
-    template<bool cond, class If_True, class If_False>
-    using Conditional = typename Conditional_<cond, If_True, If_False>::type;
-
-    template<bool cond, class Error>
-    using Enable_If = Conditional<cond, True, Error>;
-
-    static_assert(Is_Same<char, char>::value, "!");
-    static_assert(Is_Same<void, char>::value == false, "!");
+    template<bool cond, class T = Enabled>
+    using Enable_If = typename _Enable_If<cond, T>::type;
 
     template<class T>
     struct Id { using type = T; };
@@ -55,8 +39,4 @@ namespace jot
     static constexpr bool innert_type = regular_type<T> &&
         std::is_nothrow_copy_assignable_v<T> &&
         std::is_nothrow_copy_constructible_v<T>;
-
-    constexpr auto is_const_eval() noexcept -> bool {
-        return std::is_constant_evaluated();
-    }
 }

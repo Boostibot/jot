@@ -3,8 +3,10 @@
 #include <cassert>
 #include <cstdint>
 
-//I am sorry I ahve to do this...
+//I am sorry I have to do this...
+#if __cplusplus >= 202002L
 #include <compare>
+#endif
 #include <iterator>
 
 namespace jot
@@ -20,8 +22,10 @@ namespace jot
         static constexpr isize capacity = size;
         T data[size];
 
+        #if __cplusplus >= 202002L
         constexpr bool operator==(const Array&) const noexcept = default;
         constexpr auto operator<=>(const Array&) const noexcept = default;
+        #endif
         
         #define DATA data
         #define SIZE size
@@ -34,9 +38,11 @@ namespace jot
         static constexpr isize size = 0;
         static constexpr isize capacity = 0;
         T data[1];
-
+        
+        #if __cplusplus >= 202002L
         constexpr bool operator==(const Array&) const noexcept   {return true;};
         constexpr auto operator<=>(const Array&) const noexcept  {return 0;};
+        #endif
         
         #include "slice_op_text.h"
         #undef DATA

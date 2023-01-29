@@ -19,7 +19,7 @@ namespace jot
     struct No_Infer_Impl { using type = T; };
 
     template<typename T>
-    using No_Infer = No_Infer_Impl<T>::type;
+    using No_Infer = typename No_Infer_Impl<T>::type;
 
     #define no_infer(...) No_Infer<__VA_ARGS__> 
     #define nodisc [[nodiscard]]

@@ -8,10 +8,13 @@ using pointer         = T*;
 using const_pointer   = const T*;
 using reference       = T&;
 using const_reference = const T&;
-using iterator_category = std::contiguous_iterator_tag;
 
 using iterator       = T*;
 using const_iterator = const T*;
+
+#if __cplusplus >= 202002L
+using iterator_category = std::contiguous_iterator_tag;
+#endif
 
 using reverse_iterator       = std::reverse_iterator<iterator>;
 using const_reverse_iterator = std::reverse_iterator<const_iterator>;

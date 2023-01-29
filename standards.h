@@ -22,7 +22,7 @@ namespace jot
 
     struct No_Default {};
 
-    template <typename T, typename Enable = True>
+    template <typename T, typename Enable = Enabled>
     struct Assignable
     {
         nodisc static constexpr
@@ -34,8 +34,14 @@ namespace jot
             return OK_STATE;
         };
     };
+    
+    template <typename T> nodisc constexpr 
+    T && move(T* val) 
+    { 
+        return cast(T &&) *val; 
+    };
 
-    template <typename T, typename Enable = True>
+    template <typename T, typename Enable = Enabled>
     struct Swappable
     {
         static constexpr 
@@ -47,7 +53,7 @@ namespace jot
         };
     };
 
-    template <typename T, typename Enable = True>
+    template <typename T, typename Enable = Enabled>
     struct Failable : No_Default
     {
         nodisc static constexpr
@@ -57,7 +63,7 @@ namespace jot
     };
 
     template<typename T>
-    concept failable = !std::is_base_of_v<No_Default, Failable<T>>;
+    static constexpr bool failable = !std::is_base_of_v<No_Default, Failable<T>>;
 
     template <typename T> nodisc constexpr 
     State assign(T* to, T const& from) noexcept 
@@ -71,19 +77,25 @@ namespace jot
         return Swappable<T>::swap(left, right);
     }
 
-    template <failable T> nodisc constexpr 
+    template <typename T> nodisc constexpr 
     bool failed(T const& flag) noexcept 
     {
         return Failable<T>::failed(flag);
+    }
+    
+    template <typename T, typename ... Args>
+    T* construct_at(T* at, Args &&... args)
+    {
+        new(at) T(cast(Args &&) args... );
+        return at;
     }
 
     template<typename T> nodisc constexpr 
     State construct_assign_at(T* to, no_infer(T) const& from)
     {
-        std::construct_at(to);
+        construct_at(to);
         return assign<T>(to, from);
     }
-
 }
 
 #include "undefs.h"

@@ -7,7 +7,7 @@
 
 namespace jot
 {
-    template <typename T, typename Enable = True>
+    template <typename T, typename Enable = Enable>
     struct Hashable : No_Default
     {
         static 
@@ -18,7 +18,7 @@ namespace jot
         }
     };
     
-    template <typename T, typename Enable = True>
+    template <typename T, typename Enable = Enable>
     struct Key_Comparable
     {
         static

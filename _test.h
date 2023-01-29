@@ -16,7 +16,8 @@ namespace jot::tests
         constexpr Not_Copyable& operator =(const Not_Copyable&) noexcept = delete;
         constexpr Not_Copyable& operator =(Not_Copyable&&) noexcept  = default;
 
-        constexpr bool operator==(const Not_Copyable&) const noexcept = default;
+        constexpr bool operator==(const Not_Copyable& other) const noexcept { return other.val == this->val; };
+        constexpr bool operator!=(const Not_Copyable& other) const noexcept { return other.val != this->val; };
     };
 
     struct Tracker_Stats
