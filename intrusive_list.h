@@ -11,7 +11,7 @@ namespace jot
     //example of how block can look like:
     //All blocks are required to have:
     // (1) next ptr
-    // (2) static constexpr bool is_single_linked
+    // (2) static constexpr bool is_bidirectional
     // (3) prev ptr - only if is_bidirectional is set to true
     #if 0
     struct Example_Node

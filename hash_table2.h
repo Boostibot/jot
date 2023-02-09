@@ -7,7 +7,7 @@
 
 namespace jot
 {
-    template <typename T, typename Enable = Enable>
+    template <typename T, typename Enable = Enabled>
     struct Hashable : No_Default
     {
         static 
@@ -18,7 +18,7 @@ namespace jot
         }
     };
     
-    template <typename T, typename Enable = Enable>
+    template <typename T, typename Enable = Enabled>
     struct Key_Comparable
     {
         static
@@ -273,7 +273,7 @@ namespace jot
 
             //mark occurences of each entry index in a bool array
             Slice<bool> marks = trim(cast_slice<bool>(result.items), table->_entries_size);
-            null_bytes(&marks);
+            null_items(&marks);
 
             isize empty_count = 0;
             isize graveston_count = 0;

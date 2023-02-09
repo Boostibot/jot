@@ -100,7 +100,7 @@ namespace jot
     inline constexpr
     void acumulate(State* into, State new_state)
     {
-        if(failed(*into) == false)
+        if(failed(new_state) && failed(*into) == false)
             *into = new_state;
     }
 }

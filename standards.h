@@ -19,26 +19,26 @@ namespace jot
     #define OPEN_STATE_DECLARE(Name)                          \
         OPEN_ENUM_DECLARE_DERIVED(Name, ::jot::State_Holder); \
         static constexpr Type OK = nullptr;                   \
+        
+    template <typename T> nodisc constexpr 
+    T && move(T* val) 
+    { 
+        return cast(T &&) *val; 
+    };
 
     struct No_Default {};
 
     template <typename T, typename Enable = Enabled>
-    struct Assignable
+    struct Copyable
     {
         nodisc static constexpr
-        State assign(T* to, T const& from) noexcept
+        State copy(T* to, T const& from) noexcept
         {
             static_assert(std::is_nothrow_copy_assignable_v<T>, "must be nothrow copyable! If not provide a custom overload of this function");
             *to = from;
 
             return OK_STATE;
         };
-    };
-    
-    template <typename T> nodisc constexpr 
-    T && move(T* val) 
-    { 
-        return cast(T &&) *val; 
     };
 
     template <typename T, typename Enable = Enabled>
@@ -66,9 +66,9 @@ namespace jot
     static constexpr bool failable = !std::is_base_of_v<No_Default, Failable<T>>;
 
     template <typename T> nodisc constexpr 
-    State assign(T* to, T const& from) noexcept 
+    State copy(T* to, T const& from) noexcept 
     {
-        return Assignable<T>::assign(to, from);
+        return Copyable<T>::copy(to, from);
     }
 
     template <typename T> constexpr 
@@ -91,10 +91,10 @@ namespace jot
     }
 
     template<typename T> nodisc constexpr 
-    State construct_assign_at(T* to, no_infer(T) const& from)
+    State copy_construct_at(T* to, no_infer(T) const& from) noexcept
     {
         construct_at(to);
-        return assign<T>(to, from);
+        return copy(to, from);
     }
 }
 

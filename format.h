@@ -16,7 +16,7 @@ namespace jot
         nodisc static
         State format(String_Appender* into, T const& value) noexcept
         {
-            //just for illustartion
+            push_multiple(into, "{NOFORMAT}");
             return OK_STATE;
         }
     };

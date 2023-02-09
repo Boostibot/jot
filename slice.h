@@ -64,6 +64,7 @@ namespace jot
         #undef SIZE
     };
 
+
     Slice(const char*) -> Slice<const char>;
 
     nodisc constexpr 
@@ -87,7 +88,6 @@ namespace jot
         using T = std::remove_reference_t<T_ref>;
         return Slice<T>{sliced->data, sliced->size};
     }
-
     
     constexpr bool is_const_eval(bool if_not_present = false) noexcept {
         #ifdef __cpp_lib_is_constant_evaluated
@@ -115,6 +115,8 @@ namespace jot
         constexpr_assert((0 <= to_index && to_index <= slice.size) && "index out of bounds");
         return Slice<T>{slice.data, to_index};
     }
+
+    #undef constexpr_assert
 
     template<typename T> nodisc constexpr 
     Slice<T> slice_size(Slice<T> base_slice, isize from, isize size) {
@@ -162,6 +164,15 @@ namespace jot
     { 
         return (before.data + before.size > after.data) && (after.data > before.data);
     }
+    
+    template <typename T>
+    static constexpr bool is_byte_copyable = std::is_scalar_v<T> || std::is_trivially_copy_constructible_v<T>;
+    
+    template <typename T>
+    static constexpr bool is_byte_comparable = std::is_scalar_v<T> && sizeof(T) == 1;
+
+    template <typename T>
+    static constexpr bool is_byte_nullable = std::is_scalar_v<T>;
 
     template<typename T> constexpr 
     void fill(Slice<T>* to , T const& with) noexcept
@@ -171,9 +182,9 @@ namespace jot
     }
 
     template<typename T> constexpr 
-    void null_bytes(Slice<T>* to) noexcept
+    void null_items(Slice<T>* to) noexcept
     {
-        if(is_const_eval() == false)
+        if(is_const_eval() == false && is_byte_nullable<T>)
         {
             memset(to->data, 0, to->size * sizeof(T));
             return;
@@ -183,7 +194,7 @@ namespace jot
     }
 
     template<typename T> nodisc constexpr 
-    int compare(Slice<T> a, Slice<T> b, bool byte_by_byte = false) noexcept
+    int compare(Slice<T> a, Slice<T> b) noexcept
     {
         if(a.size < b.size)
             return -1;
@@ -191,7 +202,7 @@ namespace jot
         if(a.size > b.size)
             return 1;
 
-        if(byte_by_byte && is_const_eval() == false)
+        if(is_const_eval() == false && std::is_scalar_v<T> && sizeof(T) == 1)
             return memcmp(a.data, b.data, a.size * sizeof(T));
 
         for(isize i = 0; i < a.size; i++)
@@ -206,20 +217,14 @@ namespace jot
         return 0;
     }
 
-    template<typename T> nodisc constexpr 
-    int compare_bytes(Slice<T> a, Slice<T> b) noexcept
-    {
-        return compare(a, b, true);
-    }
-
     template<typename T> constexpr 
-    void copy_bytes(Slice<T>* to, Slice<const T> from) noexcept
+    void copy_items(Slice<T>* to, Slice<const T> from) noexcept
     {
         //we by default use memmove since its safer
         // (memcpy is still availible though under longer, uglier name)
-        if(is_const_eval() == false)
+        assert(to->size >= from.size && "size must be big enough");
+        if(is_const_eval() == false && is_byte_copyable<T>)
         {
-            assert(to->size >= from.size && "size must be big enough");
             memmove(to->data, from.data, from.size * sizeof(T));
             return;
         }
@@ -235,21 +240,43 @@ namespace jot
                 to->data[i] = from.data[i];
         }
     }
-
+    
     template<typename T> constexpr 
-    void copy_bytes_no_alias(Slice<T>* to, Slice<const T> from) noexcept
+    void copy_items_no_alias(Slice<T>* to, Slice<const T> from) noexcept
     {
-        if(is_const_eval() == false)
+        assert(are_aliasing(*to, from) == false && "must not alias");
+        assert(to->size >= from.size && "size must be big enough");
+        
+        if(is_const_eval() == false && is_byte_copyable<T>)
         {
-            assert(are_aliasing(*to, from) == false && "must not alias");
-            assert(to->size >= from.size && "size must be big enough");
-
             memcpy(to->data, from.data, from.size * sizeof(T));
         }
         else
         {
             for(isize i = 0; i < from.size; i++)
                 to->data[i] = from.data[i];
+        }
+    }
+    
+    template<typename T> constexpr 
+    void move_items(Slice<T>* to, Slice<T>* from) noexcept
+    {
+        assert(to->size >= from->size && "size must be big enough");
+        if(is_const_eval() == false && is_byte_copyable<T>)
+        {
+            memmove(to->data, from->data, from->size * sizeof(T));
+            return;
+        }
+
+        if(to->data < from->data)
+        {
+            for(isize i = 0; i < from->size; i++)
+                to->data[i] = cast(T&&) from->data[i];
+        }
+        else
+        {
+            for(isize i = from->size; i-- > 0;)
+                to->data[i] = cast(T&&) from->data[i];
         }
     }
 }

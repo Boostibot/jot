@@ -9,7 +9,6 @@
 #include "_test.h"
 #include "defines.h"
 
-
 namespace jot::tests::allocator
 {
     template<typename T>
@@ -76,31 +75,25 @@ namespace jot::tests::allocator
         }
     }
 
-    void test_allocators()
+    void stress_test()
     {
-        test_align();
-        //test_stack_ring();
-
         using Generator = std::mt19937;
-
         isize block_size = 100;
-        isize max_time = 5'000;
-        isize warm_up = 250;
-        isize size_log2_min = 6;
-        isize size_log2_max = 12;
-
-        isize align_log2_min = 1;
-        isize align_log2_max = 5;
+        isize max_time = 250;
 
         Generator gen;
-        auto size_distribution = std::uniform_int_distribution<decltype(1ll)>(size_log2_min, size_log2_max);
-        auto size_noise_distribution = std::uniform_int_distribution<decltype(1ll)>(0, 10);
-        auto align_distribution = std::uniform_int_distribution<decltype(1ll)>(align_log2_min, align_log2_max);
-
+        std::uniform_int_distribution<long long> size_distribution;
+        std::uniform_int_distribution<long long> size_noise_distribution;
+        std::uniform_int_distribution<long long> align_distribution;
+        
+        bool touch = true;
         Allocator* def = memory_globals::default_allocator();
-
         Allocator* tested = def;
 
+        Stack<isize> size_table;
+        Stack<isize> align_table;
+        Stack<Slice<u8>> allocs;
+        
         isize max_alloced_storage = 320 * memory_constants::MEBI_BYTE;
         Stack<u8> ring_storage;
         Stack<u8> stack_storage;
@@ -110,19 +103,25 @@ namespace jot::tests::allocator
         force(resize(&stack_storage, max_alloced_storage));
         force(resize(&stack_simple_storage, max_alloced_storage));
 
-        Failing_Allocator failling;
-        Ring_Allocator  ring = Ring_Allocator(slice(&ring_storage), def);
-        Intrusive_Stack_Scan stack_scan = Intrusive_Stack_Scan(slice(&ring_storage), def);
-        Intrusive_Stack_Resize stack_resi = Intrusive_Stack_Resize(slice(&ring_storage), def);
-        Stack_Ring_Allocator stack_ring = Stack_Ring_Allocator(slice(&ring_storage), def);
-        Intrusive_Stack_Simple stack_simp = Intrusive_Stack_Simple(slice(&ring_storage), def);
-        Arena_Allocator unbound = Arena_Allocator(def);
+        Failing_Allocator       failling;
+        Ring_Allocator          ring       = Ring_Allocator(slice(&ring_storage), def);
+        Intrusive_Stack_Scan    stack_scan = Intrusive_Stack_Scan(slice(&ring_storage), def);
+        Intrusive_Stack_Resize  stack_resi = Intrusive_Stack_Resize(slice(&ring_storage), def);
+        Stack_Ring_Allocator    stack_ring = Stack_Ring_Allocator(slice(&ring_storage), def);
+        Intrusive_Stack_Simple  stack_simp = Intrusive_Stack_Simple(slice(&ring_storage), def);
+        Arena_Allocator         unbound    = Arena_Allocator(def);
 
-        Stack<isize> size_table;
-        Stack<isize> align_table;
-        Stack<Slice<u8>> allocs;
+        const auto set_up_test = [&](
+            isize block_size_,
+            IRange size_log2,
+            IRange align_log2,
+            bool touch_,
+            isize max_time_ = 250)
+        {
+            size_distribution = std::uniform_int_distribution<long long>(size_log2.from, size_log2.to);
+            align_distribution = std::uniform_int_distribution<long long>(align_log2.from, align_log2.to);
+            size_noise_distribution = std::uniform_int_distribution<long long>(0, 10);
 
-        const auto resize_size_tables = [&](isize block_size_){
             block_size = block_size_;
             force(resize(&size_table, block_size));
             force(resize(&align_table, block_size));
@@ -133,9 +132,11 @@ namespace jot::tests::allocator
                 size_table[i]  = cast(isize) ((1ll << size_distribution(gen)) + size_noise_distribution(gen));
                 align_table[i] = cast(isize) (1ll << align_distribution(gen));
             }
-        };
 
-        bool touch = true;
+            max_time = max_time_;
+            touch = touch_;
+        };
+        
         const auto fill_slice = [&](Slice<u8> slice){
             if(touch == false)
                 return;
@@ -145,27 +146,7 @@ namespace jot::tests::allocator
                 u32s[i] = 0xAABBCCDD;
         };
 
-        const auto set_up_test = [&](
-            isize block_size_,
-            IRange size_log2,
-            IRange align_log2,
-            bool touch_,
-            isize max_time_ = 250,
-            isize warm_up_ = 100)
-        {
-            resize_size_tables(block_size_);
-
-            max_time = max_time_;
-            warm_up = warm_up_;
-            size_log2_min = size_log2.from;
-            size_log2_max = size_log2.to;
-
-            align_log2_min = align_log2.from;
-            align_log2_max = align_log2.to;
-
-            touch = touch_;
-        };
-
+        //allocate in order then deallocate in the same order
         const auto test_allocs_fifo = [&]() {
             for(isize i = 0; i < block_size; i++)
             {
@@ -186,7 +167,8 @@ namespace jot::tests::allocator
 
             unbound.reset();
         };   
-
+        
+        //allocate in order then deallocate in the opposite order
         const auto test_allocs_lifo = [&]() {
             for(isize i = 0; i < block_size; i++)
             {
@@ -201,7 +183,8 @@ namespace jot::tests::allocator
 
             unbound.reset();
         };   
-
+        
+        //allocate and then imidietelly deallocate in a loop
         const auto test_allocs_temp = [&]() {
 
             for(isize i = 0; i < block_size; i++)
@@ -215,6 +198,10 @@ namespace jot::tests::allocator
             unbound.reset();
         };
 
+        //allocate in order then deallocate half of the allocations
+        // in the same order then try to reize the remaining allocations 
+        // to two times their original size. if cant resize allocates them instead.
+        // then deallocates all remaining in order.
         const auto test_allocs_resi = [&]() {
             for(isize i = 0; i < block_size; i++)
             {
@@ -243,7 +230,7 @@ namespace jot::tests::allocator
                     force(result.state);
 
                     if(touch)
-                        copy_bytes<u8>(&result.items, old_data);
+                        copy_items<u8>(&result.items, old_data);
 
                     force(tested->deallocate(old_data, align));
                 }
@@ -251,7 +238,7 @@ namespace jot::tests::allocator
                 allocs[i] = result.items;
                 Slice<u8> added = slice(result.items, old_size);
                 if(touch)
-                    null_bytes(&added);
+                    null_items(&added);
             }
 
             for(isize i = 1; i < block_size; i += 2)
@@ -263,7 +250,8 @@ namespace jot::tests::allocator
             unbound.reset();   
         };
         
-        //Alloc data, then read the data 10 times (summing bytes but the op doesnt matter), dealloc data fifo
+        //allocate in order then read the data 10 times (summing bytes but the op doesnt matter) and dealloc the data
+        // is mostly for benchmarks
         const auto test_allocs_read = [&]() {
             for(isize i = 0; i < block_size; i++)
             {
@@ -295,72 +283,44 @@ namespace jot::tests::allocator
             unbound.reset();
         };
 
-        #if 0
-        const auto format_benchmark_result = [](Bench_Result result){
-            String_Builder builder;
-            String_Appender appender = {&builder};
-            force(format_float_into(&appender, result.mean_ms));
-            force(format_into(&appender, " : "));
-            force(format_float_into(&appender, result.deviation_ms));
+        const auto test_single = [&](Allocator* tested_)
+        {
+              tested = tested_;
 
-            return builder;
+              test_allocs_fifo();
+              test_allocs_lifo();
+              test_allocs_temp();
+              test_allocs_resi();
+              test_allocs_read();
         };
 
+        for(int i = 0; i < 10; i ++)
+        {
+            set_up_test(10, {4, 8}, {0, 5}, true);
+            test_single(&memory_globals::NEW_DELETE_ALLOCATOR);
+            test_single(&unbound);
+            test_single(&ring);
+            test_single(&stack_resi);
+            test_single(&stack_scan);
+            test_single(&stack_ring);
+            test_single(&stack_simp);
         
-        const auto print_benchmark = [&](Bench_Result result){
-            println(format_benchmark_result(result));
-        };
-
-        const auto run_and_print_tests = [&](cstring text, Allocator* tested_){
-            tested = tested_;
-
-            String_Builder res[5];
-            res[0] = format_benchmark_result(benchmark(max_time, test_allocs_fifo, block_size));
-            res[1] = format_benchmark_result(benchmark(max_time, test_allocs_lifo, block_size));
-            res[2] = format_benchmark_result(benchmark(max_time, test_allocs_temp, block_size));
-            res[3] = format_benchmark_result(benchmark(max_time, test_allocs_resi, block_size));
-            res[4] = format_benchmark_result(benchmark(max_time, test_allocs_read, block_size));
-
-            println("{} {}\t {}\t {}\t {}\t {}\t", text, res[0], res[1], res[2], res[2], res[4]);
-        };
-
-        const auto print_benchmark_for_block = [&](isize block_size_, IRange size_log2, IRange align_log2, bool touch = true){
-            set_up_test(block_size_, size_log2, align_log2, touch);
-            println("iters: {}", block_size);
-            println("size:  {} - {}", 1ll << size_log2.from, 1ll << size_log2.to);
-            println("align: {} - {}", 1ll << align_log2.from, 1ll << align_log2.to);
-            
-            println("               fifo                 \t lifo              \t temp                 \t resize                \t read");
-            run_and_print_tests("new delete:   ", &memory_globals::NEW_DELETE_ALLOCATOR);
-            run_and_print_tests("unbound:      ", &unbound);
-            run_and_print_tests("ring:         ", &ring);
-            run_and_print_tests("stack resi:   ", &stack_resi);
-            run_and_print_tests("stack scan:   ", &stack_scan);
-            run_and_print_tests("stack ring:   ", &stack_ring);
-            run_and_print_tests("stack simp:   ", &stack_simp);
-            println("\n");
-        };
-        tested = &unbound;
-
-        //println("SMALL SIZES NO TOUCH");
-        //println("===========");
-        //print_benchmark_for_block(10, {4, 8}, {0, 5}, false);
-        //print_benchmark_for_block(80, {4, 8}, {0, 5}, false);
-        //print_benchmark_for_block(640, {4, 8}, {0, 5}, false);
-        
-        println("SMALL SIZES");
-        println("===========");
-        print_benchmark_for_block(10, {4, 8}, {0, 5});
-        print_benchmark_for_block(80, {4, 8}, {0, 5});
-        print_benchmark_for_block(640, {4, 8}, {0, 5});
-
-        println("BIG SIZES");
-        println("===========");
-        print_benchmark_for_block(10, {8, 16}, {0, 5});
-        print_benchmark_for_block(80, {8, 16}, {0, 5});
-        print_benchmark_for_block(640, {8, 16}, {0, 5});
-        #endif
+            set_up_test(100, {1, 10}, {0, 10}, true);
+            test_single(&memory_globals::NEW_DELETE_ALLOCATOR);
+            test_single(&unbound);
+            test_single(&ring);
+            test_single(&stack_resi);
+            test_single(&stack_scan);
+            test_single(&stack_ring);
+            test_single(&stack_simp);
+        }
     }
-
+    
+    void test_allocators()
+    {
+        test_align();
+        test_stack_ring();
+        stress_test();
+    }
 }
 #undef cast

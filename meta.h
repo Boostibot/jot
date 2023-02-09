@@ -68,27 +68,8 @@ namespace meta
         return String{function_name.data, function_name.from + prefix_size, function_name.to - postfix_size};
     }
 
-    //type_name examples:
-    //MSVC:
-    //int
-    //class std::basic_iostream<char,struct std::char_traits<char> >
-    //struct meta::String
 
-    //GCC:
-    //int
-    //std::basic_iostream<char>
-    //String
-
-    //CLANG
-    //int
-    //std::basic_iostream<char>
-    //meta::String
-
-    //we need to create static constexpr variable to return pointer to - 
-    // - static constexpr locals are not alloved in standard c++ so we need to create 
-    // a helper struct that will hold our string
-
-    template<typename Dummy_Struct, int dummy_struct_name_size> nodisc constexpr
+    template<typename Dummy_Struct> nodisc constexpr
     String namespace_name_string() noexcept
     {
         String type_name = type_name_string<Dummy_Struct>();
@@ -105,38 +86,78 @@ namespace meta
 
         int additional_postfix_size = sizeof(additional_postfix) - 1;
         int prefix_size = sizeof(prefix) - 1;
-        int postfix_size = dummy_struct_name_size + additional_postfix_size;
 
-        String namespace_name = {type_name.data, type_name.from + prefix_size, type_name.to - postfix_size};
+        bool is_global = true;
+        int i = type_name.to - 1;
+        for(; i-- > type_name.from; )
+        {
+            
+            if(type_name.data[i] == ':' && type_name.data[i + 1] == ':')
+            {
+                is_global = false;
+                break;
+            }
+        };
+        
+        if(is_global)
+            return String{"", 0, 0};
+
+        String namespace_name = {type_name.data, type_name.from + prefix_size, i};
         return namespace_name;
     }
-
-    template<String str>
-    struct Static_Holder
+    
+    //we need to create static constexpr variable to return pointer to - 
+    // - static constexpr locals are not alloved in standard c++ so we need to create 
+    // a helper struct that will hold our string
+    namespace internal
     {
-        static constexpr const Static_String<str.to - str.from> static_str = {str.data, str.from, str.to};
-    };
+        template<typename T>
+        struct Type_Name_Holder
+        {
+            constexpr static String str = type_name_string<T>();
+            constexpr static Static_String<str.to - str.from> static_str = Static_String<str.to - str.from>(
+                str.data, str.from, str.to
+            );
+        };
 
-    template<String str> nodisc constexpr
-    const char* to_const_char() noexcept 
-    {
-        using Holder = Static_Holder<str>;
-        return Holder::static_str.string;
+        template<typename Dummy_Struct>
+        struct Namespace_Name_Holder
+        {
+            constexpr static String str = namespace_name_string<Dummy_Struct>();
+            constexpr static Static_String<str.to - str.from> static_str = Static_String<str.to - str.from>(
+                str.data, str.from, str.to
+            );
+        };
     }
 
+    //takes a type declared in a namespace and returns that namespace (is useful for macros that tell where they are)
+    template<typename Dummy_Struct> nodisc constexpr
+    const char* namespace_name() noexcept
+    {
+        return internal::Namespace_Name_Holder<Dummy_Struct>::static_str.string;
+    }
+
+    //returns compiler specific (but very readable!) name
     template<typename T> nodisc constexpr
     const char* type_name() noexcept 
     {
-        constexpr String name_str = type_name_string<T>();
-        return to_const_char<name_str>();
+        return internal::Type_Name_Holder<T>::static_str.string;
     }
 
-    template<typename Dummy_Struct, int dummy_struct_name_size = 20> nodisc constexpr
-    const char* namespace_name() noexcept
-    {
-        constexpr String name_str = namespace_name_string<Dummy_Struct, dummy_struct_name_size>();
-        return to_const_char<name_str>();
-    }
+    //type_name examples:
+    //MSVC:
+    //int
+    //class std::basic_iostream<char,struct std::char_traits<char> >
+    //struct meta::String
+
+    //GCC:
+    //int
+    //std::basic_iostream<char>
+    //String
+
+    //CLANG
+    //int
+    //std::basic_iostream<char>
+    //meta::String
 }
-
 #undef nodisc
