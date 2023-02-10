@@ -63,6 +63,13 @@ namespace jot
             return result.state != Allocator_State::OK;
         }
     };
+    
+    nodisc inline constexpr 
+    bool is_power_of_two(isize num) noexcept 
+    {
+        usize n = cast(usize) num;
+        return (n>0 && ((n & (n-1)) == 0));
+    }
 
     struct Allocator
     {
@@ -111,6 +118,8 @@ namespace jot
             cast(void) old_align;
             cast(void) custom_data;
 
+            assert_arg(is_power_of_two(new_align));
+            assert_arg(is_power_of_two(old_align));
             assert_arg(new_size >= 0);
             return {Allocator_State::UNSUPPORTED_ACTION};
         }
@@ -125,14 +134,14 @@ namespace jot
         nodisc virtual
         Allocation_Result allocate(isize size, isize align) noexcept override
         {
-            assert_arg(size >= 0 && align >= 0);
+            assert_arg(size >= 0 && is_power_of_two(align));
             return {Allocator_State::UNSUPPORTED_ACTION};
         }
 
         nodisc virtual 
         Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override
         {
-            assert_arg(allocated.data != nullptr && align >= 0);
+            assert_arg(allocated.data != nullptr && is_power_of_two(align));
             return Allocator_State::UNSUPPORTED_ACTION;
         }
 
@@ -140,7 +149,7 @@ namespace jot
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override
         {
             cast(void) allocated; cast(void) align; cast(void) new_size; 
-            assert_arg(new_size >= 0);
+            assert_arg(new_size >= 0 && is_power_of_two(align));
             return {Allocator_State::UNSUPPORTED_ACTION};
         } 
 
@@ -187,7 +196,7 @@ namespace jot
         nodisc virtual
         Allocation_Result allocate(isize size, isize align) noexcept override
         {
-            assert_arg(size >= 0 && align >= 0);
+            assert_arg(size >= 0 && is_power_of_two(align));
 
             void* obtained = operator new(cast(size_t) size, std::align_val_t{cast(size_t) align}, std::nothrow_t{});
             if(obtained == nullptr)
@@ -201,6 +210,7 @@ namespace jot
         nodisc virtual 
         Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override
         {
+            assert_arg(is_power_of_two(align));
             operator delete(allocated.data, std::align_val_t{cast(size_t) align}, std::nothrow_t{});
 
             total_alloced -= allocated.size;
@@ -210,7 +220,7 @@ namespace jot
         nodisc virtual
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override
         {
-            assert_arg(new_size >= 0);
+            assert_arg(new_size >= 0 && is_power_of_two(align));
             cast(void) align; cast(void) allocated; cast(void) new_size;
 
             return {Allocator_State::UNSUPPORTED_ACTION};
@@ -253,12 +263,6 @@ namespace jot
         }
     };
 
-    nodisc inline constexpr 
-    bool is_power_of_two(isize num) noexcept 
-    {
-        usize n = cast(usize) num;
-        return (n>0 && ((n & (n-1)) == 0));
-    }
 
     template<typename T> nodisc constexpr
     bool is_in_slice(T* ptr, Slice<T> slice)
@@ -344,7 +348,7 @@ namespace jot
         Allocation_Result allocate(isize size, isize align) noexcept override
         {
             assert(filled_to >= 0 && last_alloc >= 0);
-            assert_arg(size >= 0 && align >= 0);
+            assert_arg(size >= 0 && is_power_of_two(align));
 
             Slice<u8> available = available_slice();
             Slice<u8> aligned = _align_forward_negative(available, align);
@@ -381,7 +385,7 @@ namespace jot
         nodisc virtual
         Allocation_Result resize(Slice<u8> allocated, isize used_align, isize new_size) noexcept override 
         {
-            
+            assert_arg(is_power_of_two(used_align));
             Slice<u8> last_slice = last_alloced_slice();
             if(is_in_slice(allocated.data, buffer) == false)
                 return parent->resize(allocated, used_align, new_size);

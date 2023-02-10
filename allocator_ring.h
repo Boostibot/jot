@@ -35,12 +35,6 @@ namespace jot
         static constexpr isize MAX_BYTE_SIZE = MAX_NOT_MULT_SIZE * SIZE_MULT;
 
         nodisc static
-        isize size(Slot* slot) 
-        {
-            return (slot->size & ~USED_BIT) * SIZE_MULT;
-        }
-
-        nodisc static
         Slot* slot(void* ptr) 
         {
             u32* padding_ptr = cast(u32*) offset_ptr(ptr, -cast(isize) sizeof(Slot));
@@ -48,15 +42,6 @@ namespace jot
                 padding_ptr -= 1;
 
             return cast(Slot*) cast(void*) padding_ptr;
-        }
-
-        nodisc static
-        Slice<u8> data(Slot* slot, isize align) 
-        {
-            isize slot_size = size(slot); 
-            u8* data = align_forward(u8_ptr(slot) + sizeof(Slot), align);
-
-            return Slice<u8>{data, slot_size};
         }
 
         static 
@@ -314,8 +299,6 @@ namespace jot
 
     struct Intrusive_Stack_Simple : Allocator
     {
-        Slice<u8> buffer;
-
         u8* buffer_from = nullptr;
         u8* buffer_to = nullptr;
         u8* last_block_to = nullptr;
@@ -328,8 +311,7 @@ namespace jot
 
         struct Slot
         {
-            u32 prev_offset;
-            u32 size;
+            u64 prev_offset;
         };
 
         Intrusive_Stack_Simple(Slice<u8> buffer, Allocator* parent) 
@@ -337,7 +319,6 @@ namespace jot
         {
             using namespace detail;
             Slice<u8> aligned = align_forward(buffer, alignof(Slot));
-            this->buffer = aligned;
 
             buffer_from = aligned.data;
             buffer_to = aligned.data + aligned.size;
@@ -369,13 +350,10 @@ namespace jot
                 return parent->allocate(size, align);
 
             Slot* slot = (cast(Slot*) aligned_from) - 1;
-            slot->size = cast(u32) size | USED_BIT; 
-            slot->prev_offset = cast(u32) ptrdiff(slot, last_block_from); 
+            slot->prev_offset = cast(u64) ptrdiff(slot, last_block_from) | USED_BIT; 
 
-            #ifdef DO_ALLOCATOR_STATS
             current_alloced += size;
             max_alloced = max(max_alloced, current_alloced);
-            #endif
 
             Slice<u8> output = {aligned_from, size};
             last_block_to = aligned_to;
@@ -402,16 +380,14 @@ namespace jot
             assert(is_in_slice(allocated.data + allocated.size, used) && "invalid free!");
 
             Slot *slot = (cast(Slot*) allocated.data) - 1;
-            slot->size = slot->size & ~USED_BIT;
+            slot->prev_offset = slot->prev_offset & ~USED_BIT;
 
-            #ifdef DO_ALLOCATOR_STATS
             current_alloced -= allocated.size;
-            #endif
 
             while (true) 
             {
                 Slot* last_slot = (cast(Slot*) last_block_from) - 1;
-                if(last_slot->size & USED_BIT)
+                if(last_slot->prev_offset & USED_BIT)
                     return Allocator_State::OK;
 
                 last_block_from = (cast(u8*) last_slot) - last_slot->prev_offset;
@@ -431,11 +407,17 @@ namespace jot
         nodisc virtual 
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override 
         {
-            using namespace detail;
             u8* ptr = allocated.data;
             if(ptr < buffer_from || buffer_to <= ptr) 
                 return parent->resize(allocated, align, new_size);
 
+            //if is last block resize else fail
+            if(last_block_from == allocated.data)
+            {
+                last_block_to = align_forward(allocated.data + new_size, alignof(Slot));
+                current_alloced += new_size - allocated.size;
+                return Allocation_Result{Allocator_State::OK, Slice<u8>{allocated.data, new_size}};
+            }
             return Allocation_Result{Allocator_State::NOT_RESIZABLE};
         }
 

@@ -256,7 +256,7 @@ namespace jot
         nodisc virtual
         Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override 
         {
-            cast(void) align;
+            assert(is_power_of_two(align));
             if(allocated.data != last_allocation)
                 return Allocator_State::OK;
 
@@ -272,7 +272,7 @@ namespace jot
         nodisc virtual
         Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override
         {
-            cast(void) align;
+            assert(is_power_of_two(align));
             u8* used_to = available_from + new_size;
             if(allocated.data != last_allocation || used_to > available_to)
                 return Allocation_Result{Allocator_State::NOT_RESIZABLE};
@@ -345,9 +345,10 @@ namespace jot
         {
             cast(void) custom_data;
             cast(void) allocated;
-            cast(void) old_align;
-            cast(void) new_align;
             cast(void) other_alloc;
+            assert(is_power_of_two(new_align));
+            assert(is_power_of_two(old_align));
+
             if(action_type == Allocator_Action::RESET)
             {
                 reset();

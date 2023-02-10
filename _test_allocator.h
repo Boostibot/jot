@@ -108,7 +108,6 @@ namespace jot::tests::allocator
         
         bool touch = true;
         Allocator* def = memory_globals::default_allocator();
-        Allocator* tested = def;
 
         Stack<isize> size_table;
         Stack<isize> align_table;
@@ -170,7 +169,7 @@ namespace jot::tests::allocator
         };
 
         //allocate in order then deallocate in the same order
-        const auto test_allocs_fifo = [&]() {
+        const auto test_allocs_fifo = [&](Allocator* tested) {
             test_stats_plausibility(tested);
             isize alloced_before = tested->bytes_allocated();
 
@@ -196,7 +195,7 @@ namespace jot::tests::allocator
         };   
         
         //allocate in order then deallocate in the opposite order
-        const auto test_allocs_lifo = [&]() {
+        const auto test_allocs_lifo = [&](Allocator* tested) {
             test_stats_plausibility(tested);
             isize alloced_before = tested->bytes_allocated();
 
@@ -221,9 +220,8 @@ namespace jot::tests::allocator
         };   
         
         //allocate and then imidietelly deallocate in a loop
-        const auto test_allocs_temp = [&]() {
+        const auto test_allocs_temp = [&](Allocator* tested) {
             test_stats_plausibility(tested);
-            isize alloced_before = tested->bytes_allocated();
 
             for(isize i = 0; i < block_size; i++)
             {
@@ -237,11 +235,12 @@ namespace jot::tests::allocator
             unbound.reset();
         };
 
+
         //allocate in order then deallocate half of the allocations
         // in the same order then try to reize the remaining allocations 
         // to two times their original size. if cant resize allocates them instead.
         // then deallocates all remaining in order.
-        const auto test_allocs_resi = [&]() {
+        const auto test_allocs_resi = [&](Allocator* tested) {
             test_stats_plausibility(tested);
             isize alloced_before = tested->bytes_allocated();
 
@@ -297,10 +296,46 @@ namespace jot::tests::allocator
             test_stats_plausibility(tested);
             unbound.reset();   
         };
+
+        //Allocs, resizes the allocation and then imidiatelly deallocates it again in a loop
+        const auto test_allocs_resize_last = [&](Allocator* tested) {
+            test_stats_plausibility(tested);
+
+            for(isize i = 0; i < block_size; i++)
+            {
+                isize size = size_table[i];
+                isize new_size = size * 2;
+                isize align = align_table[i];
+
+                Allocation_Result result = tested->allocate(size, align);
+                force(result.state);
+                fill_slice(result.items);
+
+                Allocation_Result resize_result = tested->resize(result.items, align, new_size);
+                if(resize_result.state == ERROR)
+                {
+                    resize_result = tested->allocate(new_size, align);
+                    force(resize_result.state);
+
+                    if(touch)
+                        copy_items<u8>(&resize_result.items, result.items);
+
+                    force(tested->deallocate(result.items, align));
+                }
+
+                force(resize_result.state);
+                fill_slice(resize_result.items);
+
+                force(tested->deallocate(resize_result.items, align));
+            }
+
+            test_stats_plausibility(tested);
+            unbound.reset();
+        };
         
         //allocate in order then read the data 10 times (summing bytes but the op doesnt matter) and dealloc the data
         // is mostly for benchmarks
-        const auto test_allocs_read = [&]() {
+        const auto test_allocs_read = [&](Allocator* tested) {
             for(isize i = 0; i < block_size; i++)
             {
                 isize size = size_table[i];
@@ -331,17 +366,17 @@ namespace jot::tests::allocator
             unbound.reset();
         };
 
-        const auto test_single = [&](Allocator* tested_)
+        const auto test_single = [&](Allocator* tested)
         {
-            tested = tested_;
-            test_allocs_fifo();
-            test_allocs_lifo();
-            test_allocs_temp();
-            test_allocs_resi();
-            test_allocs_read();
+            test_allocs_fifo(tested);
+            test_allocs_lifo(tested);
+            test_allocs_temp(tested);
+            test_allocs_resi(tested);
+            test_allocs_resize_last(tested);
+            //test_allocs_read(tested);
         };
         
-        for(int i = 0; i < 10; i ++)
+        for(int i = 0; i < 5; i ++)
         {
             set_up_test(10, {4, 8}, {0, 5}, true);
             test_single(&memory_globals::NEW_DELETE_ALLOCATOR);

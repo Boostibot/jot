@@ -1,41 +1,97 @@
 #pragma once
 
-#include <limits>
-
 #include "memory.h"
 #include "hash.h"
+#include "stack.h"
 #include "defines.h"
 
 namespace jot
 {
-    constexpr isize HASH_SET_KEYS_ALIGN = 32;
-    constexpr isize HASH_SET_VALUES_ALIGN = 32;
-    constexpr isize HASH_SET_BASE_SIZE = 16;
-    constexpr isize HASH_SET_BASE_BYTES = 128;
-    constexpr isize HASH_SET_MAX_UTILIZATIO_NUM = 32;
-    constexpr isize HASH_SET_MAX_UTILIZATIO_DEN = 128;
-    
-    template <typename Key, typename Enable = Enabled>
-    struct Default_Hash_Functions
+    template <typename T, typename Enable = Enabled>
+    struct Hashable : No_Default
     {
-        static uint64_t hash(Key const& key);
-        static bool is_equal(Key const& a, Key const& b);
-        static void set_null_state(Key* key);
-        static bool is_null_state(Key const& key);
+        static 
+        hash_t hash(T const& val) noexcept
+        {
+            //just for illustartion:
+            return uint64_hash(val);
+        }
+    };
+    
+    template <typename T, typename Enable = Enabled>
+    struct Key_Comparable
+    {
+        static
+        bool are_equal(T const& a, T const& b) noexcept
+        {
+            return a == b;
+        }
     };
 
-    template <typename Key, typename Value, typename Hash_Functions = Default_Hash_Functions<Key>>
+
+    #define HASH_TABLE_ENTRIES_ALIGN 32
+    #define HASH_TABLE_LINKER_ALIGN 32
+    #define HASH_TABLE_LINKER_BASE_SIZE 8
+
+    //rehashes to same size if gravestones make more than
+    // HASH_TABLE_MAX_GRAVESTONES_NUM / HASH_TABLE_MAX_GRAVESTONES_DEN portion
+    #define HASH_TABLE_MAX_GRAVESTONES_NUM 1
+    #define HASH_TABLE_MAX_GRAVESTONES_DEN 4
+
+    // template<typename T>
+    // concept hashable = !std::is_base_of_v<No_Default, Hashable<T>>;
+    
+    template<typename Key, typename Value>
+    struct Hash_Table_Entry
+    {
+        Key key;
+        Value value;
+    };
+    
+    template<typename Key, typename Value>
+    using Hash_Table_Link = std::conditional_t<(sizeof(Hash_Table_Entry<Key, Value>) >= 8), u32, u64>;
+
+    template<
+        typename Key_, 
+        typename Value_, 
+        typename Hash_ = Hashable<Key_>,
+        typename Compare_ = Key_Comparable<Key_>
+        >
     struct Hash_Table
     {
-        Allocator* allocator = memory_globals::default_allocator();
-        Key* keys = nullptr;
-        Value* values = nullptr;
-        isize size = 0;
-        isize used = 0; //number of current set key-value pairs
-        bool null_state_used = false;
+        using Key = Key_;
+        using Value = Value_;
+        using Hash = Hash_;
+        using Compare = Compare_;
+        using Entry = Hash_Table_Entry<Key, Value>;
+        
+        //we assume that if the entry size is equal or greater than 8 (which is usually the case) 
+        // we wont ever hold more than 4 million entries (would be more than 32GB of data)
+        // this reduces the necessary size for linker by 50%
+        using Link = Hash_Table_Link<Key, Value>;
+
+        Allocator* _allocator = memory_globals::default_allocator();
+        Key* _keys = nullptr;
+        Value* _values = nullptr;
+        Link* _linker = nullptr;
+        
+        isize _entries_size = 0;
+        isize _entries_capacity = 0;
+        isize _linker_size = 0;
+        isize _gravestone_count = 0; //the count of gravestones in linker array + the count of unreferenced entries
+        // when too large triggers cleaning rehash
+
+        //@NOTE: we *could* use Stack to hold keys and Stack to hold values since 
+        // we effectively use one. That would howeever cost us extra 3*8 redundant bytes 
+        // which would mean this structure would no longer fit into 64B cache line and thus 
+        // requiring more than one memory read. This could very negatively impact performance.
+        
+        //@NOTE: we can implement multi hash table or properly support deletion if we added extra array
+        //   called _group containg for each entry a next and prev entry index (as u32). That way we 
+        //   could upon deletion go to back or prev and change the _linker index to point to either of them
 
         Hash_Table() noexcept = default;
-        Hash_Table(Allocator* alloc) noexcept : allocator(alloc) {}
+        Hash_Table(Allocator* alloc) noexcept : _allocator(alloc) {}
         Hash_Table(Hash_Table&& other) noexcept;
         Hash_Table(Hash_Table const& other) = delete;
         ~Hash_Table() noexcept;
@@ -44,80 +100,69 @@ namespace jot
         Hash_Table& operator=(Hash_Table const& other) = delete;
     };
     
-    template <typename Key, typename Value, typename Fns> nodisc
-    bool is_invariant(Hash_Table<Key, Value, Fns> const& hash)
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    bool is_invariant(Hash_Table<Key, Value, Hash, Comp> const& hash)
     {
-        bool is_size_power = hash.size == 0;
+        bool is_size_power = hash._linker_size == 0;
         if(is_size_power == false)
-            is_size_power = is_power_of_two(hash.size - 1) && hash.size >= 3;
+            is_size_power = is_power_of_two(hash._linker_size);
 
-        bool is_alloc_not_null = hash.allocator != nullptr;
-        bool are_both_alloced = (hash.keys == nullptr) == (hash.values == nullptr);
-        bool are_sizes_correct = (hash.keys == nullptr) == (hash.size == 0);
-        bool is_used_in_range = hash.size >= hash.used && hash.used >= 0;
+        bool is_alloc_not_null = hash._allocator != nullptr;
+        bool are_entries_simulatinous_alloced = (hash._keys == nullptr) == (hash._values == nullptr);
+        bool are_entry_sizes_correct = (hash._keys == nullptr) == (hash._entries_size == 0);
+        bool are_linker_sizes_correct = (hash._linker == nullptr) == (hash._linker_size == 0);
 
-        return is_size_power && is_alloc_not_null && are_both_alloced && are_sizes_correct && is_used_in_range;
+        bool are_sizes_in_range = hash._entries_size <= hash._entries_capacity;
+
+        bool res = is_size_power && is_alloc_not_null && are_entries_simulatinous_alloced 
+            && are_entry_sizes_correct && are_linker_sizes_correct && are_sizes_in_range;
+
+        assert(res);
+        return res;
     }
 
-    template <typename Key, typename Value, typename Fns> nodisc
-    Slice<Key> keys(Hash_Table<Key, Value, Fns>* hash)
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Slice<const Key> keys(Hash_Table<Key, Value, Hash, Comp> const& hash)
     {
-        Slice<Key> out = {hash->keys, hash->size};
+        Slice<const Key> out = {hash._keys, hash._entries_size};
         return out;
     }
     
-    template <typename Key, typename Value, typename Fns> nodisc
-    Slice<const Key> keys(Hash_Table<Key, Value, Fns> const& hash)
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Slice<Value> values(Hash_Table<Key, Value, Hash, Comp>* hash)
     {
-        Slice<const Key> out = {hash.keys, hash.size};
+        Slice<Value> out = {hash->_values, hash->_entries_size};
         return out;
     }
     
-    template <typename Key, typename Value, typename Fns> nodisc
-    Slice<Value> values(Hash_Table<Key, Value, Fns>* hash)
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Slice<const Value> values(Hash_Table<Key, Value, Hash, Comp> const& hash)
     {
-        Slice<Value> out = {hash->values, hash->size};
+        Slice<const Value> out = {hash._values, hash._entries_size};
         return out;
     }
-    
-    template <typename Key, typename Value, typename Fns> nodisc
-    Slice<const Value> values(Hash_Table<Key, Value, Fns> const& hash)
-    {
-        Slice<const Value> out = {hash.values, hash.size};
-        return out;
-    }
-    
-    template <typename Key, typename Value, typename Fns> nodisc
-    bool is_used(Hash_Table<Key, Value, Fns> const& hash, isize index)
-    {
-        assert(index >= 0 && index < hash.size && "index out of bounds!");
 
-        Key const& key = hash.keys[index];
-        bool is_used = Fns::is_null_state(key) == false;
-        bool is_null_state_used = index == 0 && hash.null_state_used;
-            
-        return is_used || is_null_state_used;
-    }
-    
-    template <typename Key, typename Value, typename Fns> nodisc
-    bool is_empty(Hash_Table<Key, Value, Fns> const& hash, isize index)
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    isize jump_table_size(Hash_Table<Key, Value, Hash, Comp> const& hash)
     {
-        return is_used(hash, index) == false;
+        return hash._linker_size;
     }
 
-    template <typename Key, typename Value, typename Fns>
-    void swap(Hash_Table<Key, Value, Fns>* left, Hash_Table<Key, Value, Fns>* right) noexcept
+    template <typename Key, typename Value, class Hash, class Comp>
+    void swap(Hash_Table<Key, Value, Hash, Comp>* left, Hash_Table<Key, Value, Hash, Comp>* right) noexcept
     {
-        swap(&left->allocator, &right->allocator);
-        swap(&left->keys, &right->keys);
-        swap(&left->values, &right->values);
-        swap(&left->size, &right->size);
-        swap(&left->used, &right->used);
-        swap(&left->null_state_used, &right->null_state_used);
+        swap(&left->_allocator, &right->_allocator);
+        swap(&left->_keys, &right->_keys);
+        swap(&left->_values, &right->_values);
+        swap(&left->_linker, &right->_linker);
+        swap(&left->_entries_size, &right->_entries_size);
+        swap(&left->_entries_capacity, &right->_entries_capacity);
+        swap(&left->_gravestone_count, &right->_gravestone_count);
+        swap(&left->_linker_size, &right->_linker_size);
     }
 
-    template <typename Key, typename Value, typename Fns>
-    Hash_Table<Key, Value, Fns>::Hash_Table(Hash_Table && other) noexcept 
+    template <typename Key, typename Value, class Hash, class Comp>
+    Hash_Table<Key, Value, Hash, Comp>::Hash_Table(Hash_Table && other) noexcept 
     {
         assert(is_invariant(*this));
         assert(is_invariant(other));
@@ -125,307 +170,552 @@ namespace jot
         swap(this, &other);
     }
     
-    template <typename Key, typename Value, typename Fns>
-    Hash_Table<Key, Value, Fns>::~Hash_Table() noexcept 
+    struct Hash_Found
     {
-        assert(is_invariant(*this));
+        isize hash_index;
+        isize entry_index;
+        isize finished_at;
+    };
 
-        if(this->keys != nullptr)
+    namespace hash_table_internal
+    {
+        constexpr isize EMPTY_LINK = -1;
+        constexpr isize GRAVESTONE_LINK = -2;
+
+        template <typename Key, typename Value, class Hash, class Comp> nodisc
+        auto linker(Hash_Table<Key, Value, Hash, Comp> const& hash)
         {
-            //destruct all keys and used values
-            Slice<Key> key_items = jot::keys(this);
-            Slice<Value> value_items = jot::values(this);
+            Slice<const Hash_Table_Link<Key, Value>> out = {hash._linker, hash._linker_size};
+            return out;
+        }
 
-            for(isize i = 0; i < this->size; i++)
+        template <typename Key, typename Value, class Hash, class Comp> nodisc
+        auto linker(Hash_Table<Key, Value, Hash, Comp>* hash)
+        {
+            Slice<Hash_Table_Link<Key, Value>> out = {hash->_linker, hash->_linker_size};
+            return out;
+        }
+        
+        template <typename Key, typename Value, class Hash, class Comp> nodisc
+        Allocator_State_Type set_entries_capacity(Hash_Table<Key, Value, Hash, Comp>* hash, isize new_capacity) noexcept
+        {
+            Allocator* alloc = hash->_allocator;
+            isize align = HASH_TABLE_ENTRIES_ALIGN;
+            isize size = hash->_entries_size;
+
+            Slice<Key> old_keys = Slice<Key>{hash->_keys, hash->_entries_capacity};
+            Slice<Value> old_values = Slice<Value>{hash->_values, hash->_entries_capacity};
+
+            Set_Capacity_Result<Key> key_res = set_capacity_allocation_stage(alloc, &old_keys, align, new_capacity, true);
+            if(key_res.state == ERROR)
+                return key_res.state;
+                
+            Set_Capacity_Result<Value> value_res = set_capacity_allocation_stage(alloc, &old_values, align, new_capacity, true);
+            if(value_res.state == ERROR)
             {
-                if(is_used(*this, i))
-                    value_items[i].~Value();
+                Slice<u8> raw_keys = cast_slice<u8>(key_res.items);
+                alloc->deallocate(raw_keys, align);
 
-                key_items[i].~Key();
+                return value_res.state;
             }
 
-            //deallocate alloced
-            this->allocator->deallocate(cast_slice<u8>(key_items), HASH_SET_KEYS_ALIGN);
-            this->allocator->deallocate(cast_slice<u8>(value_items), HASH_SET_VALUES_ALIGN);
+            set_capacity_deallocation_stage(alloc, &old_keys, size, align, &key_res);
+            set_capacity_deallocation_stage(alloc, &old_values, size, align, &value_res);
+
+            hash->_keys = key_res.items.data;
+            hash->_values = value_res.items.data;
+            hash->_entries_capacity = new_capacity;
+
+            return Allocator_State::OK;
         }
-    }
 
-    template <typename Key, typename Value, typename Fns>
-    Hash_Table<Key, Value, Fns>& Hash_Table<Key, Value, Fns>::operator=(Hash_Table && other) noexcept 
-    {
-        assert(is_invariant(*this));
-        assert(is_invariant(other));
-
-        swap(this, &other);
-        return *this;
-    }
-
-    template <typename Key, typename Value, typename Fns> nodisc
-    isize find_entry(Hash_Table<Key, Value, Fns> const& hash, no_infer(Key) const& key)
-    {
-        assert(is_invariant(hash));
-
-        if(hash.size == 0)
-            return -1;
-
-        hash_t result = Fns::hash(key);
-        hash_t mask = cast(hash_t) hash.size - 2;
-
-        hash_t index = result & mask;
-        isize contention = 0;
-
-        assert(hash.size >= 3 && "size must not be smaller than 3 (2 regular size)");
-        for(hash_t i = index;; contention++)
+        template <typename Key, typename Value, class Hash, class Comp> nodisc
+        Allocator_State_Type push_entry(Hash_Table<Key, Value, Hash, Comp>* hash, Key key, Value value) noexcept
         {
-            assert(contention != hash.size && "the contention must not be 100%");
+            assert(is_invariant(*hash));
 
-            Key const& current = hash.keys[i + 1];
-            if(Fns::is_null_state(current))
-                break;
+            isize size = hash->_entries_size;
+            isize capacity = hash->_entries_capacity;
+            if(size >= capacity)
+            {
+                isize new_capacity = calculate_stack_growth(hash->_entries_capacity, size + 1);
+                Allocator_State_Type state = set_entries_capacity(hash, new_capacity);
+                if(state == ERROR)
+                    return state;
+            }
 
-            if(Fns::is_equal(current, key))
-                return cast(isize) i + 1;
+            new (&hash->_keys[size]) Key(move(&key));
+            new (&hash->_values[size]) Value(move(&value));
 
-            i = (i + 1) & mask;
+            hash->_entries_size = size + 1;
+            
+            assert(is_invariant(*hash));
+            return Allocator_State::OK;
+        }
+    
+        template <typename Key, typename Value, class Hash, class Comp> nodisc
+        Allocator_State_Type unsafe_rehash(Hash_Table<Key, Value, Hash, Comp>* table, isize to_size) noexcept
+        {
+            assert(is_invariant(*table));
+            using Link = Hash_Table_Link<Key, Value>;
+
+            isize required_min_size = div_round_up(table->_entries_size, sizeof(Link));
+            assert(to_size >= required_min_size && is_power_of_two(to_size) && "must be big enough (no more shrinking than by 4 at a time) and power of two");
+
+
+            to_size = max(to_size, required_min_size);
+
+            Slice<Link> old_linker = linker(table);
+            Allocation_Result result = table->_allocator->allocate(to_size * cast(isize) sizeof(Link), HASH_TABLE_LINKER_ALIGN);
+            if(result.state == ERROR)
+               return result.state; 
+
+            //mark occurences of each entry index in a bool array
+            Slice<bool> marks = trim(cast_slice<bool>(result.items), table->_entries_size);
+            null_items(&marks);
+
+            isize empty_count = 0;
+            isize graveston_count = 0;
+            isize alive_count = 0;
+            for(isize i = 0; i < old_linker.size; i++)
+            {
+                #ifndef NDEBUG
+                if(old_linker[i] == cast(Link) EMPTY_LINK)
+                    empty_count ++;
+                else if(old_linker[i] == cast(Link) GRAVESTONE_LINK)
+                    graveston_count ++;
+                else
+                    alive_count ++;
+                #endif
+                
+                isize link = cast(isize) old_linker[i];
+                //skip gravestones and empty slots
+                if(link > table->_entries_size)
+                    continue;
+
+
+                marks[link] = true;
+            }
+
+            assert(empty_count + graveston_count + alive_count == table->_linker_size);
+            assert(graveston_count <= table->_gravestone_count);
+
+            //iterate the marks from front and back 
+            // swapping mark from the back into holes from front
+            //  (we dont actually need to swap marks so we skip it)
+            // swapping the entries in entry array in the same time
+            // the final position of the forward index is the filtered size
+            //this is the optimal way to remove any dead entries while 
+            // moving as little entries as possible
+            isize forward_index = 0;
+            isize backward_index = marks.size - 1;
+            isize swap_count = 0;
+                
+            while(forward_index < backward_index)
+            {
+                while(marks[forward_index] == true)
+                {
+                    forward_index++;
+                    if(forward_index >= marks.size)
+                        break;
+                }
+
+                while(marks[backward_index] == false)
+                {
+                    backward_index--;
+                    if(forward_index < 0)
+                        break;
+                }
+                    
+                if(forward_index >= backward_index)
+                    break;
+
+                table->_keys[forward_index] = move(&table->_keys[backward_index]);
+                table->_values[forward_index] = move(&table->_values[backward_index]);
+
+                swap_count ++;
+                forward_index ++;
+                backward_index--;
+            }
+
+            isize alive_entries_size = forward_index;
+            assert(alive_count == alive_entries_size);
+            assert(swap_count <= graveston_count);
+            
+            //fill new_linker to empty
+            Slice<Link> new_linker = cast_slice<Link>(result.items);
+            fill(&new_linker, cast(Link) EMPTY_LINK);
+
+            //rehash every entry up to alive_entries_size
+            hash_t mask = cast(hash_t) new_linker.size - 1;
+            for(isize i = 0; i < alive_entries_size; i++)
+            {
+                Key const& key = table->_keys[i];
+                hash_t hash = Hash::hash(key);
+                hash_t index = hash & mask;
+                new_linker[cast(isize) index] = cast(Link) i;
+            }
+
+            //destroy the dead entries
+            for(isize i = alive_entries_size; i < table->_entries_size; i++)
+            {
+                table->_keys[i].~Key();
+                table->_values[i].~Value();
+            }
+            
+            assert(table->_entries_size <= alive_entries_size + table->_gravestone_count);
+
+            table->_gravestone_count = 0;
+            table->_entries_size = alive_entries_size;
+            table->_linker_size = new_linker.size;
+            table->_linker = new_linker.data;
+            table->_allocator->deallocate(cast_slice<u8>(old_linker), HASH_TABLE_LINKER_ALIGN);
+            
+            assert(is_invariant(*table));
+
+            return Allocator_State::OK;
         }
 
-        if(Fns::is_null_state(key) && hash.null_state_used)
-            return 0;
+        template <typename Key, typename Value, class Hash, class Comp> nodisc
+        bool is_overful(Hash_Table<Key, Value, Hash, Comp> const& table)
+        {
+            //max 25% utlization
+            return table._linker_size - table._gravestone_count <= table._entries_size * 4;
+        }
+        
+        template <typename Key, typename Value, class Hash, class Comp> nodisc
+        Allocator_State_Type grow(Hash_Table<Key, Value, Hash, Comp>* table) noexcept
+        {
+            isize rehash_to = table->_linker_size * 2;
 
-        return -1;
+            //if too many gravestones keeps the same size onky clears out the grabage
+            // ( gravestones / size >= MAX_NUM / MAX_DEN )
+            if(table->_gravestone_count * HASH_TABLE_MAX_GRAVESTONES_DEN >= table->_linker_size * HASH_TABLE_MAX_GRAVESTONES_NUM)
+                rehash_to = table->_linker_size;
+            
+            //If zero go to base size
+            if(rehash_to == 0)
+                rehash_to = HASH_TABLE_LINKER_BASE_SIZE;
+
+            return unsafe_rehash(table, rehash_to);
+        }
     }
     
-    template <typename Key, typename Value, typename Hash> nodisc
-    bool has(Hash_Table<Key, Value, Hash> const& table, no_infer(Key) const& key) noexcept
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Allocator_State_Type rehash(Hash_Table<Key, Value, Hash, Comp>* table, isize to_size) noexcept
     {
-        return find_entry(table, key) != -1;
+        using Link = Hash_Table_Link<Key, Value>;
+        isize rehash_to = HASH_TABLE_LINKER_BASE_SIZE;
+
+        isize required_min_size = div_round_up(table->_entries_size, sizeof(Link)); //cannot shrink below this
+        isize normed = max(to_size, required_min_size);
+        while(rehash_to < normed)
+            rehash_to *= 2; //must be power of two and this is the simplest way of ensuring it
+
+        return hash_table_internal::unsafe_rehash(table, rehash_to);
+    }
+    
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Allocator_State_Type rehash(Hash_Table<Key, Value, Hash, Comp>* table) noexcept
+    {
+        isize rehash_to = jump_table_size(*table);
+        return hash_table_internal::unsafe_rehash(table, rehash_to);
     }
 
-    template <typename Key, typename Value, typename Hash> nodisc
-    Value const& get(Hash_Table<Key, Value, Hash>const& table, no_infer(Key) const& key, no_infer(Value) const& if_not_found) noexcept
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Allocator_State_Type reserve(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
     {
-        isize index = find_entry(table, key);
+        if(to_fit < table->_linker_size)
+            return Allocator_State_Type::OK;
+
+        return unsafe_rehash(table, to_fit);
+    }
+
+    template <typename Key, typename Value, class Hash, class Comp, bool break_on_gravestone = false> nodisc
+    Hash_Found find(Hash_Table<Key, Value, Hash, Comp> const& table, Key const& key, hash_t hash) noexcept
+    {
+        using Link = Hash_Table_Link<Key, Value>;
+        assert(is_invariant(table));
+        Hash_Found found = {};
+        found.hash_index = -1;
+        found.entry_index = -1;
+        found.finished_at = -1;
+
+        if(table._linker_size == 0)
+            return found;
+
+        hash_t mask = cast(hash_t) table._linker_size - 1;
+        hash_t modulated = hash & mask;
+
+        Slice<const Link> links = hash_table_internal::linker(table);
+        Slice<const Key> keys = jot::keys(table);
+
+        hash_t i = modulated;
+        for(isize passed = 0;; i = (i + 1) & mask, passed ++)
+        {
+            Link link = links[cast(isize) i];
+            if(link == cast(Link) hash_table_internal::EMPTY_LINK || passed > table._linker_size)
+                break;
+        
+            if(link == cast(Link) hash_table_internal::GRAVESTONE_LINK)
+            {
+                if constexpr(break_on_gravestone)
+                    break;
+
+                continue;
+            }
+
+            Key const& curr = keys[cast(isize) link];
+            if(Comp::are_equal(curr, key))
+            {
+                found.hash_index = cast(isize) i;
+                found.entry_index = link;
+                break;
+            }
+        }
+
+        found.finished_at = cast(isize) i;
+        return found;
+    }
+    
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Hash_Found find(Hash_Table<Key, Value, Hash, Comp> const& table, no_infer(Key) const& key) noexcept
+    {
+        hash_t hash = Hash::hash(key);
+        return find(table, key, hash);
+    }
+
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    void mark_removed(Hash_Table<Key, Value, Hash, Comp>* table, Hash_Found removed)
+    {
+        assert(0 <= removed.hash_index && removed.hash_index < table->_linker_size && "out of range!");
+
+        table->_linker[removed.hash_index] = cast(Hash_Table_Link<Key, Value>) hash_table_internal::GRAVESTONE_LINK;
+        table->_gravestone_count += 2; //one for the link and one for the entry 
+        //=> when only marking entries we will rehash faster then when removing them
+    }
+
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Hash_Table_Entry<Key, Value> remove(Hash_Table<Key, Value, Hash, Comp>* table, Hash_Found removed)
+    {
+        assert(0 <= removed.hash_index && removed.hash_index < table->_linker_size && "out of range!");
+        assert(0 <= removed.entry_index && removed.entry_index < table->_entries_size && "out of range!");
+        assert(table->_entries_size > 0 && "cannot remove from empty");
+
+        isize last = table->_entries_size - 1;
+        isize removed_i = removed.entry_index;
+        table->_linker[removed.hash_index] = cast(Hash_Table_Link<Key, Value>) hash_table_internal::GRAVESTONE_LINK;
+        table->_gravestone_count += 1;
+
+        if(removed_i != last)
+        {
+            Hash_Found changed_for = find(*table, table->_keys[last]);
+            table->_linker[changed_for.hash_index] = cast(Hash_Table_Link<Key, Value>) removed_i;
+        }
+
+        Hash_Table_Entry<Key, Value> removed_entry_data = {
+            move(&table->_keys[removed_i]),
+            move(&table->_values[removed_i]),
+        };
+        
+        if(removed_i != last)
+        {
+            table->_keys[removed_i] = move(&table->_keys[last]);
+            table->_values[removed_i] = move(&table->_values[last]);
+        }
+
+        table->_keys[last].~Key();
+        table->_values[last].~Value();
+            
+        table->_entries_size -= 1;
+        return removed_entry_data;
+    }
+
+
+    template <typename Key, typename Value, class Hash, class Comp>
+    isize mark_removed(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) const& key)
+    {
+        Hash_Found found = find(*table, key);
+        if(found.entry_index == -1)
+            return found.entry_index;
+
+        cast(void) mark_removed(table, found);
+        return found.entry_index;
+    }
+
+    template <typename Key, typename Value, class Hash, class Comp> 
+    bool remove(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) const& key)
+    {
+        Hash_Found found = find(*table, key);
+        if(found.entry_index == -1)
+            return false;
+
+        cast(void) remove(table, found);
+        return true;
+    }
+
+    template <typename Key, typename Value, class Hash, class Comp>
+    Hash_Table<Key, Value, Hash, Comp>::~Hash_Table() noexcept 
+    {
+        assert(is_invariant(*this));
+        cast(void) hash_table_internal::set_entries_capacity(this, cast(isize) 0);
+
+        if(this->_linker != nullptr)
+        {
+            auto linker = hash_table_internal::linker(this);
+            Slice<u8> bytes = cast_slice<u8>(linker);
+            this->_allocator->deallocate(bytes, HASH_TABLE_LINKER_ALIGN);
+        }
+    }
+
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    isize find_entry(Hash_Table<Key, Value, Hash, Comp> const& table, no_infer(Key) const& key) noexcept
+    {
+        return find(table, key).entry_index;
+    }
+    
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    bool has(Hash_Table<Key, Value, Hash, Comp> const& table, no_infer(Key) const& key) noexcept
+    {
+        return find(table, key).entry_index != -1;
+    }
+
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Value const& get(Hash_Table<Key, Value, Hash, Comp> const&  table, no_infer(Key) const& key, no_infer(Value) const& if_not_found) noexcept
+    {
+        isize index = find(table, key).entry_index;
         if(index == -1)
             return if_not_found;
 
         return values(table)[index];
     }
 
-    template <typename Key, typename Value, typename Hash> nodisc
-    Value move_out(Hash_Table<Key, Value, Hash>* table, no_infer(Key) const& key, no_infer(Value) if_not_found) noexcept
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Value move_out(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) const& key, no_infer(Value) if_not_found) noexcept
     {
-        isize index = find_entry(table, key);
+        isize index = find(*table, key).entry_index;
         if(index == -1)
             return if_not_found;
 
         return move(&values(table)[index]);
     }
 
-
-    template <typename Key, typename Value, typename Fns> nodisc
-    Allocator_State_Type rehash(Hash_Table<Key, Value, Fns>* hash, isize min_size)
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Allocator_State_Type set(Hash_Table<Key, Value, Hash, Comp>* table, Key key, hash_t hash, Value value) noexcept
     {
-        assert(is_invariant(*hash));
-        constexpr isize base_elems = max(HASH_SET_BASE_BYTES / cast(isize) sizeof(Key), HASH_SET_BASE_SIZE);
-
-        isize old_regular_size = hash->size - 1;
-        isize new_regular_size = max(old_regular_size, base_elems);
-        while(min_size - 1 > new_regular_size)
-            new_regular_size *= 2;
-
-        isize new_size = new_regular_size + 1;
-        assert(is_power_of_two(new_size - 1));
-        assert(new_size >= 3);
-
-        Allocation_Result keys_res = hash->allocator->allocate(new_size * cast(isize) sizeof(Key), HASH_SET_KEYS_ALIGN);
-        if(keys_res.state == ERROR)
-            return keys_res.state;
-
-        Allocation_Result vals_res = hash->allocator->allocate(new_size * cast(isize) sizeof(Value), HASH_SET_VALUES_ALIGN);
-        if(vals_res.state == ERROR)
+        assert(is_invariant(*table));
+        if(hash_table_internal::is_overful(*table))
         {
-            if(keys_res.state == OK)
-                hash->allocator->deallocate(keys_res.items, HASH_SET_KEYS_ALIGN);
-
-            return vals_res.state;
-        }
-            
-        Slice<Key> new_keys = cast_slice<Key>(keys_res.items);
-        Slice<Value> new_vals = cast_slice<Value>(vals_res.items);
-
-        //set all keys to null state
-        for(isize i = 0; i < new_keys.size; i++)
-        {
-            Key* current = new (&new_keys[i]) Key();
-            Fns::set_null_state(current);
-        }
-        
-        hash_t new_mask = cast(hash_t) new_size - 2;
-        for(isize i = 1; i < hash->size; i++)
-        {
-            Key& key = hash->keys[i];
-            //i from 1 => we handle the null slot seperately
-            if(Fns::is_null_state(key))
-                continue;
-            
-            Value* val = &hash->values[i + 1];
-
-            hash_t hashed = Fns::hash(key);
-            hash_t index = hashed & new_mask;
-            new_keys[cast(isize) index + 1] = move(&key);
-            new (&new_vals[cast(isize) index + 1]) Value(move(val));
-        }
-
-        if(hash->null_state_used)
-        {
-            Value* val = &hash->values[0];
-            new (&new_vals[0]) Value(move(val));
-        }
-
-        Hash_Table<Key, Value, Fns> new_table(hash->allocator);
-        new_table.size = new_size;
-        new_table.keys = new_keys.data;
-        new_table.values = new_vals.data;
-        new_table.used = hash->used;
-        new_table.null_state_used = hash->null_state_used;
-
-        *hash = move(&new_table);
-        
-        assert(is_invariant(*hash));
-        return Allocator_State::OK;
-    }
-
-    template <typename Key, typename Value, typename Fns> nodisc
-    Allocator_State_Type set(Hash_Table<Key, Value, Fns>* hash, no_infer(Key) key, no_infer(Value) value)
-    {
-        assert(is_invariant(*hash));
-        if(hash->used * HASH_SET_MAX_UTILIZATIO_DEN >= hash->size * HASH_SET_MAX_UTILIZATIO_NUM)
-        {
-            Allocator_State_Type state = rehash(hash, hash->size + 1);
+            Allocator_State_Type state = hash_table_internal::grow(table);
             if(state == ERROR)
                 return state;
         }
 
-        hash_t result = Fns::hash(key);
-        hash_t mask = cast(hash_t) hash->size - 2;
-
-        hash_t index = result & mask;
-        isize contention = 0;
-        isize found_i = 0;
-        bool first_used = false;
-        
-        for(hash_t i = index;; contention++)
+        Hash_Found found = find<Key, Value, Hash, Comp, true>(*table, key, hash);
+        if(found.entry_index != -1)
         {
-            assert(contention != hash->size && "the contention must not be 100%");
-
-            isize curr_i = cast(isize) i + 1;
-            Key const& current = hash->keys[curr_i];
-            if(Fns::is_null_state(current))
-            {
-                bool is_null_state = Fns::is_null_state(key);
-                if(is_null_state)
-                {
-                    found_i = 0;
-                    first_used = hash->null_state_used == false;
-                    hash->null_state_used = true;
-                }
-                else
-                {
-                    found_i = curr_i;
-                    first_used = true;
-                }
-
-                break;
-            }
-
-            if(Fns::is_equal(current, key))
-            {
-                found_i = curr_i;
-                break;
-            }
-
-            i = (i + 1) & mask;
+            values(table)[found.entry_index] = move(&value);
+            return Allocator_State::OK;
         }
         
-        if(first_used)
+        assert(found.finished_at < table->_linker_size && "should be empty or gravestone at this point");
+
+        //if finished on a gravestone we can overwrite it and thus remove it 
+        if(found.finished_at == cast(Hash_Table_Link<Key, Value>) hash_table_internal::GRAVESTONE_LINK)
         {
-            new (&values(hash)[found_i]) Value(move(&value));
-            hash->used += 1;
-            keys(hash)[found_i] = move(&key);
-        }
-        else
-        {
-            values(hash)[found_i] = move(&value);
+            assert(table->_gravestone_count > 0);
+            table->_gravestone_count -= 1;
         }
 
-        assert(is_invariant(*hash));
-        return Allocator_State::OK;
+        Allocator_State_Type state = hash_table_internal::push_entry(table, move(&key), move(&value));
+        if(state == OK)
+            table->_linker[found.finished_at] = cast(Hash_Table_Link<Key, Value>) table->_entries_size - 1;
+
+        return state;
+    }
+    
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Allocator_State_Type set(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, no_infer(Value) value) noexcept
+    {
+        hash_t hash = Hash::hash(key);
+        return set<Key, Value, Hash>(table, move(&key), hash, move(&value));
     }
 
-  
-    struct Not_Integral_Hash {};
-
-    template <typename Int_Key>
-    struct Default_Hash_Functions<Int_Key, Enable_If<std::is_integral_v<Int_Key>>>
+    template <typename T>
+    struct Hashable<T, Enable_If<std::is_integral_v<T>>>
     {
-        static constexpr Int_Key NULL_STATE = std::is_unsigned_v<Int_Key> 
-            ? std::numeric_limits<Int_Key>::max() 
-            : std::numeric_limits<Int_Key>::min(); 
-
-        static uint64_t hash(Int_Key const& key)
+        static constexpr
+        hash_t hash(T const& val) noexcept
         {
-            hash_t convreted = cast(hash_t) key;
-            return uint64_hash(convreted);
-        }
-
-        static bool is_equal(Int_Key const& a, Int_Key const& b)
-        {
-            return a == b;
-        }
-
-        static void set_null_state(Int_Key* key)
-        {
-            *key = NULL_STATE;
-        }
-
-        static bool is_null_state(Int_Key const& key)
-        {
-            return key == NULL_STATE;
+            return uint64_hash(cast(u64) val);
         }
     };
 
-    struct Not_Direct_Container {};
-
-    #if 0
-    //can be used for Slice, String, String_Builder and others
-    template <typename Container>
-    struct Default_Hash_Functions<Container, Enable_If<std::is_integral_v<Int_Key>>>
+    template <typename T>
+    struct Hashable<Slice<T>>
     {
-        static uint64_t hash(Container const& key)
+        static 
+        hash_t hash(Slice<T> const& val) noexcept
         {
-            auto items = slice(key);
-            Slice<const u8> bytes = cast_slice<const u8>(items);
-            return murmur_hash64(bytes.data, bytes.size, 0);
-        }
-
-        static bool is_equal(Container const& a, Container const& b)
-        {
-            auto a_s = slice(a);
-            auto b_s = slice(b);
-            return compare(a_s, b_s) == 0;
-        }
-
-        static void set_null_state(Container* key)
-        {
-            *key = Container();
-        }
-
-        static bool is_null_state(Container const& key)
-        {
-            return std::data(key) == nullptr;
+            //if is scalar (array of bultin types ie char, int...) just use the optimal hash
+            if constexpr(std::is_scalar_v<T>)
+                return cast(hash_t) murmur_hash64(val.data, val.size * cast(isize) sizeof(T), cast(u64) val.size);
+            //else mixin the hashes for each element
+            else
+            {
+                u64 running_hash = cast(u64) val.size;
+                for(isize i = 0; i < val.size; i++)
+                    running_hash ^= Hashable<T>::hash(val);
+            
+                return cast(hash_t) running_hash;
+            }
         }
     };
-    #endif
+    
+    template <typename T>
+    struct Hashable<Stack<T>>
+    {
+        static 
+        hash_t hash(Stack<T> const& val) noexcept
+        {
+            return Hashable<Slice<const T>>::hash(slice(val));
+        }
+    };
+
+    template <typename T>
+    struct Key_Comparable<Slice<T>>
+    {
+        static
+        bool are_equal(Slice<T> const& a, Slice<T> const& b) noexcept
+        {
+            //if possible use by byte compare (memcmp)
+            if constexpr(std::is_scalar_v<T>)
+                return compare(cast_slice<const u8>(a),  cast_slice<const u8>(b)) == 0;       
+            else
+            {
+                if(a.size != b.size)
+                    return false;
+                
+                for(isize i = 0; i < a.size; i++)
+                {
+                    if(Key_Comparable<T>::are_equal(a[i], b[i]) == false)
+                        return false;
+                }
+
+                return true;
+            }
+        }
+    };
+
+    template <typename T>
+    struct Key_Comparable<Stack<T>>
+    {
+        static
+        bool are_equal(Stack<T> const& a, Stack<T> const& b) noexcept
+        {
+            return Key_Comparable<Slice<const T>>::are_equal(slice(a), slice(b));
+        }
+    };
 }
 
 #include "undefs.h"
