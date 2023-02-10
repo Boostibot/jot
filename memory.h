@@ -316,7 +316,7 @@ namespace jot
     //Allocate linearry from a buffer. Once the buffer is filled no more
     // allocations are possible. Deallocation is possible only of the most recent allocation
     //Doesnt insert any extra data into the provided buffer
-    struct Stack_Allocator : Allocator
+    struct Linear_Allocator : Allocator
     {
         Slice<u8> buffer = {};
         isize filled_to = 0;
@@ -326,7 +326,7 @@ namespace jot
 
         Allocator* parent = nullptr;
 
-        Stack_Allocator(Slice<u8> buffer, Allocator* parent) noexcept 
+        Linear_Allocator(Slice<u8> buffer, Allocator* parent) noexcept 
             : buffer(buffer), parent(parent) {}
 
         Slice<u8> available_slice() const 
@@ -446,7 +446,7 @@ namespace jot
         };
 
         virtual
-        ~Stack_Allocator() noexcept override {}
+        ~Linear_Allocator() noexcept override {}
     };
 
     namespace memory_globals

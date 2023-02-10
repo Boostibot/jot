@@ -4,7 +4,7 @@
 #include "memory.h"
 #include "allocator_arena.h"
 #include "allocator_stack_ring.h"
-#include "allocator_ring.h"
+#include "allocator_stack.h"
 #include "stack.h"
 #include "_test.h"
 #include "defines.h"
@@ -115,20 +115,15 @@ namespace jot::tests::allocator
         isize total_size_in_size_table = 0;
         
         isize max_alloced_storage = 320 * memory_constants::MEBI_BYTE;
-        Stack<u8> ring_storage;
         Stack<u8> stack_storage;
         Stack<u8> stack_simple_storage;
 
-        force(resize(&ring_storage, max_alloced_storage));
         force(resize(&stack_storage, max_alloced_storage));
         force(resize(&stack_simple_storage, max_alloced_storage));
 
         Failing_Allocator       failling;
-        Ring_Allocator          ring       = Ring_Allocator(slice(&ring_storage), def);
-        Intrusive_Stack_Scan    stack_scan = Intrusive_Stack_Scan(slice(&ring_storage), def);
-        Intrusive_Stack_Resize  stack_resi = Intrusive_Stack_Resize(slice(&ring_storage), def);
-        Stack_Ring_Allocator    stack_ring = Stack_Ring_Allocator(slice(&ring_storage), def);
-        Intrusive_Stack_Simple  stack_simp = Intrusive_Stack_Simple(slice(&ring_storage), def);
+        Stack_Ring_Allocator    stack_ring = Stack_Ring_Allocator(slice(&stack_storage), def);
+        Stack_Allocator         stack = Stack_Allocator(slice(&stack_simple_storage), def);
         Arena_Allocator         unbound    = Arena_Allocator(def);
 
         const auto set_up_test = [&](
@@ -381,20 +376,14 @@ namespace jot::tests::allocator
             set_up_test(10, {4, 8}, {0, 5}, true);
             test_single(&memory_globals::NEW_DELETE_ALLOCATOR);
             test_single(&unbound);
-            test_single(&ring);
-            test_single(&stack_resi);
-            test_single(&stack_scan);
             test_single(&stack_ring);
-            test_single(&stack_simp);
+            test_single(&stack);
         
             set_up_test(200, {1, 10}, {0, 10}, true);
             test_single(&memory_globals::NEW_DELETE_ALLOCATOR);
             test_single(&unbound);
-            test_single(&ring);
-            test_single(&stack_resi);
-            test_single(&stack_scan);
             test_single(&stack_ring);
-            test_single(&stack_simp);
+            test_single(&stack);
         }
     }
     

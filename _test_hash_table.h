@@ -1,36 +1,9 @@
 #pragma once
 
 #include "hash_table.h"
-#include "marker_hash_table.h"
 #include "_test.h"
 #include "string.h"
 #include "defines.h"
-
-namespace jot
-{
-    template<>
-    struct Default_Hash_Functions<String_Builder>
-    {
-        static uint64_t hash(String_Builder const& key) 
-        {
-            return Default_Hash_Functions<String>::hash(slice(key));
-        }
-        static bool is_equal(String_Builder const& a, String_Builder const& b) 
-        {
-            return Default_Hash_Functions<String>::is_equal(slice(a), slice(b));
-        }
-        static void set_null_state(String_Builder* key) 
-        {
-            String_Builder swapped;
-            swap(key, &swapped);
-        }
-        static bool is_null_state(String_Builder const& key) 
-        {
-            return data(key) == nullptr;
-        }
-    };
-}
-
 
 namespace jot::tests::hash_table
 {
@@ -305,17 +278,11 @@ namespace jot::tests::hash_table
     struct Test_Int_Hash_Functions
     {
         static uint64_t hash(Key const& key) {return cast(hash_t) key;}
-        static bool is_equal(Key const& a, Key const& b) {return a == b;}
-        static void set_null_state(Key* key) { *key = 0; }
-        static bool is_null_state(Key const& key) {return key == 0; }
     };
         
     struct Test_Tracker_Hash_Functions
     {
         static uint64_t hash(Tracker<i32> const& key) {return cast(hash_t) key.val;}
-        static bool is_equal(Tracker<i32> const& a, Tracker<i32> const& b) {return a.val == b.val;}
-        static void set_null_state(Tracker<i32>* key) { key->val = 0; }
-        static bool is_null_state(Tracker<i32> const& key) {return key.val == 0; }
     };
     
 
@@ -325,15 +292,9 @@ namespace jot::tests::hash_table
 
         {
             using Trc = Tracker<i32>;
-            test_table_add_find<Marker_Hash_Table<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
-            test_table_add_find<Marker_Hash_Table<u32, u32, Default_Hash_Functions<u32>>>();
-            test_table_add_find<Marker_Hash_Table<u32, Trc, Default_Hash_Functions<u32>>>();
-            test_table_add_find<Marker_Hash_Table<Trc, u32, Test_Tracker_Hash_Functions>>();
-            test_table_add_find<Marker_Hash_Table<Trc, Trc, Test_Tracker_Hash_Functions>>();
-
             test_table_add_find<Hash_Table<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
-            test_table_add_find<Hash_Table<u32, u32, Default_Hash_Functions<u32>>>();
-            test_table_add_find<Hash_Table<u32, Trc, Default_Hash_Functions<u32>>>();
+            test_table_add_find<Hash_Table<u32, u32>>();
+            test_table_add_find<Hash_Table<u32, Trc>>();
             test_table_add_find<Hash_Table<Trc, u32, Test_Tracker_Hash_Functions>>();
             test_table_add_find<Hash_Table<Trc, Trc, Test_Tracker_Hash_Functions>>();
 
@@ -346,23 +307,19 @@ namespace jot::tests::hash_table
             Array<String_Builder, 10> builders = {{str("1"), str("2"), str("3"), str("4"), str("5"), str("6"), str("7"), str("8"), str("9"), str("10")}};
             Array<String, 10> strings = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
 
-            test_table_add_find_any<Marker_Hash_Table<String, String_Builder>>(dup(strings), dup(builders)); 
-            test_table_add_find_any<Marker_Hash_Table<String_Builder, String>>(dup(builders), dup(strings)); 
-            test_table_add_find_any<Marker_Hash_Table<String_Builder, String_Builder>>(dup(builders), dup(builders)); 
-            
             test_table_add_find_any<Hash_Table<String, String_Builder>>(dup(strings), dup(builders)); 
             test_table_add_find_any<Hash_Table<String_Builder, String>>(dup(builders), dup(strings)); 
             test_table_add_find_any<Hash_Table<String_Builder, String_Builder>>(dup(builders), dup(builders)); 
 
             test_table_mark_remove<Hash_Table<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
-            test_table_mark_remove<Hash_Table<u32, u32, Default_Hash_Functions<u32>>>();
-            test_table_mark_remove<Hash_Table<u32, Trc, Default_Hash_Functions<u32>>>();
+            test_table_mark_remove<Hash_Table<u32, u32>>();
+            test_table_mark_remove<Hash_Table<u32, Trc>>();
             test_table_mark_remove<Hash_Table<Trc, u32, Test_Tracker_Hash_Functions>>();
             test_table_mark_remove<Hash_Table<Trc, Trc, Test_Tracker_Hash_Functions>>();
 
             test_table_remove<Hash_Table<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
-            test_table_remove<Hash_Table<u32, u32, Default_Hash_Functions<u32>>>();
-            test_table_remove<Hash_Table<u32, Trc, Default_Hash_Functions<u32>>>();
+            test_table_remove<Hash_Table<u32, u32>>();
+            test_table_remove<Hash_Table<u32, Trc>>();
             test_table_remove<Hash_Table<Trc, u32, Test_Tracker_Hash_Functions>>();
             test_table_remove<Hash_Table<Trc, Trc, Test_Tracker_Hash_Functions>>();
         }
