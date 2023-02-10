@@ -292,7 +292,7 @@ namespace jot
 
             Slot *slot = (cast(Slot*) allocated.data) - 1;
             Slot* current_slot = slot;
-            i32 new_reduced_size = 0; 
+            isize new_reduced_size = 0; 
 
             //we iterate forward empty slots from the current positions 
             // once we hit a slot that is free and the cumulative size is big enough
@@ -318,16 +318,16 @@ namespace jot
                         return Allocation_Result{Allocator_State::OUT_OF_MEM};
 
                     u8* aligned_end = align_forward(new_end_ptr, sizeof(Slot));
-                    new_reduced_size = cast(i32) (ptrdiff(aligned_end, allocated.data) / SIZE_MULT);
+                    new_reduced_size = ptrdiff(aligned_end, allocated.data) / SIZE_MULT;
                     stack_to = aligned_end;
                     break;
                 }
 
                 //if have enough size & is not a stub (& is not at end)
-                if(ptrdiff(next_slot, slot) >= new_size && is_stub == false)
+                if(ptrdiff(next_slot, allocated.data) >= new_size && is_stub == false)
                 {
                     u8* aligned_end = cast(u8*) next_slot;
-                    new_reduced_size = cast(i32) (ptrdiff(aligned_end, allocated.data) / SIZE_MULT);
+                    new_reduced_size = ptrdiff(aligned_end, allocated.data) / SIZE_MULT;
                     next_slot->prev_offset = cast(u32) new_reduced_size;
                     break;
                 }
@@ -343,7 +343,7 @@ namespace jot
             i32 old_redced_size = cast(i32) (slot->size & ~USED_BIT);
 
             slot->size = cast(u32) new_reduced_size | USED_BIT;;
-            current_alloced += new_reduced_size - old_redced_size;
+            current_alloced += cast(i32) new_reduced_size - old_redced_size;
 
             Slice<u8> output = {allocated.data, new_size};
             return Allocation_Result{Allocator_State::OK, output};
@@ -403,7 +403,7 @@ namespace jot
         nodisc virtual 
         isize max_bytes_allocated() const noexcept override 
         {
-            return max_alloced;
+            return cast(isize) max_alloced * SIZE_MULT;
         }
 
         nodisc virtual 

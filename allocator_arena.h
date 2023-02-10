@@ -263,10 +263,8 @@ namespace jot
             available_from = allocated.data;
             reset_last_allocation();
             
-            #ifdef DO_ALLOCATOR_STATS
             bytes_alloced_ -= allocated.size;
             assert(bytes_alloced_ >= 0);
-            #endif
 
             return Allocator_State::OK;
         } 
@@ -500,11 +498,9 @@ namespace jot
         void 
         update_bytes_alloced(isize delta)
         {
-            #ifdef DO_ALLOCATOR_STATS
             bytes_alloced_ += delta;
             max_bytes_alloced_ = max(max_bytes_alloced_, bytes_alloced_);
             assert(bytes_alloced_ >= 0);
-            #endif
         }
     };
 

@@ -177,6 +177,7 @@ namespace jot
 
             current_alloced -= allocated.size;
 
+            bool had_cycle = false;
             // Advance the free pointer past all free slots.
             while (true) {
                 Slot* first_slot = cast(Slot*) used_from;
@@ -194,7 +195,9 @@ namespace jot
                 if (used_from >= buffer_to)
                 {
                     used_from = buffer_from;
-                    break;
+                    if(had_cycle == true)
+                        break;
+                    had_cycle = true;
                 }
             }
 
@@ -648,7 +651,7 @@ namespace jot
         {
             using namespace detail;
             assert(is_invariant());
-
+            
             u8* ptr = allocated.data;
             if(ptr < buffer_from || buffer_to <= ptr) 
                 return parent->resize(allocated, align, new_size);
@@ -680,13 +683,20 @@ namespace jot
                 }
 
                 //if have enough size (& is not at end)
-                if(ptrdiff(next_slot, slot) >= new_size)
+                if(ptrdiff(next_slot, allocated.data) >= new_size)
                 {
+                    //resizing is slightly broken at the moment (just use a different and btter version of this
+                    // either simp - scan - or stack ring). We apparently have somehow wrong next slot which points
+                    // to region without a header and overriden with user data...
+                    return Allocation_Result{Allocator_State::NOT_RESIZABLE}; 
+                    #if 0
                     u8* aligned_end = cast(u8*) next_slot;
                     isize new_reduced_size = ptrdiff(aligned_end, allocated.data) / SIZE_MULT;
+
                     slot->size = cast(u32) new_reduced_size | USED_BIT;
                     next_slot->prev_offset = cast(u32) new_reduced_size;
                     break;
+                    #endif
                 }
 
                 if(next_slot->size & USED_BIT)
@@ -948,7 +958,7 @@ namespace jot
                 }
 
                 //if have enough size & is not a stub (& is not at end)
-                if(ptrdiff(next_slot, slot) >= new_size && is_stub == false)
+                if(ptrdiff(next_slot, allocated.data) >= new_size && is_stub == false)
                 {
                     u8* aligned_end = cast(u8*) next_slot;
                     isize new_reduced_size = ptrdiff(aligned_end, allocated.data) / SIZE_MULT;

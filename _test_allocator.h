@@ -33,26 +33,44 @@ namespace jot::tests::allocator
         force(align_forward(aligned + 13, 16) == align_backward(aligned + 17, 16));
     }
 
+    const auto test_stats_plausibility(Allocator* tested_)
+    {
+        isize alloced = tested_->bytes_allocated();
+        isize max_alloced = tested_->max_bytes_allocated();
+        isize used = tested_->bytes_used();
+        isize max_used = tested_->max_bytes_used();
+
+        test(max_used >= used);
+        test(max_alloced >= alloced);
+        test(used >= alloced || used == Allocator::SIZE_NOT_TRACKED);
+    }
+
     void test_stack_ring()
     {
-        u8 stack_ring_storage[400];
+        //We test if the wrap around works correctly.
+        //We also test if the size tracking is plausible
+        alignas(256) u8 stack_ring_storage[400];
         {
             Stack_Ring_Allocator stack_ring = Stack_Ring_Allocator(Slice{stack_ring_storage, 400}, &memory_globals::FAILING_ALLOCATOR);
+            test_stats_plausibility(&stack_ring);
+
             Slice<u8> first = stack_ring.allocate(10, 8).items;
             Slice<u8> second = stack_ring.allocate(20, 256).items;
             Slice<u8> third = stack_ring.allocate(30, 8).items;
 
-            force(stack_ring.deallocate(second, 8));
+            test_stats_plausibility(&stack_ring);
+            force(stack_ring.deallocate(second, 256));
 
             Allocation_Result result = stack_ring.resize(first, 8, 25);
             force(result.state);
             first = result.items;
 
             result = stack_ring.resize(first, 8, 40 + 256);
-            force(result.state == ERROR);
+            test(result.state == ERROR);
 
             force(stack_ring.deallocate(first, 8));
             force(stack_ring.deallocate(third, 8));
+            test_stats_plausibility(&stack_ring);
         }
 
         {
@@ -60,6 +78,7 @@ namespace jot::tests::allocator
             Slice<u8> a1 = stack_ring.allocate(64, 8).items;
             Slice<u8> a2 = stack_ring.allocate(64, 8).items;
             Slice<u8> a3 = stack_ring.allocate(64, 8).items;
+            test_stats_plausibility(&stack_ring);
 
             force(stack_ring.deallocate(a1, 8));
             force(stack_ring.deallocate(a2, 8));
@@ -67,11 +86,12 @@ namespace jot::tests::allocator
             Slice<u8> a4 = stack_ring.allocate(64, 8).items;
             Slice<u8> a5 = stack_ring.allocate(64, 8).items;
 
-            force(stack_ring.allocate(64, 8).state == ERROR);
+            test(stack_ring.allocate(64, 8).state == ERROR);
             
             force(stack_ring.deallocate(a3, 8));
             force(stack_ring.deallocate(a4, 8));
             force(stack_ring.deallocate(a5, 8));
+            test_stats_plausibility(&stack_ring);
         }
     }
 
@@ -93,6 +113,7 @@ namespace jot::tests::allocator
         Stack<isize> size_table;
         Stack<isize> align_table;
         Stack<Slice<u8>> allocs;
+        isize total_size_in_size_table = 0;
         
         isize max_alloced_storage = 320 * memory_constants::MEBI_BYTE;
         Stack<u8> ring_storage;
@@ -127,10 +148,12 @@ namespace jot::tests::allocator
             force(resize(&align_table, block_size));
             force(resize(&allocs, block_size));
 
+            total_size_in_size_table = 0;
             for(isize i = 0; i < block_size; i++)
             {
                 size_table[i]  = cast(isize) ((1ll << size_distribution(gen)) + size_noise_distribution(gen));
                 align_table[i] = cast(isize) (1ll << align_distribution(gen));
+                total_size_in_size_table += size_table[i];
             }
 
             max_time = max_time_;
@@ -148,28 +171,35 @@ namespace jot::tests::allocator
 
         //allocate in order then deallocate in the same order
         const auto test_allocs_fifo = [&]() {
+            test_stats_plausibility(tested);
+            isize alloced_before = tested->bytes_allocated();
+
             for(isize i = 0; i < block_size; i++)
             {
-                isize size = size_table[i];
-                isize align = align_table[i];
-                Allocation_Result result = tested->allocate(size, align);
+                Allocation_Result result = tested->allocate(size_table[i], align_table[i]);
                 force(result.state);
                 fill_slice(result.items);
                 allocs[i] = result.items;
             }
+            
+            isize alloced_max = tested->bytes_allocated();
+            test(alloced_max >= alloced_before + total_size_in_size_table  //the size must reflect the alloced size
+                || alloced_max == alloced_before                           // or it can be not tracked and be a constant
+            );
 
             for(isize i = 0; i < block_size; i++)
-            {
-                Slice<u8> alloced = allocs[i];
-                isize align = align_table[i];
-                force(tested->deallocate(alloced, align));
-            }
+                force(tested->deallocate(allocs[i], align_table[i]));
+            
+            test_stats_plausibility(tested);
 
             unbound.reset();
         };   
         
         //allocate in order then deallocate in the opposite order
         const auto test_allocs_lifo = [&]() {
+            test_stats_plausibility(tested);
+            isize alloced_before = tested->bytes_allocated();
+
             for(isize i = 0; i < block_size; i++)
             {
                 Allocation_Result result = tested->allocate(size_table[i], align_table[i]);
@@ -178,14 +208,22 @@ namespace jot::tests::allocator
                 allocs[i] = result.items;
             }
 
+            isize alloced_max = tested->bytes_allocated();
+            test(alloced_max >= alloced_before + total_size_in_size_table
+                || alloced_max == alloced_before                         
+            );
+
             for(isize i = block_size; i-- > 0;)
                 force(tested->deallocate(allocs[i], align_table[i]));
-
+                
+            test_stats_plausibility(tested);
             unbound.reset();
         };   
         
         //allocate and then imidietelly deallocate in a loop
         const auto test_allocs_temp = [&]() {
+            test_stats_plausibility(tested);
+            isize alloced_before = tested->bytes_allocated();
 
             for(isize i = 0; i < block_size; i++)
             {
@@ -195,6 +233,7 @@ namespace jot::tests::allocator
                 force(tested->deallocate(result.items, align_table[i]));
             }
 
+            test_stats_plausibility(tested);
             unbound.reset();
         };
 
@@ -203,6 +242,9 @@ namespace jot::tests::allocator
         // to two times their original size. if cant resize allocates them instead.
         // then deallocates all remaining in order.
         const auto test_allocs_resi = [&]() {
+            test_stats_plausibility(tested);
+            isize alloced_before = tested->bytes_allocated();
+
             for(isize i = 0; i < block_size; i++)
             {
                 Allocation_Result result = tested->allocate(size_table[i], align_table[i]);
@@ -210,6 +252,11 @@ namespace jot::tests::allocator
                 fill_slice(result.items);
                 allocs[i] = result.items;
             }
+
+            isize alloced_max = tested->bytes_allocated();
+            test(alloced_max >= alloced_before + total_size_in_size_table
+                || alloced_max == alloced_before                         
+            );
 
             for(isize i = 0; i < block_size; i += 2)
             {
@@ -246,7 +293,8 @@ namespace jot::tests::allocator
                 if(allocs[i].data != nullptr)
                     force(tested->deallocate(allocs[i], align_table[i]));
             }
-
+            
+            test_stats_plausibility(tested);
             unbound.reset();   
         };
         
@@ -285,15 +333,14 @@ namespace jot::tests::allocator
 
         const auto test_single = [&](Allocator* tested_)
         {
-              tested = tested_;
-
-              test_allocs_fifo();
-              test_allocs_lifo();
-              test_allocs_temp();
-              test_allocs_resi();
-              test_allocs_read();
+            tested = tested_;
+            test_allocs_fifo();
+            test_allocs_lifo();
+            test_allocs_temp();
+            test_allocs_resi();
+            test_allocs_read();
         };
-
+        
         for(int i = 0; i < 10; i ++)
         {
             set_up_test(10, {4, 8}, {0, 5}, true);
@@ -305,7 +352,7 @@ namespace jot::tests::allocator
             test_single(&stack_ring);
             test_single(&stack_simp);
         
-            set_up_test(100, {1, 10}, {0, 10}, true);
+            set_up_test(200, {1, 10}, {0, 10}, true);
             test_single(&memory_globals::NEW_DELETE_ALLOCATOR);
             test_single(&unbound);
             test_single(&ring);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <limits>
+
 #include "open_enum.h"
 #include "option.h"
 #include "utils.h"
@@ -64,6 +66,8 @@ namespace jot
 
     struct Allocator
     {
+        static constexpr isize SIZE_NOT_TRACKED = -1;
+
         nodisc virtual
         Allocation_Result allocate(isize size, isize align) noexcept = 0; 
         
@@ -189,11 +193,8 @@ namespace jot
             if(obtained == nullptr)
                 return {Allocator_State::OUT_OF_MEM};
 
-            #ifdef DO_ALLOCATOR_STATS
-                total_alloced += size;
-                max_alloced = max(max_alloced, total_alloced);
-            #endif // DO_ALLOCATOR_STATS
-
+            total_alloced += size;
+            max_alloced = max(max_alloced, total_alloced);
             return {Allocator_State::OK, {cast(u8*) obtained, size}};
         }
 
@@ -202,10 +203,7 @@ namespace jot
         {
             operator delete(allocated.data, std::align_val_t{cast(size_t) align}, std::nothrow_t{});
 
-            #ifdef DO_ALLOCATOR_STATS
-                total_alloced -= allocated.size;
-            #endif // do_memory_stats
-
+            total_alloced -= allocated.size;
             return Allocator_State::OK;
         } 
 
@@ -227,17 +225,13 @@ namespace jot
         nodisc virtual
         isize bytes_allocated() const noexcept override 
         {
-            #ifdef DO_ALLOCATOR_STATS
-                return total_alloced;
-            #else
-                return -1;
-            #endif // DO_ALLOCATOR_STATS
+            return total_alloced;
         }
 
         nodisc virtual
         isize bytes_used() const noexcept override 
         {
-            return -1;
+            return SIZE_NOT_TRACKED;
         }
 
         nodisc virtual
@@ -249,7 +243,7 @@ namespace jot
         nodisc virtual
         isize max_bytes_used() const noexcept override 
         {
-            return -1;
+            return SIZE_NOT_TRACKED;
         }
 
         virtual
