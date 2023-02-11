@@ -14,3 +14,27 @@ This is an attempt to rewrite everything I would need from the standard library 
 - The entire library is non throwing. All errors are properly signaled to the called via the return value. I belive the burden of keeping track of another control path at all times is simply too error prone (at least for me) and is very difficult to properly test. The propagation of error values however is fairly difficult problem to solve generally. We simply allow each function to signal errors using an `open_enum` - a enum like numeric value that is guaranteed to be unique. (This is also how Zig handles errors)   
 
 - The library is built with instrumentation in mind. Many containers and allocators have additional counter fields that make it very easy to debug the application later on. In addition liberal use of asserts makes hidden bugs surface as quickly as possible.
+
+- Many of the included files are completely free standing. This one can simply copy their contents without including any additional files.
+
+### Free standing files
+
+The following files can be used without the rest of the library. They internaly mostly just include cstd headers.
+
+- `array.h`
+- `bits.h`
+- `defer.h`
+- `defines.h` & `undefs.h`
+- `hash.h`
+- `intrusive_list.h`
+- `meta.h`
+- `no_destruct.h`
+- `open_enum.h`
+- `slice.h` with `slice_op_text.h`
+- `time.h`
+- `traits.h`
+- `type_id.h`
+- `types.h`
+- `unistd.h`
+- `utils.h`
+
