@@ -1,6 +1,14 @@
 //THIS IS A LITERAL TEXT SUBSTITUION FILE
 // DONT INCLUDE IT ON ITS OWN!
 
+#ifndef DATA
+    #define DATA data
+#endif
+
+#ifndef SIZE
+    #define SIZE size
+#endif
+
 using value_type      = T;
 using size_type       = isize;
 using difference_type = ptrdiff_t;
@@ -56,3 +64,6 @@ T& operator[](isize index) noexcept
     assert(0 <= index && index < this->SIZE && "index out of range"); 
     return this->DATA[index]; 
 }
+
+#undef DATA
+#undef SIZE

@@ -60,11 +60,7 @@ namespace jot
             return !(other == *this);
         }
 
-        #define DATA data
-        #define SIZE size
         #include "slice_op_text.h"
-        #undef DATA
-        #undef SIZE
     };
 
 
@@ -100,8 +96,6 @@ namespace jot
         #endif
     }
 
-    #define constexpr_assert(a) (is_const_eval(true) ? (void)0 : assert(a))
-
     template<typename T> nodisc constexpr  
     bool is_invarinat(Slice<T> slice) {
         return slice.size >= 0;
@@ -109,17 +103,15 @@ namespace jot
 
     template<typename T> nodisc constexpr 
     Slice<T> slice(Slice<T> slice, isize from) {
-        constexpr_assert((0 <= from && from <= slice.size) && "index out of bounds");
+        assert((0 <= from && from <= slice.size) && "index out of bounds");
         return Slice<T>{slice.data + from, slice.size - from};
     }
 
     template<typename T> nodisc constexpr 
     Slice<T> trim(Slice<T> slice, isize to_index) {   
-        constexpr_assert((0 <= to_index && to_index <= slice.size) && "index out of bounds");
+        assert((0 <= to_index && to_index <= slice.size) && "index out of bounds");
         return Slice<T>{slice.data, to_index};
     }
-
-    #undef constexpr_assert
 
     template<typename T> nodisc constexpr 
     Slice<T> slice_size(Slice<T> base_slice, isize from, isize size) {

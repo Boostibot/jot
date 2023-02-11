@@ -28,8 +28,6 @@ namespace jot
 
     using isize = ptrdiff_t;
     using usize = size_t;
-
-    struct Unit {};
 }
 
 #define JOT_SIZE_T ::jot::isize

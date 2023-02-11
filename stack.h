@@ -39,8 +39,6 @@ namespace jot
         #define DATA _data
         #define SIZE _size
         #include "slice_op_text.h"
-        #undef DATA
-        #undef SIZE
     };
 
     template<class T> nodisc
