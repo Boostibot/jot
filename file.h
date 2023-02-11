@@ -16,6 +16,7 @@
 
 #include "unistd.h"
 
+
 namespace jot 
 {
     namespace file 
@@ -24,6 +25,23 @@ namespace jot
         typedef int             Flag;
         typedef mode_t          Mode;
         typedef Stat64          Stats;
+
+        //A thin wrapper around the posix file interface
+        // handles closing the file automatically
+        struct File_Descriptor 
+        {
+            Descriptor descriptor = -1;
+            File_Descriptor() {}
+            File_Descriptor(Descriptor from) : descriptor(from) {}
+            File_Descriptor(File_Descriptor const&) = delete;
+
+            ~File_Descriptor() {
+                if(descriptor == -1)
+                    return;
+
+                ::close(descriptor);
+            }
+        };
 
         //Shared flags
         namespace Flags {
@@ -112,21 +130,6 @@ namespace jot
 
         static const Mode DEFAULT_OPEN_MODE = 0644;
         static const int MAX_READ_WRITE_CHUNK = 1 << 30;
-
-        struct File_Descriptor 
-        {
-            Descriptor descriptor = -1;
-            File_Descriptor() {}
-            File_Descriptor(Descriptor from) : descriptor(from) {}
-            File_Descriptor(File_Descriptor const&) = delete;
-
-            ~File_Descriptor() {
-                if(descriptor == -1)
-                    return;
-
-                ::close(descriptor);
-            }
-        };
 
         File_Descriptor open(const char* filename, Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY, Mode pmode = DEFAULT_OPEN_MODE) noexcept
         {

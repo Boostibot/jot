@@ -1,18 +1,19 @@
 #pragma once
-
-#pragma once
-
-#include "slice.h"
-#include "types.h"
-#include "defines.h"
+#define nodisc [[nodiscard]]
 
 namespace jot
 {
-    //example of how block can look like:
-    //All blocks are required to have:
+    //A collection of primitives for dealing with linked lists.
+    //Because linked lists can take all shapes and sizes it is better
+    // to implement only the bare minimum and let the user pack it in
+    // a nice List class than trying to implement every single list in
+    // existance (and failing).
+
+    //Works on all nodes that have the following structure:
     // (1) next ptr
     // (2) static constexpr bool is_bidirectional
-    // (3) prev ptr - only if is_bidirectional is set to true
+    // (3) prev ptr* 
+    //     * prev ptr required only if is_bidirectional is set to true
     #if 0
     struct Example_Node
     {
@@ -163,4 +164,4 @@ namespace jot
     }
 }
 
-#include "undefs.h"
+#undef nodisc

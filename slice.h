@@ -28,6 +28,9 @@ namespace jot
         return size;
     };
 
+    //Open POD struct representing a contiguous array 
+    // in memory. Does not own the data and is literally just a pointer.
+    // Is analoguous to std::span except much simpler. Is also used for strings (see string.h)
     template<typename T>
     struct Slice
     {

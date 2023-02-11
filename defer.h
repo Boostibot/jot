@@ -1,5 +1,14 @@
 #pragma once
 
+//Executes a function at the end of its lifetime.
+// This can be used in the following way:
+// 
+//      FILE* file = fopen("...");
+//      defer(fclose(file));
+//      // ....
+// 
+// We can now use the file liberaly without having to
+// worry about closing it. This is also perfectly exception safe.
 template <typename Fn>
 struct Defered 
 {

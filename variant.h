@@ -15,8 +15,10 @@ namespace jot
         std::is_trivially_copyable_v<T> && 
         std::is_trivially_destructible_v<T>;
     
-    //Type erased POD variant using type_id as tag
-    // Can store any type that fits inside its data and align
+    //Type erased POD variant using type_id as tag.
+    // Can store any type that fits inside its data and align.
+    // Note that even though it is type erased its performance is
+    // still the same (casting pointers is a noop)
     template<isize byte_size_, isize align_>
     struct Variant
     {

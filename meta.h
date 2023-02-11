@@ -1,6 +1,30 @@
 #pragma once
 namespace meta
 {
+    //returns compiler specific (but very readable!) name at compile time
+    template<typename T> nodisc constexpr
+    const char* type_name() noexcept ;
+
+    //takes a type declared in a namespace and returns that namespace (is useful for macros that tell where they are)
+    template<typename Dummy_Struct> nodisc constexpr
+    const char* namespace_name() noexcept;
+
+    // type_name() examples:
+    // MSVC:
+    //  int
+    //  class std::basic_iostream<char,struct std::char_traits<char> >
+    //  struct meta::String
+    //
+    // GCC:
+    //  int
+    //  std::basic_iostream<char>
+    //  String
+    //
+    // CLANG:
+    //  int
+    //  std::basic_iostream<char>
+    //  meta::String
+
     #if defined(__clang__)
         #define __FUNCTION_NAME__ __PRETTY_FUNCTION__
     #elif defined(__GNUC__)
@@ -130,34 +154,16 @@ namespace meta
         };
     }
 
-    //takes a type declared in a namespace and returns that namespace (is useful for macros that tell where they are)
     template<typename Dummy_Struct> nodisc constexpr
     const char* namespace_name() noexcept
     {
         return internal::Namespace_Name_Holder<Dummy_Struct>::static_str.string;
     }
 
-    //returns compiler specific (but very readable!) name
     template<typename T> nodisc constexpr
     const char* type_name() noexcept 
     {
         return internal::Type_Name_Holder<T>::static_str.string;
     }
-
-    //type_name examples:
-    //MSVC:
-    //int
-    //class std::basic_iostream<char,struct std::char_traits<char> >
-    //struct meta::String
-
-    //GCC:
-    //int
-    //std::basic_iostream<char>
-    //String
-
-    //CLANG
-    //int
-    //std::basic_iostream<char>
-    //meta::String
 }
 #undef nodisc

@@ -28,19 +28,6 @@ namespace jot
         }
     };
 
-
-    #define HASH_TABLE_ENTRIES_ALIGN 32
-    #define HASH_TABLE_LINKER_ALIGN 32
-    #define HASH_TABLE_LINKER_BASE_SIZE 8
-
-    //rehashes to same size if gravestones make more than
-    // HASH_TABLE_MAX_GRAVESTONES_NUM / HASH_TABLE_MAX_GRAVESTONES_DEN portion
-    #define HASH_TABLE_MAX_GRAVESTONES_NUM 1
-    #define HASH_TABLE_MAX_GRAVESTONES_DEN 4
-
-    // template<typename T>
-    // concept hashable = !std::is_base_of_v<No_Default, Hashable<T>>;
-    
     template<typename Key, typename Value>
     struct Hash_Table_Entry
     {
@@ -51,6 +38,12 @@ namespace jot
     template<typename Key, typename Value>
     using Hash_Table_Link = std::conditional_t<(sizeof(Hash_Table_Entry<Key, Value>) >= 8), u32, u64>;
 
+    //Cache efficient packed hash table. Stores the jump table, keys and values all in seperate arrays for maximum cache utilization.
+    // This also allows us to expose the values array directly to the user which removes the need for custom iterators. 
+    // Further we can also construct/decosntruct the hash table by transfering to/from it two Stacks. One for values and other for keys.
+    // Because it doesnt have explicit links between keys with the same hash has to only ever delete entries in the jump table by marking 
+    // them as deleted. After sufficient ammount of deleted entries rehashing is triggered (exactly the same ways as while adding) which 
+    // only then properly removes the deleted jump table entries.
     template<
         typename Key_, 
         typename Value_, 
@@ -100,6 +93,15 @@ namespace jot
         Hash_Table& operator=(Hash_Table const& other) = delete;
     };
     
+    constexpr static isize HASH_TABLE_ENTRIES_ALIGN = 32;
+    constexpr static isize HASH_TABLE_LINKER_ALIGN = 32;
+    constexpr static isize HASH_TABLE_LINKER_BASE_SIZE = 8;
+
+    //rehashes to same size if gravestones make more than
+    // HASH_TABLE_MAX_GRAVESTONES_NUM / HASH_TABLE_MAX_GRAVESTONES_DEN portion
+    constexpr static isize HASH_TABLE_MAX_GRAVESTONES_NUM = 1;
+    constexpr static isize HASH_TABLE_MAX_GRAVESTONES_DEN = 4;
+
     template <typename Key, typename Value, class Hash, class Comp> nodisc
     bool is_invariant(Hash_Table<Key, Value, Hash, Comp> const& hash)
     {
@@ -495,6 +497,7 @@ namespace jot
         //=> when only marking entries we will rehash faster then when removing them
     }
 
+    //Removes an entry from the keys and values array and marks the jump table slot as deleted
     template <typename Key, typename Value, class Hash, class Comp> nodisc
     Hash_Table_Entry<Key, Value> remove(Hash_Table<Key, Value, Hash, Comp>* table, Hash_Found removed)
     {
@@ -531,7 +534,10 @@ namespace jot
         return removed_entry_data;
     }
 
-
+    //Only marks the jump table slot as deleted but keeps the key value entries in their place.
+    // These marked but not removed entries will get cleaned up during the next rehashin in an optimal way.
+    // When deleting large number of entries it is better to use this function than `remove` on every single
+    // entry individually
     template <typename Key, typename Value, class Hash, class Comp>
     isize mark_removed(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) const& key)
     {
@@ -641,6 +647,7 @@ namespace jot
         return set<Key, Value, Hash>(table, move(&key), hash, move(&value));
     }
 
+    //Specializations of the Hashable and Key_Comparable for some of the common types:
     template <typename T>
     struct Hashable<T, Enable_If<std::is_integral_v<T>>>
     {

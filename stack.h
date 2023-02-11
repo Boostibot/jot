@@ -9,6 +9,10 @@
 
 namespace jot
 {
+
+    //Contiguos dynamic array.
+    //Acts in exactly the same as std::vector but is not freely copyable and comaprable
+    // (since those ops are costly). Use the appropriate 'copy' and 'compare' functions instead.
     template <typename T>
     struct Stack
     {   
