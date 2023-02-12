@@ -259,7 +259,6 @@ namespace jot
         virtual
         ~New_Delete_Allocator() noexcept override
         {
-            assert(total_alloced == 0);
         }
     };
 

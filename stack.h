@@ -757,25 +757,25 @@ namespace jot
     template<class T> nodisc
     T* const data(Stack_Appender<T> const& appender)
     {
-        return data(appender.stack) + appender._from_index;
+        return data(appender._stack) + appender._from_index;
     }
 
     template<class T> nodisc
     T* data(Stack_Appender<T>* appender)
     {
-        return data(&appender->stack) + appender->_from_index;
+        return data(appender->_stack) + appender->_from_index;
     }
 
     template<class T> nodisc
     isize size(Stack_Appender<T> const& appender)
     {
-        return size(appender.stack) - appender._from_index;
+        return size(*appender._stack) - appender._from_index;
     }
     
     template<class T> nodisc
     isize capacity(Stack_Appender<T> const& appender)
     {
-        return capacity(appender.stack) - appender._from_index;
+        return capacity(*appender._stack) - appender._from_index;
     }
 
     template<class T> nodisc
@@ -806,6 +806,12 @@ namespace jot
     State resize(Stack_Appender<T>* appender, isize to)
     {
         return resize(appender->_stack, to + appender->_from_index);
+    }
+
+    template<class T> nodisc 
+    State resize_for_overwrite(Stack_Appender<T>* appender, isize to)
+    {
+        return resize_for_overwrite(appender->_stack, to + appender->_from_index);
     }
 
     template <class T> nodisc
