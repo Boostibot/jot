@@ -131,17 +131,18 @@ namespace jot
         static const Mode DEFAULT_OPEN_MODE = 0644;
         static const int MAX_READ_WRITE_CHUNK = 1 << 30;
 
-        File_Descriptor open(const char* filename, Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY, Mode pmode = DEFAULT_OPEN_MODE) noexcept
+        
+        inline File_Descriptor open(const char* filename, Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY, Mode pmode = DEFAULT_OPEN_MODE) noexcept
         {
             return File_Descriptor(::open(filename, oflag | Windows_Flags::BINARY, pmode));
         }
 
-        File_Descriptor create(const char* filename, Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY | Flags::CREATE, Mode pmode = DEFAULT_OPEN_MODE) noexcept
+        inline File_Descriptor create(const char* filename, Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY | Flags::CREATE, Mode pmode = DEFAULT_OPEN_MODE) noexcept
         {
             return open(filename, oflag, pmode);
         }
 
-        bool close(File_Descriptor fd) noexcept
+        inline bool close(File_Descriptor fd) noexcept
         {
             if(fd.descriptor == -1)
                 return true;
@@ -151,37 +152,37 @@ namespace jot
             return state;
         }
 
-        bool has_access(const char* path, Access_Permission permission) noexcept
+        inline bool has_access(const char* path, Access_Permission permission) noexcept
         {
             return ::access(path, (int) permission) != -1;
         }
 
-        File_Descriptor copy(File_Descriptor const& fd) noexcept
+        inline File_Descriptor copy(File_Descriptor const& fd) noexcept
         {
             return File_Descriptor(::dup(fd.descriptor));
         }
 
-        bool copy(File_Descriptor const& fd, File_Descriptor* to) noexcept
+        inline bool copy(File_Descriptor const& fd, File_Descriptor* to) noexcept
         {
             return ::dup2(fd.descriptor, to->descriptor) == 0;
         }
 
-        bool truncate(File_Descriptor* fd, long size) noexcept
+        inline bool truncate(File_Descriptor* fd, long size) noexcept
         {
             return ::ftruncate(fd->descriptor, (long) size) == 0;
         }
 
-        bool unlink(const char* filename) noexcept
+        inline bool unlink(const char* filename) noexcept
         {
             return ::unlink(filename) == 0;
         }
 
-        File_Descriptor from_c_file(FILE* stream) noexcept
+        inline File_Descriptor from_c_file(FILE* stream) noexcept
         {
             return File_Descriptor(::fileno(stream));
         }
 
-        FILE* to_c_file(File_Descriptor fd, const char* mode) noexcept
+        inline FILE* to_c_file(File_Descriptor fd, const char* mode) noexcept
         {
             return ::fdopen(fd.descriptor, mode);
         }
@@ -189,47 +190,47 @@ namespace jot
         //Fills buffer with the current dir const char*. If it is too small mallocs it instead
         // returns a pointer to the potentionally alloced destination. This needs to be freed
         // Might also fail and return NULL instead.
-        const char* fill_or_alloc_current_dir_cstring(char *buffer, int maxlen) noexcept
+        inline const char* fill_or_alloc_current_dir_cstring(char *buffer, int maxlen) noexcept
         {
             return ::getcwd(buffer, maxlen);
         }
 
-        bool change_dir(const char* dirname) noexcept
+        inline bool change_dir(const char* dirname) noexcept
         {
             return ::chdir(dirname) == 0;
         }
 
-        bool is_open(File_Descriptor const& fd) noexcept
+        inline bool is_open(File_Descriptor const& fd) noexcept
         {
             return fd.descriptor != -1;
         }
 
-        bool is_character_device(File_Descriptor const& fd) noexcept
+        inline bool is_character_device(File_Descriptor const& fd) noexcept
         {
             return is_open(fd) && ::isatty(fd.descriptor) != 0;
         }
 
-        off64_t seek(File_Descriptor* fd, off64_t offset, Seek_From from = Seek_From::Begin) noexcept
+        inline off64_t seek(File_Descriptor* fd, off64_t offset, Seek_From from = Seek_From::Begin) noexcept
         {
             return ::lseek64(fd->descriptor, offset, (int) from);
         } 
 
-        off64_t tell(File_Descriptor const& fd) noexcept
+        inline off64_t tell(File_Descriptor const& fd) noexcept
         {
             return ::tell64(fd.descriptor);
         }
 
-        bool make_dir(const char* dirname) noexcept
+        inline bool make_dir(const char* dirname) noexcept
         {
             return ::mkdir(dirname) == 0;
         }
 
-        bool remove_dir(const char* dirname) noexcept
+        inline bool remove_dir(const char* dirname) noexcept
         {
             return ::rmdir(dirname) == 0;
         }
 
-        bool rename(const char* old, const char* new_name) noexcept
+        inline bool rename(const char* old, const char* new_name) noexcept
         {
             return ::rename(old, new_name) == 0;
         }
@@ -237,7 +238,7 @@ namespace jot
         //Returns the number of bytes read or
         // EOF (-1) when end of file is reached
         // -2... Signaling other errros (offset by one from the posix)
-        int read(File_Descriptor* fd, void * buffer, unsigned buffer_size) noexcept
+        inline int read(File_Descriptor* fd, void * buffer, unsigned buffer_size) noexcept
         {
             assert(buffer_size <= MAX_READ_WRITE_CHUNK && "past maximum buffer size");
             if(buffer_size == 0)
@@ -252,20 +253,20 @@ namespace jot
         }
 
         //Returns the number of bytes written
-        int write(File_Descriptor* fd, const void *buffer, unsigned buffer_size) noexcept
+        inline int write(File_Descriptor* fd, const void *buffer, unsigned buffer_size) noexcept
         {
             assert(buffer_size <= MAX_READ_WRITE_CHUNK && "past maximum buffer size");
             return ::write(fd->descriptor, buffer, (unsigned) buffer_size);
         }
 
-        Stats get_stats(File_Descriptor const& fd) noexcept
+        inline Stats get_stats(File_Descriptor const& fd) noexcept
         {
             Stats stat;
             ::fstat64(fd.descriptor, &stat);
             return stat;
         }
 
-        Stats get_stats(const char* path) noexcept
+        inline Stats get_stats(const char* path) noexcept
         {
             Stats stat;
             ::stat64(path, &stat);

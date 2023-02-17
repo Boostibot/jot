@@ -127,6 +127,7 @@ namespace jot
         return size_inv && capa_inv && data_inv;
     }
 
+    constexpr inline
     isize calculate_stack_growth(isize curr_size, isize to_fit)
     {
         isize size = curr_size;

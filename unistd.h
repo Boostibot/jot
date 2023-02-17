@@ -22,27 +22,27 @@
 
     typedef struct _stat64 Stat64;
 
-    int ftruncate(int fd,long size) 
+    inline int ftruncate(int fd,long size) 
     { 
         return _chsize(fd, size); 
     }
 
-    off64_t lseek64(int fd, off64_t offset, int whence)
+    inline off64_t lseek64(int fd, off64_t offset, int whence)
     { 
         return _lseeki64(fd, offset, whence); 
     }
 
-    off64_t tell64(int fd) 
+    inline off64_t tell64(int fd) 
     { 
         return _telli64(fd); 
     }
 
-    int stat64(const char* name, Stat64* stat) 
+    inline int stat64(const char* name, Stat64* stat) 
     { 
         return _stat64(name, stat); 
     }
 
-    int fstat64(int fd, Stat64* stat) 
+    inline int fstat64(int fd, Stat64* stat) 
     { 
         return _fstat64(fd, stat); 
     }

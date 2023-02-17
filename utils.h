@@ -42,13 +42,11 @@ namespace jot
         return max(lo, min(val, hi));
     }
 
-    template<typename T> nodisc constexpr 
     float lerp(float lo, float hi, float t) noexcept 
     {
         return lo * (1.0f - t) + hi * t;
     }
 
-    template<typename T> nodisc constexpr 
     double lerp(double lo, double hi, double t) noexcept 
     {
         return lo * (1.0 - t) + hi * t;

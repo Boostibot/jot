@@ -13,7 +13,7 @@ namespace jot
     using String_Builder = Stack<char>;
     using String_Appender = Stack_Appender<char>;
 
-    nodisc constexpr 
+    nodisc inline  
     isize first_index_of(String in_str, String search_for, isize from = 0)
     {
         if(search_for.size == 0)
@@ -40,6 +40,17 @@ namespace jot
         };
 
         return -1;
+    }
+
+    //adds null termination to the string if it
+    // already doesnt have one
+    nodisc inline 
+    State null_terminate(String_Builder* string)
+    {
+        if(size(*string) > 0 && last(*string) == '\0')
+            return OK_STATE;
+
+        return push(string, '\0');
     }
 }
 
