@@ -40,8 +40,8 @@ open_enum Allocator_Action
 //Instantiation using the ::Type field 
 Allocator_Action::Type my_enum = Allocator_Action::ADDED_VALUE;
 
-std::cout << my_enum->value_name; //"ADDED_VALUE"
-std::cout << my_enum->type_name; //"jot::Allocator_Action"
+std::cout << my_enum.data->value_name; //"ADDED_VALUE"
+std::cout << my_enum.data->type_name; //"jot::Allocator_Action"
 
 #endif
 
@@ -52,40 +52,45 @@ std::cout << my_enum->type_name; //"jot::Allocator_Action"
 // We use this to declare a State type to which all other state types cast.
 // All open_enum types freely cast to Open_Enum::Type.
 
+struct Open_Enum_Holder
+{
+    const char* value_name;
+    const char* type_name;
+};
+
 open_enum Open_Enum
 {
     namespace open_enum_info {                  
         constexpr const char* TYPE_NAME = "Open_Enum"; 
     }       
 
-    struct Holder
+    struct Type
     {
-        const char* value_name;
-        const char* type_name;
+        const Open_Enum_Holder* data;
+        constexpr bool operator==(Type const& other) const {return data == other.data;}
+        constexpr bool operator!=(Type const& other) const {return data != other.data;}
     };
-
-    using Type = const Holder*;
 }
 
-#define OPEN_ENUM_DECLARE_DERIVED(Name, Parent) \
-    namespace open_enum_info {                  \
-        constexpr const char* TYPE_NAME = Name; \
-    }                                           \
-                                                \
-    struct Holder : Parent {};                  \
-    using Type = const Holder*;                 \
+#define OPEN_ENUM_DECLARE_DERIVED(name_str, Parent)                                           \
+    namespace open_enum_info {                                                                \
+        constexpr const char* TYPE_NAME = name_str;                                           \
+    }                                                                                         \
+                                                                                              \
+    struct Type : Parent {                                                                    \
+        constexpr bool operator==(Type const& other) const {return this->data == other.data;} \
+        constexpr bool operator!=(Type const& other) const {return this->data != other.data;} \
+    };                                                                                        \
 
+#define OPEN_ENUM_ENTRY(Name)                                               \
+    namespace open_enum_info                                                \
+    {                                                                       \
+        static constexpr ::Open_Enum_Holder Name                            \
+            = {PP_STRINGIFY(Name), TYPE_NAME};                              \
+    }                                                                       \
+    static constexpr Type Name = {Open_Enum::Type{&open_enum_info::Name}};  \
 
-#define OPEN_ENUM_ENTRY(Name)                                       \
-    namespace open_enum_info                                        \
-    {                                                               \
-        static constexpr Holder Name = Holder{                      \
-            ::Open_Enum::Holder{PP_STRINGIFY(Name), TYPE_NAME}      \
-        };                                                          \
-    }                                                               \
-    static constexpr const Holder* Name = &open_enum_info::Name;    \
-
-#define OPEN_ENUM_DECLARE(Name) OPEN_ENUM_DECLARE_DERIVED(Name, ::Open_Enum::Holder)
+#define OPEN_ENUM_DECLARE(name_str) OPEN_ENUM_DECLARE_DERIVED(name_str, ::Open_Enum::Type)
 
 //For pure C
 #ifdef OPEN_ENUM_C

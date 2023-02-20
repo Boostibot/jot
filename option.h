@@ -88,6 +88,12 @@ namespace jot
     template <typename T, Enable_If<failable<T>> = ENABLED> nodisc constexpr 
     void operator<<(Ok_Type, T const& left) noexcept { force(left); }
 
+    inline
+    void operator*(State state)
+    {
+        force(state);
+    }
+
     inline constexpr
     State acumulate(State prev, State new_state)
     {

@@ -6,19 +6,18 @@
 
 open_enum Open_Enum
 {
-    static constexpr Type OK = nullptr;
+    static constexpr Type OK = Type{nullptr};
 }
 
 namespace jot
 {
     using State = ::Open_Enum::Type;
-    using State_Holder = ::Open_Enum::Holder;
     constexpr State OK_STATE = ::Open_Enum::OK;
 
     //Declares open enum with aditional OK value set as the null value
-    #define OPEN_STATE_DECLARE(Name)                          \
-        OPEN_ENUM_DECLARE_DERIVED(Name, ::jot::State_Holder); \
-        static constexpr Type OK = nullptr;                   \
+    #define OPEN_STATE_DECLARE(name_str)                      \
+        OPEN_ENUM_DECLARE_DERIVED(name_str, ::jot::State);    \
+        static constexpr Type OK = Type{nullptr};             \
         
     template <typename T> nodisc constexpr 
     T && move(T* val) 
