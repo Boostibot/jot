@@ -45,12 +45,21 @@ namespace jot
     //adds null termination to the string if it
     // already doesnt have one
     nodisc inline 
-    State null_terminate(String_Builder* string)
+    State null_terminate(String_Builder* string) noexcept
     {
-        if(size(*string) > 0 && last(*string) == '\0')
-            return OK_STATE;
+        State state = reserve(string, size(*string) + 1);
+        if(state == ERROR)
+            return state;
 
-        return push(string, '\0');
+        data(string)[size(*string)] = '\0';
+        return state;
+    }
+
+    nodisc
+    cstring to_cstr(String_Builder* string)
+    {
+        *null_terminate(string);
+        return data(*string);
     }
 }
 

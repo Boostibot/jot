@@ -62,6 +62,13 @@ namespace jot
         else
             return Formattable<T>::format(into, arg);
     }
+    
+    template<typename T> nodisc
+    State format_into(String_Builder* into, T const& arg) noexcept
+    {
+        String_Appender appender(into);
+        return format_into(&appender, arg);
+    }
 
     template<typename T> nodisc
     Format_Result format(T const& arg) noexcept

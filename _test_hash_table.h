@@ -29,7 +29,7 @@ namespace jot::tests::hash_table
         bool manual = find_entry(table, key) == -1;
         bool obtained = has(table, key) == false;
 
-        force(manual == obtained);
+        test(manual == obtained);
         return manual;
     }
         
@@ -40,41 +40,41 @@ namespace jot::tests::hash_table
         {
             Table table;
 
-            force(empty_at(table, 1));
-            force(empty_at(table, 101));
-            force(empty_at(table, 0));
+            test(empty_at(table, 1));
+            test(empty_at(table, 101));
+            test(empty_at(table, 0));
 
-            force(set(&table, 1, 10));
-            force(empty_at(table, 1) == false);
-            force(value_matches_at(table, 1, 10));
-            force(value_matches_at(table, 1, 100) == false);
+            *set(&table, 1, 10);
+            test(empty_at(table, 1) == false);
+            test(value_matches_at(table, 1, 10));
+            test(value_matches_at(table, 1, 100) == false);
             
-            force(empty_at(table, 101));
-            force(empty_at(table, 2));
+            test(empty_at(table, 101));
+            test(empty_at(table, 2));
 
-            force(set(&table, 3, 30));
-            force(set(&table, 2, 20));
+            *set(&table, 3, 30);
+            *set(&table, 2, 20);
 
-            force(value_matches_at(table, 1, 10));
-            force(empty_at(table, 442120));
-            force(value_matches_at(table, 2, 20));
-            force(empty_at(table, 654351));
-            force(value_matches_at(table, 3, 30));
-            force(empty_at(table, 5));
+            test(value_matches_at(table, 1, 10));
+            test(empty_at(table, 442120));
+            test(value_matches_at(table, 2, 20));
+            test(empty_at(table, 654351));
+            test(value_matches_at(table, 3, 30));
+            test(empty_at(table, 5));
 
-            force(set(&table, 15, 15));
-            force(set(&table, 31, 15));
+            *set(&table, 15, 15);
+            *set(&table, 31, 15);
         
-            force(set(&table, 0, 100));
-            force(value_matches_at(table, 0, 100));
-            force(set(&table, 0, 1000));
-            force(value_matches_at(table, 0, 1000));
-            force(value_matches_at(table, 0, 100) == false);
-            force(empty_at(table, 5));
+            *set(&table, 0, 100);
+            test(value_matches_at(table, 0, 100));
+            *set(&table, 0, 1000);
+            test(value_matches_at(table, 0, 1000));
+            test(value_matches_at(table, 0, 100) == false);
+            test(empty_at(table, 5));
         }
             
         isize alive_after = trackers_alive();
-        force(alive_before == alive_after);
+        test(alive_before == alive_after);
     }
         
     template <typename Table> 
@@ -84,41 +84,41 @@ namespace jot::tests::hash_table
         {
             Table table;
 
-            force(empty_at(table, keys[0]));
-            force(empty_at(table, keys[3]));
-            force(empty_at(table, keys[5]));
+            test(empty_at(table, keys[0]));
+            test(empty_at(table, keys[3]));
+            test(empty_at(table, keys[5]));
 
-            force(set(&table, dup(keys[0]), dup(values[0])));
-            force(empty_at(table, keys[0]) == false);
-            force(value_matches_at(table, keys[0], values[0]));
-            force(value_matches_at(table, keys[0], values[1]) == false);
+            *set(&table, dup(keys[0]), dup(values[0]));
+            test(empty_at(table, keys[0]) == false);
+            test(value_matches_at(table, keys[0], values[0]));
+            test(value_matches_at(table, keys[0], values[1]) == false);
             
-            force(empty_at(table, keys[5]));
-            force(empty_at(table, keys[1]));
+            test(empty_at(table, keys[5]));
+            test(empty_at(table, keys[1]));
 
-            force(set(&table, dup(keys[2]), dup(values[2])));
-            force(set(&table, dup(keys[1]), dup(values[1])));
+            *set(&table, dup(keys[2]), dup(values[2]));
+            *set(&table, dup(keys[1]), dup(values[1]));
 
-            force(value_matches_at(table, keys[0], values[0]));
-            force(empty_at(table, keys[8]));
-            force(value_matches_at(table, keys[1], values[1]));
-            force(empty_at(table, keys[9]));
-            force(value_matches_at(table, keys[2], values[2]));
-            force(empty_at(table, keys[4]));
+            test(value_matches_at(table, keys[0], values[0]));
+            test(empty_at(table, keys[8]));
+            test(value_matches_at(table, keys[1], values[1]));
+            test(empty_at(table, keys[9]));
+            test(value_matches_at(table, keys[2], values[2]));
+            test(empty_at(table, keys[4]));
 
-            force(set(&table, dup(keys[5]), dup(values[5])));
-            force(set(&table, dup(keys[7]), dup(values[7])));
+            *set(&table, dup(keys[5]), dup(values[5]));
+            *set(&table, dup(keys[7]), dup(values[7]));
         
-            force(set(&table, dup(keys[0]), dup(values[8])));
-            force(value_matches_at(table, keys[0], values[8]));
-            force(set(&table, dup(keys[0]), dup(values[9])));
-            force(value_matches_at(table, keys[0], values[9]));
-            force(value_matches_at(table, keys[0], values[8]) == false);
-            force(empty_at(table, keys[4]));
+            *set(&table, dup(keys[0]), dup(values[8]));
+            test(value_matches_at(table, keys[0], values[8]));
+            *set(&table, dup(keys[0]), dup(values[9]));
+            test(value_matches_at(table, keys[0], values[9]));
+            test(value_matches_at(table, keys[0], values[8]) == false);
+            test(empty_at(table, keys[4]));
         }
             
         isize alive_after = trackers_alive();
-        force(alive_before == alive_after);
+        test(alive_before == alive_after);
     }
 
     template <typename Table> 
@@ -128,37 +128,37 @@ namespace jot::tests::hash_table
         {
             Table table;
 
-            force(set(&table, 1, 10));
-            force(set(&table, 2, 10));
-            force(set(&table, 3, 10));
-            force(set(&table, 4, 10));
+            *set(&table, 1, 10);
+            *set(&table, 2, 10);
+            *set(&table, 3, 10);
+            *set(&table, 4, 10);
 
-            force(value_matches_at(table, 1, 10));
-            force(value_matches_at(table, 2, 10));
-            force(value_matches_at(table, 3, 10));
-            force(value_matches_at(table, 4, 10));
+            test(value_matches_at(table, 1, 10));
+            test(value_matches_at(table, 2, 10));
+            test(value_matches_at(table, 3, 10));
+            test(value_matches_at(table, 4, 10));
 
             mark_removed(&table, 2);
-            force(empty_at(table, 2));
-            force(value_matches_at(table, 3, 10));
-            force(value_matches_at(table, 1, 10));
+            test(empty_at(table, 2));
+            test(value_matches_at(table, 3, 10));
+            test(value_matches_at(table, 1, 10));
             
             mark_removed(&table, 3);
-            force(empty_at(table, 3));
-            force(value_matches_at(table, 1, 10));
-            force(value_matches_at(table, 4, 10));
+            test(empty_at(table, 3));
+            test(value_matches_at(table, 1, 10));
+            test(value_matches_at(table, 4, 10));
 
-            force(set(&table, 2, 20));
-            force(value_matches_at(table, 2, 20));
+            *set(&table, 2, 20);
+            test(value_matches_at(table, 2, 20));
             
-            force(set(&table, 6, 60));
-            force(set(&table, 7, 70));
-            force(set(&table, 8, 80));
-            force(set(&table, 9, 90));
-            force(set(&table, 10, 100));
+            *set(&table, 6, 60);
+            *set(&table, 7, 70);
+            *set(&table, 8, 80);
+            *set(&table, 9, 90);
+            *set(&table, 10, 100);
             
-            force(value_matches_at(table, 9, 90));
-            force(value_matches_at(table, 4, 10));
+            test(value_matches_at(table, 9, 90));
+            test(value_matches_at(table, 4, 10));
 
             mark_removed(&table, 6);
             mark_removed(&table, 7);
@@ -168,26 +168,26 @@ namespace jot::tests::hash_table
             mark_removed(&table, 10);
             mark_removed(&table, 10);
 
-            force(empty_at(table, 6));
-            force(empty_at(table, 7));
-            force(empty_at(table, 8));
-            force(empty_at(table, 9));
-            force(empty_at(table, 10));
+            test(empty_at(table, 6));
+            test(empty_at(table, 7));
+            test(empty_at(table, 8));
+            test(empty_at(table, 9));
+            test(empty_at(table, 10));
             
-            force(value_matches_at(table, 1, 10));
-            force(value_matches_at(table, 4, 10));
-            force(empty_at(table, 3));
+            test(value_matches_at(table, 1, 10));
+            test(value_matches_at(table, 4, 10));
+            test(empty_at(table, 3));
 
-            force(set(&table, 10, 100));
-            force(value_matches_at(table, 10, 100));
+            *set(&table, 10, 100);
+            test(value_matches_at(table, 10, 100));
             
             mark_removed(&table, 1);
-            force(empty_at(table, 1));
-            force(value_matches_at(table, 4, 10));
+            test(empty_at(table, 1));
+            test(value_matches_at(table, 4, 10));
         }
             
         isize alive_after = trackers_alive();
-        force(alive_before == alive_after);
+        test(alive_before == alive_after);
     }
     
     template <typename Table> 
@@ -197,81 +197,81 @@ namespace jot::tests::hash_table
         {
             Table table;
                 
-            force(set(&table, 1, 10));
-            force(set(&table, 2, 20));
-            force(set(&table, 3, 30));
-            force(set(&table, 4, 40));
+            *set(&table, 1, 10);
+            *set(&table, 2, 20);
+            *set(&table, 3, 30);
+            *set(&table, 4, 40);
 
-            force(value_matches_at(table, 1, 10));
-            force(value_matches_at(table, 2, 20));
-            force(value_matches_at(table, 3, 30));
-            force(value_matches_at(table, 4, 40));
+            test(value_matches_at(table, 1, 10));
+            test(value_matches_at(table, 2, 20));
+            test(value_matches_at(table, 3, 30));
+            test(value_matches_at(table, 4, 40));
 
             auto entry = remove(&table, find(table, 2));
-            force(entry.key == 2 && entry.value == 20);
-            force(empty_at(table, 2));
-            force(value_matches_at(table, 3, 30));
-            force(value_matches_at(table, 1, 10));
+            test(entry.key == 2 && entry.value == 20);
+            test(empty_at(table, 2));
+            test(value_matches_at(table, 3, 30));
+            test(value_matches_at(table, 1, 10));
             
             entry = remove(&table, find(table, 3));
-            force(entry.key == 3 && entry.value == 30);
-            force(empty_at(table, 3));
-            force(value_matches_at(table, 1, 10));
-            force(value_matches_at(table, 4, 40));
+            test(entry.key == 3 && entry.value == 30);
+            test(empty_at(table, 3));
+            test(value_matches_at(table, 1, 10));
+            test(value_matches_at(table, 4, 40));
 
-            force(set(&table, 2, 20));
-            force(value_matches_at(table, 2, 20));
+            *set(&table, 2, 20);
+            test(value_matches_at(table, 2, 20));
             
-            force(set(&table, 6, 60));
-            force(set(&table, 7, 70));
-            force(set(&table, 8, 80));
-            force(set(&table, 9, 90));
-            force(set(&table, 10, 100));
+            *set(&table, 6, 60);
+            *set(&table, 7, 70);
+            *set(&table, 8, 80);
+            *set(&table, 9, 90);
+            *set(&table, 10, 100);
             
-            force(value_matches_at(table, 9, 90));
-            force(value_matches_at(table, 4, 40));
+            test(value_matches_at(table, 9, 90));
+            test(value_matches_at(table, 4, 40));
 
             entry = remove(&table, find(table, 6));
-            force(entry.key == 6 && entry.value == 60);
-            force(remove(&table, 6) == false);
+            test(entry.key == 6 && entry.value == 60);
+            test(remove(&table, 6) == false);
 
             entry = remove(&table, find(table, 7));
-            force(entry.key == 7 && entry.value == 70);
-            force(remove(&table, 7) == false);
+            test(entry.key == 7 && entry.value == 70);
+            test(remove(&table, 7) == false);
 
             entry = remove(&table, find(table, 8));
-            force(entry.key == 8 && entry.value == 80);
+            test(entry.key == 8 && entry.value == 80);
 
             entry = remove(&table, find(table, 9));
-            force(entry.key == 9 && entry.value == 90);
+            test(entry.key == 9 && entry.value == 90);
 
             entry = remove(&table, find(table, 10));
-            force(entry.key == 10 && entry.value == 100);
+            test(entry.key == 10 && entry.value == 100);
 
-            force(remove(&table, 7) == false);
-            force(remove(&table, 10) == false);
-            force(remove(&table, 3) == false);
+            test(remove(&table, 7) == false);
+            test(remove(&table, 10) == false);
+            test(remove(&table, 3) == false);
 
-            force(empty_at(table, 6));
-            force(empty_at(table, 7));
-            force(empty_at(table, 8));
-            force(empty_at(table, 9));
-            force(empty_at(table, 10));
+            test(empty_at(table, 6));
+            test(empty_at(table, 7));
+            test(empty_at(table, 8));
+            test(empty_at(table, 9));
+            test(empty_at(table, 10));
             
-            force(value_matches_at(table, 1, 10));
-            force(value_matches_at(table, 4, 40));
-            force(empty_at(table, 3));
+            test(value_matches_at(table, 1, 10));
+            test(value_matches_at(table, 4, 40));
+            test(empty_at(table, 3));
 
-            force(set(&table, 10, 100));
-            force(value_matches_at(table, 10, 100));
+            *set(&table, 10, 100);
+            test(value_matches_at(table, 10, 100));
             
             entry = remove(&table, find(table, 1));
-            force(empty_at(table, 1));
-            force(value_matches_at(table, 4, 40));
+            test(empty_at(table, 1));
+            test(value_matches_at(table, 4, 40));
         }
             
         isize alive_after = trackers_alive();
-        force(alive_before == alive_after);
+        test(alive_before == alive_after);
     }
 
     template <typename Key>
@@ -286,7 +286,7 @@ namespace jot::tests::hash_table
     };
     
 
-    void test_hash()
+    void test_hash_table()
     {
         isize memory_before = memory_globals::default_allocator()->bytes_allocated();
 
@@ -300,7 +300,7 @@ namespace jot::tests::hash_table
 
             const auto str = [](cstring cstr){
                 String_Builder builder;
-                force(copy(&builder, String(cstr)));
+                *copy(&builder, String(cstr));
                 return builder;
             };
 
