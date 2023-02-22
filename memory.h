@@ -262,6 +262,58 @@ namespace jot
         }
     };
 
+    namespace memory_globals
+    {
+        static New_Delete_Allocator NEW_DELETE_ALLOCATOR;
+        static Failing_Allocator    FAILING_ALLOCATOR;
+        
+        namespace hidden
+        {
+            thread_local static Allocator* DEFAULT_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
+            thread_local static Allocator* SCRATCH_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
+        }
+
+        nodisc inline Allocator* default_allocator() noexcept 
+        {
+            return hidden::DEFAULT_ALLOCATOR;
+        }
+
+        nodisc inline Allocator* scratch_allocator() noexcept 
+        {
+            return hidden::SCRATCH_ALLOCATOR;
+        }
+
+        //Upon construction exchnages the DEFAULT_ALLOCATOR to the provided allocator
+        // and upon destruction restores original value of DEFAULT_ALLOCATOR
+        //Does safely compose
+        struct Default_Swap
+        {
+            Allocator* new_allocator;
+            Allocator* old_allocator;
+
+            Default_Swap(Allocator* resource, Allocator* old = memory_globals::default_allocator()) : new_allocator(resource), old_allocator(old) {
+                hidden::DEFAULT_ALLOCATOR = new_allocator;
+            }
+
+            ~Default_Swap() {
+                hidden::DEFAULT_ALLOCATOR = old_allocator;
+            }
+        };
+
+        struct Scratch_Swap
+        {
+            Allocator* new_allocator;
+            Allocator* old_allocator;
+
+            Scratch_Swap(Allocator* resource, Allocator* old = memory_globals::scratch_allocator()) : new_allocator(resource), old_allocator(old) {
+                hidden::SCRATCH_ALLOCATOR = new_allocator;
+            }
+
+            ~Scratch_Swap() {
+                hidden::SCRATCH_ALLOCATOR = old_allocator;
+            }
+        };
+    }
 
     template<typename T> nodisc constexpr
     bool is_in_slice(T* ptr, Slice<T> slice)
@@ -327,6 +379,9 @@ namespace jot
 
         Linear_Allocator(Slice<u8> buffer, Allocator* parent) noexcept 
             : buffer(buffer), parent(parent) {}
+
+        Linear_Allocator(Slice<u8> buffer) noexcept 
+            : buffer(buffer), parent(memory_globals::default_allocator()) {}
 
         Slice<u8> available_slice() const 
         {
@@ -447,59 +502,6 @@ namespace jot
         virtual
         ~Linear_Allocator() noexcept override {}
     };
-
-    namespace memory_globals
-    {
-        static New_Delete_Allocator NEW_DELETE_ALLOCATOR;
-        static Failing_Allocator    FAILING_ALLOCATOR;
-
-        namespace hidden
-        {
-            thread_local static Allocator* DEFAULT_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
-            thread_local static Allocator* SCRATCH_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
-        }
-
-        nodisc inline Allocator* default_allocator() noexcept 
-        {
-            return hidden::DEFAULT_ALLOCATOR;
-        }
-
-        nodisc inline Allocator* scratch_allocator() noexcept 
-        {
-            return hidden::SCRATCH_ALLOCATOR;
-        }
-
-        //Upon construction exchnages the DEFAULT_ALLOCATOR to the provided allocator
-        // and upon destruction restores original value of DEFAULT_ALLOCATOR
-        //Does safely compose
-        struct Default_Swap
-        {
-            Allocator* new_allocator;
-            Allocator* old_allocator;
-
-            Default_Swap(Allocator* resource, Allocator* old = memory_globals::default_allocator()) : new_allocator(resource), old_allocator(old) {
-                hidden::DEFAULT_ALLOCATOR = new_allocator;
-            }
-
-            ~Default_Swap() {
-                hidden::DEFAULT_ALLOCATOR = old_allocator;
-            }
-        };
-
-        struct Scratch_Swap
-        {
-            Allocator* new_allocator;
-            Allocator* old_allocator;
-
-            Scratch_Swap(Allocator* resource, Allocator* old = memory_globals::scratch_allocator()) : new_allocator(resource), old_allocator(old) {
-                hidden::SCRATCH_ALLOCATOR = new_allocator;
-            }
-
-            ~Scratch_Swap() {
-                hidden::SCRATCH_ALLOCATOR = old_allocator;
-            }
-        };
-    }
 
     template <typename T>
     static constexpr isize DEF_ALIGNMENT = cast(isize) max(alignof(T), 4);

@@ -25,12 +25,12 @@ namespace jot::tests::allocator
         u8 dummy = 0;
         u8* aligned = align_forward(&dummy, 32);
         usize ptr_num = cast(usize) aligned;
-        force(ptr_num/32*32 == ptr_num);
+        test(ptr_num/32*32 == ptr_num);
 
-        force(align_forward(aligned + 1, 4) == align_backward(aligned + 7, 4));
-        force(align_forward(aligned + 1, 8) == align_backward(aligned + 15, 8));
-        force(align_forward(aligned + 3, 16) == align_backward(aligned + 27, 16));
-        force(align_forward(aligned + 13, 16) == align_backward(aligned + 17, 16));
+        test(align_forward(aligned + 1, 4) == align_backward(aligned + 7, 4));
+        test(align_forward(aligned + 1, 8) == align_backward(aligned + 15, 8));
+        test(align_forward(aligned + 3, 16) == align_backward(aligned + 27, 16));
+        test(align_forward(aligned + 13, 16) == align_backward(aligned + 17, 16));
     }
 
     const auto test_stats_plausibility(Allocator* tested_)
@@ -59,17 +59,17 @@ namespace jot::tests::allocator
             Slice<u8> third = stack_ring.allocate(30, 8).items;
 
             test_stats_plausibility(&stack_ring);
-            force(stack_ring.deallocate(second, 256));
+            *stack_ring.deallocate(second, 256);
 
             Allocation_Result result = stack_ring.resize(first, 8, 25);
-            force(result.state);
+            *result.state;
             first = result.items;
 
             result = stack_ring.resize(first, 8, 40 + 256);
             test(result.state == ERROR);
 
-            force(stack_ring.deallocate(first, 8));
-            force(stack_ring.deallocate(third, 8));
+            *stack_ring.deallocate(first, 8);
+            *stack_ring.deallocate(third, 8);
             test_stats_plausibility(&stack_ring);
         }
 
@@ -80,17 +80,17 @@ namespace jot::tests::allocator
             Slice<u8> a3 = stack_ring.allocate(64, 8).items;
             test_stats_plausibility(&stack_ring);
 
-            force(stack_ring.deallocate(a1, 8));
-            force(stack_ring.deallocate(a2, 8));
+            *stack_ring.deallocate(a1, 8);
+            *stack_ring.deallocate(a2, 8);
             
             Slice<u8> a4 = stack_ring.allocate(64, 8).items;
             Slice<u8> a5 = stack_ring.allocate(64, 8).items;
 
             test(stack_ring.allocate(64, 8).state == ERROR);
             
-            force(stack_ring.deallocate(a3, 8));
-            force(stack_ring.deallocate(a4, 8));
-            force(stack_ring.deallocate(a5, 8));
+            *stack_ring.deallocate(a3, 8);
+            *stack_ring.deallocate(a4, 8);
+            *stack_ring.deallocate(a5, 8);
             test_stats_plausibility(&stack_ring);
         }
     }
@@ -118,12 +118,12 @@ namespace jot::tests::allocator
         Stack<u8> stack_storage;
         Stack<u8> stack_simple_storage;
 
-        force(resize(&stack_storage, max_alloced_storage));
-        force(resize(&stack_simple_storage, max_alloced_storage));
+        *resize(&stack_storage, max_alloced_storage);
+        *resize(&stack_simple_storage, max_alloced_storage);
 
         Failing_Allocator       failling;
         Stack_Ring_Allocator    stack_ring = Stack_Ring_Allocator(slice(&stack_storage), def);
-        Stack_Allocator         stack = Stack_Allocator(slice(&stack_simple_storage), def);
+        Stack_Allocator         stack      = Stack_Allocator(slice(&stack_simple_storage), def);
         Arena_Allocator         unbound    = Arena_Allocator(def);
 
         const auto set_up_test = [&](
@@ -138,9 +138,9 @@ namespace jot::tests::allocator
             size_noise_distribution = std::uniform_int_distribution<long long>(0, 10);
 
             block_size = block_size_;
-            force(resize(&size_table, block_size));
-            force(resize(&align_table, block_size));
-            force(resize(&allocs, block_size));
+            *resize(&size_table, block_size);
+            *resize(&align_table, block_size);
+            *resize(&allocs, block_size);
 
             total_size_in_size_table = 0;
             for(isize i = 0; i < block_size; i++)
@@ -171,7 +171,7 @@ namespace jot::tests::allocator
             for(isize i = 0; i < block_size; i++)
             {
                 Allocation_Result result = tested->allocate(size_table[i], align_table[i]);
-                force(result.state);
+                *result.state;
                 fill_slice(result.items);
                 allocs[i] = result.items;
             }
@@ -182,7 +182,7 @@ namespace jot::tests::allocator
             );
 
             for(isize i = 0; i < block_size; i++)
-                force(tested->deallocate(allocs[i], align_table[i]));
+                *tested->deallocate(allocs[i], align_table[i]);
             
             test_stats_plausibility(tested);
 
@@ -197,7 +197,7 @@ namespace jot::tests::allocator
             for(isize i = 0; i < block_size; i++)
             {
                 Allocation_Result result = tested->allocate(size_table[i], align_table[i]);
-                force(result.state);
+                *result.state;
                 fill_slice(result.items);
                 allocs[i] = result.items;
             }
@@ -208,7 +208,7 @@ namespace jot::tests::allocator
             );
 
             for(isize i = block_size; i-- > 0;)
-                force(tested->deallocate(allocs[i], align_table[i]));
+                *tested->deallocate(allocs[i], align_table[i]);
                 
             test_stats_plausibility(tested);
             unbound.reset();
@@ -221,9 +221,9 @@ namespace jot::tests::allocator
             for(isize i = 0; i < block_size; i++)
             {
                 Allocation_Result result = tested->allocate(size_table[i], align_table[i]);
-                force(result.state);
+                *result.state;
                 fill_slice(result.items);
-                force(tested->deallocate(result.items, align_table[i]));
+                *tested->deallocate(result.items, align_table[i]);
             }
 
             test_stats_plausibility(tested);
@@ -242,7 +242,7 @@ namespace jot::tests::allocator
             for(isize i = 0; i < block_size; i++)
             {
                 Allocation_Result result = tested->allocate(size_table[i], align_table[i]);
-                force(result.state);
+                *result.state;
                 fill_slice(result.items);
                 allocs[i] = result.items;
             }
@@ -254,7 +254,7 @@ namespace jot::tests::allocator
 
             for(isize i = 0; i < block_size; i += 2)
             {
-                force(tested->deallocate(allocs[i], align_table[i]));
+                *tested->deallocate(allocs[i], align_table[i]);
             }
 
             for(isize i = 1; i < block_size; i += 2)
@@ -268,12 +268,12 @@ namespace jot::tests::allocator
                 if(result.state == ERROR)
                 {
                     result = tested->allocate(new_size, align);
-                    force(result.state);
+                    *result.state;
 
                     if(touch)
                         copy_items<u8>(&result.items, old_data);
 
-                    force(tested->deallocate(old_data, align));
+                    *tested->deallocate(old_data, align);
                 }
 
                 allocs[i] = result.items;
@@ -285,7 +285,7 @@ namespace jot::tests::allocator
             for(isize i = 1; i < block_size; i += 2)
             {
                 if(allocs[i].data != nullptr)
-                    force(tested->deallocate(allocs[i], align_table[i]));
+                    *tested->deallocate(allocs[i], align_table[i]);
             }
             
             test_stats_plausibility(tested);
@@ -303,25 +303,25 @@ namespace jot::tests::allocator
                 isize align = align_table[i];
 
                 Allocation_Result result = tested->allocate(size, align);
-                force(result.state);
+                *result.state;
                 fill_slice(result.items);
 
                 Allocation_Result resize_result = tested->resize(result.items, align, new_size);
                 if(resize_result.state == ERROR)
                 {
                     resize_result = tested->allocate(new_size, align);
-                    force(resize_result.state);
+                    *resize_result.state;
 
                     if(touch)
                         copy_items<u8>(&resize_result.items, result.items);
 
-                    force(tested->deallocate(result.items, align));
+                    *tested->deallocate(result.items, align);
                 }
 
-                force(resize_result.state);
+                *resize_result.state;
                 fill_slice(resize_result.items);
 
-                force(tested->deallocate(resize_result.items, align));
+                *tested->deallocate(resize_result.items, align);
             }
 
             test_stats_plausibility(tested);
@@ -336,7 +336,7 @@ namespace jot::tests::allocator
                 isize size = size_table[i];
                 isize align = align_table[i];
                 Allocation_Result result = tested->allocate(size, align);
-                force(result.state);
+                *result.state;
                 allocs[i] = result.items;
             }
 
@@ -355,7 +355,7 @@ namespace jot::tests::allocator
             {
                 Slice<u8> alloced = allocs[i];
                 isize align = align_table[i];
-                force(tested->deallocate(alloced, align));
+                *tested->deallocate(alloced, align);
             }
 
             unbound.reset();
@@ -387,7 +387,7 @@ namespace jot::tests::allocator
         }
     }
     
-    void test_allocators()
+    void test_allocator()
     {
         test_align();
         test_stack_ring();
