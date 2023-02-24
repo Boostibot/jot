@@ -56,7 +56,6 @@ namespace jot
     {
         return ptr.value;
     }
-    
 
     template <typename T, Enable_If<failable<T>> = ENABLED> nodisc constexpr 
     bool operator==(T const& left, Ok_Type) noexcept { return failed(left) == false; }
@@ -92,6 +91,14 @@ namespace jot
     void operator*(State state)
     {
         force(state);
+    }
+    
+    template<typename T> nodisc constexpr
+    T dup(T const& in)
+    {
+        T copied;
+        *copy(&copied, in);
+        return copied;
     }
 
     inline constexpr

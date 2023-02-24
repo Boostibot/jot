@@ -111,7 +111,7 @@ namespace jot
 
         bool is_alloc_not_null = hash._allocator != nullptr;
         bool are_entries_simulatinous_alloced = (hash._keys == nullptr) == (hash._values == nullptr);
-        bool are_entry_sizes_correct = (hash._keys == nullptr) == (hash._entries_size == 0);
+        bool are_entry_sizes_correct = (hash._keys == nullptr) == (hash._entries_capacity == 0);
         bool are_linker_sizes_correct = (hash._linker == nullptr) == (hash._linker_size == 0);
 
         bool are_sizes_in_range = hash._entries_size <= hash._entries_capacity;
@@ -231,20 +231,27 @@ namespace jot
             return Allocator_State::OK;
         }
 
+        
+        template <typename Key, typename Value, class Hash, class Comp> nodisc
+        Allocator_State_Type reserve_entries(Hash_Table<Key, Value, Hash, Comp>* hash, isize to_fit) noexcept
+        {
+            if(to_fit > hash->_entries_capacity)
+            {
+                isize new_capacity = calculate_stack_growth(hash->_entries_capacity, to_fit);
+                return set_entries_capacity(hash, new_capacity);
+            }
+
+            return Allocator_State::OK;
+        }
+
         template <typename Key, typename Value, class Hash, class Comp> nodisc
         Allocator_State_Type push_entry(Hash_Table<Key, Value, Hash, Comp>* hash, Key key, Value value) noexcept
         {
             assert(is_invariant(*hash));
-
             isize size = hash->_entries_size;
-            isize capacity = hash->_entries_capacity;
-            if(size >= capacity)
-            {
-                isize new_capacity = calculate_stack_growth(hash->_entries_capacity, size + 1);
-                Allocator_State_Type state = set_entries_capacity(hash, new_capacity);
-                if(state == ERROR)
-                    return state;
-            }
+            Allocator_State_Type state = hash_table_internal::reserve_entries(hash, size + 1);
+            if(state == ERROR)
+                return state;
 
             new (&hash->_keys[size]) Key(move(&key));
             new (&hash->_values[size]) Value(move(&value));
@@ -279,6 +286,7 @@ namespace jot
             isize empty_count = 0;
             isize graveston_count = 0;
             isize alive_count = 0;
+
             for(isize i = 0; i < old_linker.size; i++)
             {
                 #ifndef NDEBUG
@@ -291,11 +299,12 @@ namespace jot
                 #endif
                 
                 isize link = cast(isize) old_linker[i];
+
                 //skip gravestones and empty slots
-                if(link > table->_entries_size)
+                if(link >= table->_entries_capacity)
                     continue;
 
-
+                assert(marks[link] == false && "all links must be unique!");
                 marks[link] = true;
             }
 
@@ -332,6 +341,10 @@ namespace jot
                 if(forward_index >= backward_index)
                     break;
 
+                bool markf = marks[forward_index];
+                bool markb = marks[backward_index];
+                Key const& keyf = table->_keys[forward_index];
+
                 table->_keys[forward_index] = move(&table->_keys[backward_index]);
                 table->_values[forward_index] = move(&table->_values[backward_index]);
 
@@ -341,8 +354,8 @@ namespace jot
             }
 
             isize alive_entries_size = forward_index;
-            assert(alive_count == alive_entries_size);
             assert(swap_count <= graveston_count);
+            assert(alive_count == alive_entries_size);
             
             //fill new_linker to empty
             Slice<Link> new_linker = cast_slice<Link>(result.items);
@@ -425,12 +438,30 @@ namespace jot
     }
 
     template <typename Key, typename Value, class Hash, class Comp> nodisc
-    Allocator_State_Type reserve(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
+    Allocator_State_Type reserve_linker(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
     {
         if(to_fit < table->_linker_size)
-            return Allocator_State_Type::OK;
+            return Allocator_State::OK;
 
-        return unsafe_rehash(table, to_fit);
+        return rehash(table, to_fit);
+    }
+
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Allocator_State_Type reserve_entries(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
+    {
+        return hash_table_internal::reserve_entries(table, to_fit);
+    }
+
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    Allocator_State_Type reserve_both(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
+    {
+        Allocator_State_Type state1 = reserve_linker(table, to_fit);
+        Allocator_State_Type state2 = reserve_entries(table, to_fit);
+
+        if(state1 == ERROR)
+            return state1;
+
+        return state2;
     }
 
     template <typename Key, typename Value, class Hash, class Comp, bool break_on_gravestone = false> nodisc

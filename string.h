@@ -14,15 +14,12 @@ namespace jot
     using String_Appender = Stack_Appender<char>;
 
     nodisc inline  
-    isize first_index_of(String in_str, String search_for, isize from = 0)
+    isize first_index_of(String in_str, String search_for, isize from = 0) noexcept
     {
         if(search_for.size == 0)
             return 0;
 
-        if(in_str.size < search_for.size)
-            return -1;
-
-        isize to = min(in_str.size - search_for.size + 1, in_str.size);
+        isize to = in_str.size - search_for.size + 1;
         for(isize i = from; i < to; i++)
         {
             const auto execute = [&](){
@@ -41,6 +38,33 @@ namespace jot
 
         return -1;
     }
+
+    nodisc inline  
+    isize last_index_of(String in_str, String search_for, isize from = 0) noexcept
+    {
+        if(search_for.size == 0)
+            return 0;
+
+        isize to = in_str.size - search_for.size + 1;
+        for(isize i = to; i-- > from; )
+        {
+            const auto execute = [&](){
+                for(isize j = 0; j < search_for.size; j++)
+                {
+                    if(in_str[i + j] != search_for[j])
+                        return false;
+                }
+
+                return true;
+            };
+
+            if(execute())
+                return i;
+        };
+
+        return -1;
+    }
+
 
     //adds null termination to the string if it
     // already doesnt have one

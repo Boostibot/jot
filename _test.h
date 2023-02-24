@@ -116,14 +116,6 @@ namespace jot::tests
         };
     };
 
-    template<typename T> constexpr
-    T dup(T const& in)
-    {
-        T copy;
-        force(Copyable<T>::copy(&copy, in));
-        return copy;
-    }
-    
     void test(bool cond)
     {
         force(cond);

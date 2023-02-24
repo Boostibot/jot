@@ -63,12 +63,6 @@ namespace jot
             return Formattable<T>::format(into, arg);
     }
     
-    template<typename T> nodisc
-    State format_into(String_Builder* into, T const& arg) noexcept
-    {
-        String_Appender appender(into);
-        return format_into(&appender, arg);
-    }
 
     template<typename T> nodisc
     Format_Result format(T const& arg) noexcept
@@ -386,13 +380,17 @@ namespace jot
                     break;
                 }
 
-                if(new_found != 0 && format_str[new_found - 1] == '\\')
+                if(new_found != 0 && new_found > 0 && new_found + 2 < format_str.size)
                 {
-                    String in_between = slice_range(format_str, last, new_found - 1);
-                    acumulate(&state, push_multiple(appender, in_between));
-                    acumulate(&state, push_multiple(appender, sub_for));
-
-                    continue;
+                    if (format_str[new_found - 1] == '{' && format_str[new_found + 2] == '}')
+                    {
+                        String in_between = slice_range(format_str, last, new_found - 1);
+                        acumulate(&state, push_multiple(appender, in_between));
+                        acumulate(&state, push_multiple(appender, sub_for));
+                        
+                        new_found += 1;
+                        continue;
+                    }
                 }
 
                 assert(found_count < adapted.size && "number of arguments and holes must match");
@@ -435,6 +433,13 @@ namespace jot
         return format_adapted_into(appender, format_str, adapted_slice);
     }
     
+    template<typename... Ts> nodisc
+    State format_into(String_Builder* into, Ts const&... args) noexcept
+    {
+        String_Appender appender(into);
+        return format_into(&appender, args...);
+    }
+
     template<typename... Ts> nodisc
     Format_Result format(String format_str, Ts const&... args)
     {
