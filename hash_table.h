@@ -95,12 +95,15 @@ namespace jot
     
     constexpr static isize HASH_TABLE_ENTRIES_ALIGN = 32;
     constexpr static isize HASH_TABLE_LINKER_ALIGN = 32;
-    constexpr static isize HASH_TABLE_LINKER_BASE_SIZE = 8;
+    constexpr static isize HASH_TABLE_LINKER_BASE_SIZE = 16;
 
     //rehashes to same size if gravestones make more than
     // HASH_TABLE_MAX_GRAVESTONES_NUM / HASH_TABLE_MAX_GRAVESTONES_DEN portion
     constexpr static isize HASH_TABLE_MAX_GRAVESTONES_NUM = 1;
     constexpr static isize HASH_TABLE_MAX_GRAVESTONES_DEN = 4;
+
+    constexpr static isize HASH_TABLE_MAX_UTILIZATION_NUM = 1;
+    constexpr static isize HASH_TABLE_MAX_UTILIZATION_DEN = 2;
 
     template <typename Key, typename Value, class Hash, class Comp> nodisc
     bool is_invariant(Hash_Table<Key, Value, Hash, Comp> const& hash)
@@ -294,8 +297,6 @@ namespace jot
                     empty_count ++;
                 else if(old_linker[i] == cast(Link) GRAVESTONE_LINK)
                     graveston_count ++;
-                else
-                    alive_count ++;
                 #endif
                 
                 isize link = cast(isize) old_linker[i];
@@ -303,7 +304,8 @@ namespace jot
                 //skip gravestones and empty slots
                 if(link >= table->_entries_capacity)
                     continue;
-
+                    
+                alive_count ++;
                 assert(marks[link] == false && "all links must be unique!");
                 marks[link] = true;
             }
@@ -322,28 +324,24 @@ namespace jot
             isize backward_index = marks.size - 1;
             isize swap_count = 0;
                 
-            while(forward_index < backward_index)
+            while(forward_index <= backward_index)
             {
                 while(marks[forward_index] == true)
                 {
                     forward_index++;
-                    if(forward_index >= marks.size)
+                    if(forward_index >= backward_index)
                         break;
                 }
 
                 while(marks[backward_index] == false)
                 {
                     backward_index--;
-                    if(forward_index < 0)
+                    if(backward_index <= forward_index)
                         break;
                 }
                     
                 if(forward_index >= backward_index)
                     break;
-
-                bool markf = marks[forward_index];
-                bool markb = marks[backward_index];
-                Key const& keyf = table->_keys[forward_index];
 
                 table->_keys[forward_index] = move(&table->_keys[backward_index]);
                 table->_values[forward_index] = move(&table->_values[backward_index]);
@@ -353,17 +351,13 @@ namespace jot
                 backward_index--;
             }
 
-            isize alive_entries_size = forward_index;
-            assert(swap_count <= graveston_count);
-            assert(alive_count == alive_entries_size);
-            
             //fill new_linker to empty
             Slice<Link> new_linker = cast_slice<Link>(result.items);
             fill(&new_linker, cast(Link) EMPTY_LINK);
 
-            //rehash every entry up to alive_entries_size
+            //rehash every entry up to alive_count
             hash_t mask = cast(hash_t) new_linker.size - 1;
-            for(isize i = 0; i < alive_entries_size; i++)
+            for(isize i = 0; i < alive_count; i++)
             {
                 Key const& key = table->_keys[i];
                 hash_t hash = Hash::hash(key);
@@ -372,16 +366,16 @@ namespace jot
             }
 
             //destroy the dead entries
-            for(isize i = alive_entries_size; i < table->_entries_size; i++)
+            for(isize i = alive_count; i < table->_entries_size; i++)
             {
                 table->_keys[i].~Key();
                 table->_values[i].~Value();
             }
             
-            assert(table->_entries_size <= alive_entries_size + table->_gravestone_count);
+            assert(table->_entries_size <= alive_count + table->_gravestone_count);
 
             table->_gravestone_count = 0;
-            table->_entries_size = alive_entries_size;
+            table->_entries_size = alive_count;
             table->_linker_size = new_linker.size;
             table->_linker = new_linker.data;
             table->_allocator->deallocate(cast_slice<u8>(old_linker), HASH_TABLE_LINKER_ALIGN);
@@ -395,7 +389,7 @@ namespace jot
         bool is_overful(Hash_Table<Key, Value, Hash, Comp> const& table)
         {
             //max 25% utlization
-            return table._linker_size - table._gravestone_count <= table._entries_size * 4;
+            return (table._linker_size - table._gravestone_count) * HASH_TABLE_MAX_UTILIZATION_NUM <= table._entries_size * HASH_TABLE_MAX_UTILIZATION_DEN;
         }
         
         template <typename Key, typename Value, class Hash, class Comp> nodisc
@@ -438,7 +432,7 @@ namespace jot
     }
 
     template <typename Key, typename Value, class Hash, class Comp> nodisc
-    Allocator_State_Type reserve_linker(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
+    Allocator_State_Type reserve_jump_table(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
     {
         if(to_fit < table->_linker_size)
             return Allocator_State::OK;
@@ -453,9 +447,9 @@ namespace jot
     }
 
     template <typename Key, typename Value, class Hash, class Comp> nodisc
-    Allocator_State_Type reserve_both(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
+    Allocator_State_Type reserve(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
     {
-        Allocator_State_Type state1 = reserve_linker(table, to_fit);
+        Allocator_State_Type state1 = reserve_jump_table(table, to_fit);
         Allocator_State_Type state2 = reserve_entries(table, to_fit);
 
         if(state1 == ERROR)
@@ -538,30 +532,50 @@ namespace jot
 
         isize last = table->_entries_size - 1;
         isize removed_i = removed.entry_index;
-        table->_linker[removed.hash_index] = cast(Hash_Table_Link<Key, Value>) hash_table_internal::GRAVESTONE_LINK;
+
+        using Link = Hash_Table_Link<Key, Value>;
+        Slice<Link> linker  = {table->_linker,  table->_linker_size};
+        Slice<Key> keys     = {table->_keys,    table->_entries_size};
+        Slice<Value> values = {table->_values,  table->_entries_size};
+
+        linker[removed.hash_index] = cast(Hash_Table_Link<Key, Value>) hash_table_internal::GRAVESTONE_LINK;
         table->_gravestone_count += 1;
-
-        if(removed_i != last)
-        {
-            Hash_Found changed_for = find(*table, table->_keys[last]);
-            table->_linker[changed_for.hash_index] = cast(Hash_Table_Link<Key, Value>) removed_i;
-        }
-
-        Hash_Table_Entry<Key, Value> removed_entry_data = {
-            move(&table->_keys[removed_i]),
-            move(&table->_values[removed_i]),
-        };
         
+        Hash_Table_Entry<Key, Value> removed_entry_data = {
+            move(&keys[removed_i]),
+            move(&values[removed_i]),
+        };
+
+        bool delete_last = true;
         if(removed_i != last)
         {
-            table->_keys[removed_i] = move(&table->_keys[last]);
-            table->_values[removed_i] = move(&table->_values[last]);
+            Hash_Found changed_for = find(*table, keys[last]);
+
+            //in the case the table contains 'mark_removed' entries
+            // we can no longer assure that the last key will actually exists
+            // in that case we simply only mark the entry as deleted and nothing more
+            // (we could scan back for other not removed entries to swap with but that has no use since
+            //  the user cannot make any assumptions about which entries are used and and which ones 
+            //  arent when using mark_removed)
+            if(changed_for.hash_index != -1)
+            {
+                linker[changed_for.hash_index] = cast(Hash_Table_Link<Key, Value>) removed_i;
+                keys[removed_i] = move(&keys[last]);
+                values[removed_i] = move(&values[last]);
+            }
+            else
+                delete_last = false;
         }
 
-        table->_keys[last].~Key();
-        table->_values[last].~Value();
+        if(delete_last)
+        {
+            keys[last].~Key();
+            values[last].~Value();
+        
+            table->_entries_size -= 1;
+        }
+
             
-        table->_entries_size -= 1;
         return removed_entry_data;
     }
 

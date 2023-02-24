@@ -1,8 +1,11 @@
 #pragma once
 
+#include <random>
+
+#include "_test.h"
 #include "array.h"
 #include "stack.h"
-#include "_test.h"
+
 
 namespace jot::tests::stack
 {
@@ -479,6 +482,138 @@ namespace jot::tests::stack
         test(before == after);
     }
     
+
+    void test_stress()
+    {
+        using Track = Tracker<isize>;
+        std::mt19937 gen;
+
+        constexpr isize OP_PUSH1 = 0;
+        constexpr isize OP_PUSH2 = 1;
+        constexpr isize OP_PUSH3 = 2;
+        constexpr isize OP_POP = 3;
+        constexpr isize OP_RESERVE = 4;
+        constexpr isize OP_SPLICE = 5;
+        constexpr isize OP_INSERT = 6;
+        constexpr isize OP_REMOVE = 7;
+        constexpr isize OP_INSERT_UNORDERED = 8;
+        constexpr isize OP_REMOVE_UNORDERED = 9;
+
+        std::uniform_int_distribution<unsigned> op_distribution(0, 9);
+        std::uniform_int_distribution<unsigned> index_distribution(0);
+        std::uniform_int_distribution<unsigned> val_distribution(0);
+
+        isize max_size = 1000;
+        const auto test_batch = [&](isize block_size){
+            i64 before = trackers_alive();
+
+            {
+                Array<Track, 30> to_insert = {
+                    Track{1}, Track{2}, Track{3}, Track{4}, Track{5}, 
+                    Track{6}, Track{7}, Track{8}, Track{9}, Track{10},
+
+                    Track{1}, Track{2}, Track{3}, Track{4}, Track{5}, 
+                    Track{6}, Track{7}, Track{8}, Track{9}, Track{10},
+
+                    Track{1}, Track{2}, Track{3}, Track{4}, Track{5}, 
+                    Track{6}, Track{7}, Track{8}, Track{9}, Track{10},
+                };
+
+                Stack<Track> stack;
+                for(isize i = 0; i < block_size; i++)
+                {
+                    isize op = (isize) op_distribution(gen);
+                    isize index = (isize) index_distribution(gen);
+                    isize size = jot::size(stack);
+                    isize size_incr = size + 1;
+                    isize val = val_distribution(gen);
+
+                    switch(op)
+                    {
+                        case OP_PUSH1: 
+                        case OP_PUSH2: 
+                        case OP_PUSH3:
+                        {
+                            *push(&stack, Track{val});
+                            break;
+                        }
+
+                        case OP_POP: 
+                        {
+                            if(size != 0)
+                                pop(&stack); 
+                            break;
+                        }
+
+                        case OP_RESERVE:
+                        {
+                            *reserve(&stack, index % max_size);
+                            break;
+                        }
+                       
+                        case OP_INSERT:
+                        {
+                            *insert(&stack, index % size_incr, Track{val});
+                            break;
+                        }
+
+                        case OP_REMOVE:
+                        {
+                            if(size != 0)
+                                remove(&stack, index % size);
+                            break;
+                        }
+
+                        case OP_INSERT_UNORDERED:
+                        {
+                            *unordered_insert(&stack, index % size_incr, Track{val});
+                            break;
+                        }
+
+                        case OP_REMOVE_UNORDERED:
+                        {
+                            if(size != 0)
+                                unordered_remove(&stack, index % size);
+                            break;
+                        }
+                        
+                        case OP_SPLICE:
+                        {
+                            isize at = index % size_incr;
+                            isize remaining = size - at;
+                            isize replace_size = index % (remaining + 1);
+
+                            //so that the inserting is 'fair' - we insert and replace on average the same ammount of 
+                            // elements
+                            replace_size = replace_size % to_insert.size; 
+                            isize inserted_size = index % to_insert.size;
+
+                            Array duped = dup(to_insert);
+                            Slice<Track> inserted = {duped.data, inserted_size};
+                            *splice(&stack, at, replace_size, move(&inserted));
+                            break;
+                        }
+
+                        default: break;
+                    }
+
+                    test(is_invariant(stack));
+                }
+            }
+            
+            i64 after = trackers_alive();
+            test(before == after);
+        };
+
+        for(isize i = 0; i < 100; i++)
+        {
+            test_batch(10);
+            test_batch(40);
+            test_batch(160);
+            test_batch(640);
+        }
+    }
+
     template<typename T>
     void test_stack(Array<T, 6> vals)
     {
@@ -497,5 +632,6 @@ namespace jot::tests::stack
         test_stack(Array{'a', 'b', 'c', 'd', 'e', 'f'});
         test_stack(Array{Tracker{1}, Tracker{2}, Tracker{3}, Tracker{6346}, Tracker{-422}, Tracker{12}});
         test_stack(Array{No_Copy{1}, No_Copy{2}, No_Copy{3}, No_Copy{6346}, No_Copy{-422}, No_Copy{12}});
+        test_stress();
     }
 }

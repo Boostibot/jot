@@ -1,12 +1,12 @@
 #pragma once
 #include <random>
+#include "_test.h"
 
 #include "memory.h"
 #include "allocator_arena.h"
 #include "allocator_stack_ring.h"
 #include "allocator_stack.h"
 #include "stack.h"
-#include "_test.h"
 #include "defines.h"
 
 namespace jot::tests::allocator
