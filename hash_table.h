@@ -272,15 +272,23 @@ namespace jot
             using Link = Hash_Table_Link<Key, Value>;
 
             isize required_min_size = div_round_up(table->_entries_size, sizeof(Link));
-            assert(to_size >= required_min_size && is_power_of_two(to_size) && "must be big enough (no more shrinking than by 4 at a time) and power of two");
+            bool is_shrinking_ammount_allowed = to_size >= required_min_size;
+            bool is_resulting_size_allowed = is_power_of_two(to_size) || to_size == 0;
 
+            assert(is_shrinking_ammount_allowed && is_resulting_size_allowed && "must be big enough (no more shrinking than by 4 at a time) and power of two");
 
             to_size = max(to_size, required_min_size);
 
             Slice<Link> old_linker = linker(table);
-            Allocation_Result result = table->_allocator->allocate(to_size * cast(isize) sizeof(Link), HASH_TABLE_LINKER_ALIGN);
-            if(result.state == ERROR)
-               return result.state; 
+            Allocation_Result result = {};
+            
+            //if to_size == 0 we only deallocate
+            if(to_size != 0)
+            {
+                result = table->_allocator->allocate(to_size * cast(isize) sizeof(Link), HASH_TABLE_LINKER_ALIGN);
+                if(result.state == ERROR)
+                   return result.state; 
+            }
 
             //mark occurences of each entry index in a bool array
             Slice<bool> marks = trim(cast_slice<bool>(result.items), table->_entries_size);
@@ -329,14 +337,14 @@ namespace jot
                 while(marks[forward_index] == true)
                 {
                     forward_index++;
-                    if(forward_index >= backward_index)
+                    if(forward_index >= marks.size)
                         break;
                 }
 
                 while(marks[backward_index] == false)
                 {
                     backward_index--;
-                    if(backward_index <= forward_index)
+                    if(backward_index < 0)
                         break;
                 }
                     
@@ -345,6 +353,10 @@ namespace jot
 
                 table->_keys[forward_index] = move(&table->_keys[backward_index]);
                 table->_values[forward_index] = move(&table->_values[backward_index]);
+
+                bool temp = marks[forward_index];
+                marks[forward_index] = marks[backward_index];
+                marks[backward_index] = temp;
 
                 swap_count ++;
                 forward_index ++;
@@ -357,12 +369,27 @@ namespace jot
 
             //rehash every entry up to alive_count
             hash_t mask = cast(hash_t) new_linker.size - 1;
-            for(isize i = 0; i < alive_count; i++)
+
+            assert(alive_count <= new_linker.size && "there must be enough size to fit all entries");
+            for(isize entry_index = 0; entry_index < alive_count; entry_index++)
             {
-                Key const& key = table->_keys[i];
+                Key const& key = table->_keys[entry_index];
                 hash_t hash = Hash::hash(key);
-                hash_t index = hash & mask;
-                new_linker[cast(isize) index] = cast(Link) i;
+                hash_t slot = hash & mask;
+
+                //if linker slot is taken iterate until we find an empty slot
+                for(isize passed = 0;; slot = (slot + 1) & mask, passed ++)
+                {
+                    Link link = new_linker[cast(isize) slot];
+                    if(link == cast(Link) hash_table_internal::EMPTY_LINK)
+                        break;
+
+                    assert(passed < new_linker.size && 
+                        "there must be enough size to fit all entries"
+                        "this assert should never occur");
+                }
+
+                new_linker[cast(isize) slot] = cast(Link) entry_index;
             }
 
             //destroy the dead entries
@@ -449,7 +476,9 @@ namespace jot
     template <typename Key, typename Value, class Hash, class Comp> nodisc
     Allocator_State_Type reserve(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
     {
-        Allocator_State_Type state1 = reserve_jump_table(table, to_fit);
+        //we reserve such that inserting to_fit element swill not result in a reallocation of entries nor rehashing
+        isize jump_table_size = to_fit * HASH_TABLE_MAX_UTILIZATION_DEN / HASH_TABLE_MAX_UTILIZATION_NUM;
+        Allocator_State_Type state1 = reserve_jump_table(table, jump_table_size);
         Allocator_State_Type state2 = reserve_entries(table, to_fit);
 
         if(state1 == ERROR)

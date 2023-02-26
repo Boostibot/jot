@@ -5,7 +5,21 @@
 #include "_test.h"
 #include "hash_table.h"
 #include "string.h"
+#include "format.h"
 #include "defines.h"
+
+namespace jot
+{
+    template <typename T> 
+    struct Formattable<tests::Tracker<T>>
+    {
+        nodisc static
+        State format(String_Appender* appender, tests::Tracker<T> tracker) noexcept
+        {
+            return Formattable<T>::format(appender, tracker.val);
+        }
+    };
+}
 
 namespace jot::tests::hash_table
 {
@@ -193,17 +207,60 @@ namespace jot::tests::hash_table
     }
     
     template <typename Table> 
+    String_Builder format_linker(Table const& table)
+    {
+        using Link = Hash_Table_Link<typename Table::Key, typename Table::Value>;
+        Slice<Link> linker = {table._linker, table._linker_size};
+
+        String_Builder builder;
+        *reserve(&builder, linker.size * 6);
+        *format_into(&builder, '[');
+
+        isize gravestone_count = 0;
+        isize alive_count = 0;
+        for(isize i = 0; i < linker.size; i++)
+        {
+            if(i != 0)
+                *format_into(&builder, ", ");
+
+            if(linker[i] == cast(Link) hash_table_internal::EMPTY_LINK)
+                *format_into(&builder, '-');
+            else if(linker[i] == cast(Link) hash_table_internal::GRAVESTONE_LINK)
+            {
+                gravestone_count ++;
+                *format_into(&builder, 'R');
+            }
+            else
+            {
+                alive_count ++;
+                *format_into(&builder, cast(i64) linker[i]);
+            }
+        }
+        *format_into(&builder, "] #A: {} #R: {}", alive_count, gravestone_count);
+
+        return builder;
+    }
+    
+    template <typename Table> 
+    void print_table(Table const& table)
+    {
+        println("\nkeys:   {} #{}", keys(table), keys(table).size);
+        println("values: {} #{}", values(table), values(table).size);
+        println("linker: {}", format_linker(table));
+    }
+
+    template <typename Table> 
     void test_table_remove()
     {
         isize alive_before = trackers_alive();
         {
             Table table;
-                
+               
             *set(&table, 1, 10);
             *set(&table, 2, 20);
             *set(&table, 3, 30);
             *set(&table, 4, 40);
-
+            
             test(value_matches_at(table, 1, 10));
             test(value_matches_at(table, 2, 20));
             test(value_matches_at(table, 3, 30));
@@ -215,6 +272,8 @@ namespace jot::tests::hash_table
             test(value_matches_at(table, 3, 30));
             test(value_matches_at(table, 1, 10));
             
+            test(value_matches_at(table, 4, 40));
+
             entry = remove(&table, find(table, 3));
             test(entry.key == 3 && entry.value == 30);
             test(empty_at(table, 3));
@@ -228,6 +287,8 @@ namespace jot::tests::hash_table
             *set(&table, 7, 70);
             *set(&table, 8, 80);
             *set(&table, 9, 90);
+            *rehash(&table);
+
             *set(&table, 10, 100);
             
             test(value_matches_at(table, 9, 90));
@@ -345,25 +406,33 @@ namespace jot::tests::hash_table
 
         std::random_device rd;
         
-        constexpr isize OP_SET1 = 0;
-        constexpr isize OP_SET2 = 1;
-        constexpr isize OP_SET3 = 2;
-        constexpr isize OP_REMOVE = 3;
-        constexpr isize OP_MARK_REMOVED = 4;
-        constexpr isize OP_RESERVE_ENTRIES = 5;
-        constexpr isize OP_RESERVE_JUMP_TABLE = 6;
+        constexpr isize OP_SET = 0;
+        constexpr isize OP_REMOVE = 1;
+        constexpr isize OP_MARK_REMOVED = 2;
+        constexpr isize OP_RESERVE_ENTRIES = 3;
+        constexpr isize OP_RESERVE_JUMP_TABLE = 4;
+        constexpr isize OP_REHASH = 5;
 
-        std::uniform_int_distribution<unsigned> op_distribution(0, 6);
+        std::discrete_distribution<unsigned> op_distribution({50, 15, 15, 5, 5, 10});
         std::uniform_int_distribution<unsigned> index_distribution(0);
         std::uniform_int_distribution<unsigned> val_distribution(0);
 
         isize max_size = 500;
         
+        enum Do_Ops : u32
+        {   
+            DO_REMOVE = 1,
+            DO_MARK_REMOVED = 2,
+        };
+
         std::mt19937 gen;
-        const auto test_batch = [&](isize block_size, bool do_mark_removed){
+        const auto test_batch = [&](isize block_size, u32 do_ops){
             i64 before = trackers_alive();
 
             {
+                bool do_remove = do_ops & DO_REMOVE;
+                bool do_mark_removed = do_ops & DO_MARK_REMOVED;
+
                 Table table;
                 for(isize i = 0; i < block_size; i++)
                 {
@@ -377,15 +446,13 @@ namespace jot::tests::hash_table
                     
                     switch(op)
                     {
-                        case OP_SET1:
-                        case OP_SET2:
-                        case OP_SET3:
+                        case OP_SET:
                             *set(&table, Key{cast(i32) i}, Val{cast(i32) i});
                             break;
 
                         case OP_REMOVE: 
                         {
-                            if(keys.size != 0)
+                            if(keys.size != 0 && do_remove)
                             {
                                 //select a random key from the entries and remove it
                                 Key key = keys[index % keys.size];
@@ -415,6 +482,10 @@ namespace jot::tests::hash_table
                         case OP_RESERVE_JUMP_TABLE: 
                             *reserve_jump_table(&table, index % max_size);
                             break;
+                            
+                        case OP_REHASH: 
+                            *rehash(&table);
+                            break;
 
                         default: break;
                     }
@@ -422,17 +493,22 @@ namespace jot::tests::hash_table
                     keys = jot::keys(table);
                     values = jot::values(table);
 
-                    //test integrity at random
-                    if(keys.size != 0 && do_mark_removed == false)
+                    //test integrity of all key value pairs
+                    // - we cant perform this check if we used mark_removed
+                    //   because then the entries might contain entries which are
+                    //   deleted and thus cannot be found via the find function
+                    if(do_mark_removed == false)
                     {
-                        isize at = index % keys.size; 
-                        Key key = keys[at];
+                        for(isize k = 0; k < keys.size; k++)
+                        {
+                            Key key = keys[k];
                         
-                        Hash_Found found = find(table, key);
-                        test(found.entry_index != -1 && "key must be present");
+                            Hash_Found found = find(table, key);
+                            test(found.entry_index != -1 && "key must be present");
                         
-                        Val val = values[found.entry_index];
-                        test(val.val == key.val && "key values must form a pair");
+                            Val val = values[found.entry_index];
+                            test(val.val == key.val && "key values must form a pair");
+                        }
                     }
 
                     test(is_invariant(table));
@@ -447,17 +523,19 @@ namespace jot::tests::hash_table
         gen = std::mt19937(seed);
         for(int i = 0; i < 100; i++)
         {
-            //we test 10 batch size 2x more often
-            test_batch(10, false);
-            test_batch(10, false);
-            test_batch(40, false);
-            test_batch(160, false);
-            test_batch(640, false);
-        
-            test_batch(10, true);
-            test_batch(10, true);
-            test_batch(160, true);
-            test_batch(640, true);
+            //we test 10 batch size 2x more often becasue 
+            // such small size makes edge cases more likely
+            test_batch(10,  DO_REMOVE);
+            test_batch(10,  DO_REMOVE);
+            test_batch(40,  DO_REMOVE);
+            test_batch(160, DO_REMOVE);
+            test_batch(640, DO_REMOVE);
+
+            test_batch(10,  DO_REMOVE | DO_MARK_REMOVED);
+            test_batch(10,  DO_REMOVE | DO_MARK_REMOVED);
+            test_batch(40,  DO_REMOVE | DO_MARK_REMOVED);
+            test_batch(160, DO_REMOVE | DO_MARK_REMOVED);
+            test_batch(640, DO_REMOVE | DO_MARK_REMOVED);
         }
     }
 
