@@ -361,7 +361,7 @@ namespace jot
                 return Allocation_Result{Allocator_State::OK};
             }
 
-            assert_arg(new_size >= 0);
+            assert(new_size >= 0);
             return Allocation_Result{Allocator_State::UNSUPPORTED_ACTION};
         }
 

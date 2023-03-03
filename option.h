@@ -1,5 +1,6 @@
 #pragma once
 #include "standards.h"
+#include "panic.h"
 #include "defines.h"
 
 #ifdef ERROR
@@ -68,39 +69,7 @@ namespace jot
     
     template <typename T, Enable_If<failable<T>> = ENABLED> nodisc constexpr 
     bool operator!=(T const& left, Error_Type) noexcept { return failed(left) == false; }
-
-    template <typename T> constexpr
-    void force(T const& value)
-    {
-        if(failed(value))
-            throw value;
-    }
-
-    template <typename T> constexpr
-    void force_error(T const& value)
-    {
-        if(failed(value) == false)
-            throw value;
-    }
     
-    //the forcing operator (cause I am lazy)
-    template <typename T, Enable_If<failable<T>> = ENABLED> nodisc constexpr 
-    void operator<<(Ok_Type, T const& left) noexcept { force(left); }
-
-    inline
-    void operator*(State state)
-    {
-        force(state);
-    }
-    
-    template<typename T> nodisc constexpr
-    T dup(T const& in)
-    {
-        T copied;
-        *copy(&copied, in);
-        return copied;
-    }
-
     inline constexpr
     State acumulate(State prev, State new_state)
     {
@@ -115,6 +84,30 @@ namespace jot
     {
         if(failed(new_state) && failed(*into) == false)
             *into = new_state;
+    }
+    
+    constexpr 
+    void _force(bool failed, const char* message, Line_Info const& line_info)
+    {
+        if(failed)
+            throw Panic{message, line_info};
+    }
+
+    #define force(condition) _force(failed(condition), #condition, GET_LINE_INFO())
+    #define force_msg(condition, msg) _force(failed(condition), msg, GET_LINE_INFO())
+
+    inline
+    void operator*(State state)
+    {
+        force(failed(state) == false);
+    }
+    
+    template<typename T> nodisc constexpr
+    T dup(T const& in)
+    {
+        T copied;
+        *copy(&copied, in);
+        return copied;
     }
 }
 

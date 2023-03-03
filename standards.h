@@ -33,7 +33,7 @@ namespace jot
         nodisc static constexpr
         State copy(T* to, T const& from) noexcept
         {
-            static_assert(std::is_nothrow_copy_assignable_v<T>, "must be nothrow copyable! If not provide a custom overload of this function");
+            //static_assert(std::is_nothrow_copy_assignable_v<T>, "must be nothrow copyable! If not provide a custom overload of this function");
             *to = from;
 
             return OK_STATE;

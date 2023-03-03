@@ -1,6 +1,8 @@
 #pragma once
 namespace meta
 {
+    #define nodisc [[nodiscard]]
+
     //returns compiler specific (but very readable!) name at compile time
     template<typename T> nodisc constexpr
     const char* type_name() noexcept ;
@@ -34,8 +36,6 @@ namespace meta
     #else
         #error "Unsupported compiler"
     #endif
-
-    #define nodisc [[nodiscard]]
 
     struct String
     {

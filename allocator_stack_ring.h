@@ -115,7 +115,7 @@ namespace jot
         Allocation_Result try_allocate(isize size, isize align, bool is_second_try = false) noexcept 
         {
             assert(is_invariant());
-            assert_arg(size >= 0 && align > 0);
+            assert(size >= 0 && align > 0);
 
             if(align <= sizeof(Slot))
                 align = sizeof(Slot);

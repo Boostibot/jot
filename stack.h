@@ -1,8 +1,6 @@
 #pragma once
 
 #include "utils.h"
-#include "array.h"
-#include "types.h"
 #include "slice.h"
 #include "memory.h"
 #include "defines.h"
@@ -26,15 +24,14 @@ namespace jot
             : _allocator{allocator} {}
 
         Stack(Stack && other) noexcept;
+        Stack(Stack const& other);
 
         Stack(T* data, isize size, isize capacity, Allocator* allocator) noexcept
             : _data{data}, _size{size}, _capacity{capacity}, _allocator{allocator} {}
 
         ~Stack() noexcept;
         Stack& operator=(Stack && other) noexcept;
-
-        Stack(Stack const& other) noexcept = delete;
-        Stack& operator=(Stack const& other) noexcept = delete;
+        Stack& operator=(Stack const& other);
         
         #define DATA _data
         #define SIZE _size
@@ -356,12 +353,30 @@ namespace jot
         }
     };
 
+}
+
+namespace std 
+{
+    template<class T> 
+    size_t size(jot::Stack<T> const& stack) noexcept
+    {
+        return jot::size(stack);
+    }
+
+    template<class T> 
+    void swap(jot::Stack<T>& stack1, jot::Stack<T>& stack2)
+    {
+        jot::swap(&stack1, &stack2);
+    }
+}
+
+namespace jot
+{
     template<typename T>
     Stack<T>::~Stack() noexcept 
     {
         Slice<T> old_slice = {_data, _capacity};
         destroy_and_deallocate(_allocator, &old_slice, _size, DEF_ALIGNMENT<T>);
-        //cast(void) stack_internal::set_capacity(this, cast(isize) 0);
     }
 
     template<typename T>
@@ -374,6 +389,24 @@ namespace jot
     Stack<T>& Stack<T>::operator=(Stack<T> && other) noexcept 
     {
         swap(this, &other);
+        return *this;
+    }
+    
+    template<typename T>
+    Stack<T>::Stack(Stack const& other) 
+    {
+        State state = Copyable<Stack<T>>::copy(this, other);
+        if(state == ERROR)
+            panic("Stack copy assigment failed!");
+    }
+
+    template<typename T>
+    Stack<T>& Stack<T>::operator=(Stack<T> const& other) 
+    {
+        State state = Copyable<Stack<T>>::copy(this, other);
+        if(state == ERROR)
+            panic("Stack copy assigment failed!");
+
         return *this;
     }
 
@@ -822,13 +855,5 @@ namespace jot
     }
 }
 
-namespace std 
-{
-    template<class T> 
-    void swap(jot::Stack<T>& stack1, jot::Stack<T>& stack2)
-    {
-        jot::swap(&stack1, &stack2);
-    }
-}
 
 #include "undefs.h"

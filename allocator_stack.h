@@ -38,7 +38,7 @@ namespace jot
         nodisc virtual 
         Allocation_Result allocate(isize size, isize align) noexcept override 
         {
-            assert_arg(size >= 0 && align > 0);
+            assert(size >= 0 && align > 0);
 
             if(align <= alignof(Slot))
                 align = alignof(Slot);
