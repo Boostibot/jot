@@ -9,7 +9,7 @@ namespace jot
     template<typename T>
     struct alignas(alignof(T)) No_Destruct 
     {
-        u8 bytes[sizeof(T)] = {0};
+        unsigned char bytes[sizeof(T)] = {0};
 
         No_Destruct() noexcept 
         {

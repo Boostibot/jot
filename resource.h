@@ -1,21 +1,31 @@
 #pragma once
+#include <memory>
 
 namespace jot
 {
-    //Struct similar to std::unique_ptr which calls Deleter::use on the
+    
+    template <typename T>
+    T make_def_value() noexcept
+    {
+        return T();
+    }
+
+    //Struct similar to std::unique_ptr which calls deleter on the
     // stored value in destructor. Is move only
-    template <typename T, typename Deleter>
+    template <typename T, void (*deleter)(T), T (*def_value)() = make_def_value<T>>
     struct Resource
     {
-        T val = T();
+        T val = def_value();
+        
+        Resource() noexcept = default;
 
-        Resource(T val = T()) noexcept
+        Resource(T val) noexcept
             : val(move(&val)) {}
 
         Resource(Resource const&) noexcept = delete;
         Resource(Resource&& other) noexcept 
         {
-            *this = move(&other);
+            *this = (Resource&&) other;
         }
         
         Resource& operator=(Resource const&) noexcept = delete;
@@ -27,9 +37,9 @@ namespace jot
             return *this;
         }
 
-        ~Resource()
+        ~Resource() noexcept
         {
-            Deleter::use(move(&val));
+            deleter(move(&val));
         }
         
         operator T() noexcept {
@@ -43,27 +53,25 @@ namespace jot
         T const& operator*() const noexcept {
             return val;
         }
+
+        static T&& move(T* ptr)
+        {
+            return (T&&) *ptr;
+
+        }
     };
     
-    #define PP_CONCAT2(a, b) a ## b
-    #define PP_CONCAT(a, b) PP_CONCAT2(a, b)
-
-    #define DELETER_FUNC(func) \
-        struct PP_CONCAT(Deleter_Func_, __COUNTER__)\
-        {   \
-            static void use func \
-        } \
-
     //use like so:
     #if 0
     struct Shader
     {
-        using Program_Deleter = DELETER_FUNC((GLuint program) { 
+        static void program_delete(GLuint program) 
+        { 
             if(program != -1)
                 glDeleteProgram(program);
-        });
+        };
 
-        Resource<GLuint, Program_Deleter> program = cast(GLuint) -1;
+        Resource<GLuint, program_delete> program = -1;
         String_Builder vertex_path = {};
         String_Builder fragment_path = {};
         String_Builder geometry_path = {};
