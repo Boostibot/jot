@@ -398,10 +398,11 @@ namespace jot::tests::hash_table
 
     void test_stress()
     {
-        using Track = Tracker<i32>;
-        using Key = Track;
-        using Val = Track;
+        using Key = Tracker<i32>;
+        using Val = Tracker<i32>;
+
         using Table = Hash_Table<Key, Val, Test_Tracker_Hash_Functions>;
+        using Count_Table = Hash_Table<Key, i32, Test_Tracker_Hash_Functions>;
         using Seed = std::random_device::result_type;
 
         std::random_device rd;
@@ -412,17 +413,36 @@ namespace jot::tests::hash_table
         constexpr isize OP_RESERVE_ENTRIES = 3;
         constexpr isize OP_RESERVE_JUMP_TABLE = 4;
         constexpr isize OP_REHASH = 5;
+        constexpr isize OP_MULTIADD = 6;
 
-        std::discrete_distribution<unsigned> op_distribution({50, 15, 15, 5, 5, 10});
+        std::discrete_distribution<unsigned> op_distribution({50, 15, 15, 5, 5, 15, 40});
         std::uniform_int_distribution<unsigned> index_distribution(0);
-        std::uniform_int_distribution<unsigned> val_distribution(0);
 
         isize max_size = 500;
         
         enum Do_Ops : u32
         {   
+            DO_BASE = 0,
             DO_REMOVE = 1,
             DO_MARK_REMOVED = 2,
+            DO_MULTIADD = 4,
+        };
+
+        const auto incr_count_table = [](Count_Table* count_table, Key const& key){
+            i32 count = get(*count_table, key, 0);
+            *set(count_table, key, count + 1);
+            
+            return count + 1;
+        };
+
+        const auto decr_count_table = [](Count_Table* count_table, Key const& key){
+            i32 count = get(*count_table, key, 0);
+            if(count <= 1)
+                remove(count_table, key);
+            else
+                *set(count_table, key, count - 1);
+
+            return max(count, 0);
         };
 
         std::mt19937 gen;
@@ -432,48 +452,74 @@ namespace jot::tests::hash_table
             {
                 bool do_remove = do_ops & DO_REMOVE;
                 bool do_mark_removed = do_ops & DO_MARK_REMOVED;
+                bool do_multiadd = do_ops & DO_MULTIADD;
 
                 Table table;
+                Count_Table count_table;
+                i32 added_i = 0;
                 for(isize i = 0; i < block_size; i++)
                 {
                     isize op = (isize) op_distribution(gen);
                     isize index = (isize) index_distribution(gen);
                     
                     Slice<const Key> keys = jot::keys(table);
-                    Slice<const Val> values = jot::values(table);
-
-                    isize val = val_distribution(gen);
                     
+                    bool skipped = false;
                     switch(op)
                     {
-                        case OP_SET:
-                            *set(&table, Key{cast(i32) i}, Val{cast(i32) i});
+                        case OP_SET: {
+                            Key key = Key{added_i};
+                            Val val = Val{added_i};
+
+                            *set(&table, key, val);
+                            incr_count_table(&count_table, key);
+
+                            added_i++;
+                            break;
+                        }
+
+                        case OP_MULTIADD: 
+                            if(keys.size == 0 || do_multiadd == false)
+                                skipped = true;
+                            else
+                            {
+                                Key key = Key{added_i - 1};
+
+                                incr_count_table(&count_table, key);
+                                *multi::add_another(&table, key, key);
+                            }
+                                
                             break;
 
                         case OP_REMOVE: 
-                        {
-                            if(keys.size != 0 && do_remove)
+                            if(keys.size == 0 || do_remove == false)
+                                skipped = true;
+                            else
                             {
                                 //select a random key from the entries and remove it
                                 Key key = keys[index % keys.size];
+
                                 bool was_found = remove(&table, key); 
+                                if(was_found)
+                                    decr_count_table(&count_table, key);
 
                                 //the key can be not found if we allow OP_MARK_REMOVED
                                 test(was_found || do_mark_removed);
                             }
                             break;
-                        }
 
                         case OP_MARK_REMOVED: 
-                        {
-                            if(keys.size != 0 && do_mark_removed)
+                            if(keys.size == 0 || do_mark_removed == false)
+                                skipped = true;
+                            else
                             {
                                 //select a random key from the entries and remove it
                                 Key key = keys[index % keys.size];
-                                mark_removed(&table, key); 
+                                isize entry_i = mark_removed(&table, key); 
+                                if(entry_i != -1)
+                                    decr_count_table(&count_table, key);
                             }
                             break;
-                        }
 
                         case OP_RESERVE_ENTRIES: 
                             *reserve_entries(&table, index % max_size);
@@ -490,24 +536,50 @@ namespace jot::tests::hash_table
                         default: break;
                     }
                     
-                    keys = jot::keys(table);
-                    values = jot::values(table);
-
+                    //if nothing happened try again
+                    if(skipped == true)
+                    {
+                        i--;
+                        continue;
+                    }
+                    
                     //test integrity of all key value pairs
                     // - we cant perform this check if we used mark_removed
                     //   because then the entries might contain entries which are
                     //   deleted and thus cannot be found via the find function
                     if(do_mark_removed == false)
                     {
-                        for(isize k = 0; k < keys.size; k++)
+                        Slice<const Key> count_table_keys = jot::keys(count_table);
+                        Slice<const Val> table_values = jot::values(table);
+                        Slice<const Key> table_keys = jot::keys(table);
+
+                        //all count_table keys keys need to be correct
+                        for(isize k = 0; k < count_table_keys.size; k++)
                         {
-                            Key key = keys[k];
-                        
+                            Key key = count_table_keys[k];
+                            i32 generation_size = get(count_table, key, -1);
+                            test(generation_size > 0 && "count must be present");
+
                             Hash_Found found = find(table, key);
-                            test(found.entry_index != -1 && "key must be present");
-                        
-                            Val val = values[found.entry_index];
-                            test(val.val == key.val && "key values must form a pair");
+                            i32 found_generation_size = 0;
+                            
+                            while(found.entry_index != -1)
+                            {
+                                Val value = table_values[found.entry_index];
+                                test(value.val == key.val && "key values must form a pair");
+
+                                found = multi::find_next(table, key, found);
+                                found_generation_size ++;
+                            }
+
+                            test(found_generation_size == generation_size && "there must be exactly generation_size entries and no more");
+                        }
+
+                        for(isize k = 0; k < table_keys.size; k++)
+                        {
+                            Key key = table_keys[k];
+                            bool is_found = has(table, key);
+                            test(is_found && "all table keys need to be in count_table (otherwise the above test wouldnt be exhaustive)");
                         }
                     }
 
@@ -519,9 +591,9 @@ namespace jot::tests::hash_table
             test(before == after);
         };
         
-        Seed seed = 3566690314;
+        Seed seed = rd();
         gen = std::mt19937(seed);
-        for(int i = 0; i < 100; i++)
+        for(int i = 0; i < 25; i++)
         {
             //we test 10 batch size 2x more often becasue 
             // such small size makes edge cases more likely
@@ -536,6 +608,10 @@ namespace jot::tests::hash_table
             test_batch(40,  DO_REMOVE | DO_MARK_REMOVED);
             test_batch(160, DO_REMOVE | DO_MARK_REMOVED);
             test_batch(640, DO_REMOVE | DO_MARK_REMOVED);
+            
+            test_batch(640, DO_MULTIADD | DO_MARK_REMOVED);
+            test_batch(640, DO_MULTIADD | DO_REMOVE);
+            test_batch(640, DO_MULTIADD | DO_REMOVE | DO_MARK_REMOVED);
         }
     }
 

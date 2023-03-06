@@ -116,8 +116,5 @@ namespace jot::tests
         };
     };
 
-    void test(bool cond)
-    {
-        force(cond);
-    }
+    #define test(cond) force(cond)
 }

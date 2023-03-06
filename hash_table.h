@@ -66,11 +66,10 @@ namespace jot
         Allocator* _allocator = memory_globals::default_allocator();
         Key* _keys = nullptr;
         Value* _values = nullptr;
-        Link* _linker = nullptr;
+        Slice<Link> _linker = {nullptr, 0};
         
         isize _entries_size = 0;
         isize _entries_capacity = 0;
-        isize _linker_size = 0;
         isize _gravestone_count = 0; //the count of gravestones in linker array + the count of unreferenced entries
         // when too large triggers cleaning rehash
 
@@ -103,19 +102,19 @@ namespace jot
     constexpr static isize HASH_TABLE_MAX_GRAVESTONES_DEN = 4;
 
     constexpr static isize HASH_TABLE_MAX_UTILIZATION_NUM = 1;
-    constexpr static isize HASH_TABLE_MAX_UTILIZATION_DEN = 2;
+    constexpr static isize HASH_TABLE_MAX_UTILIZATION_DEN = 4;
 
     template <typename Key, typename Value, class Hash, class Comp> nodisc
     bool is_invariant(Hash_Table<Key, Value, Hash, Comp> const& hash)
     {
-        bool is_size_power = hash._linker_size == 0;
+        bool is_size_power = hash._linker.size == 0;
         if(is_size_power == false)
-            is_size_power = is_power_of_two(hash._linker_size);
+            is_size_power = is_power_of_two(hash._linker.size);
 
         bool is_alloc_not_null = hash._allocator != nullptr;
         bool are_entries_simulatinous_alloced = (hash._keys == nullptr) == (hash._values == nullptr);
         bool are_entry_sizes_correct = (hash._keys == nullptr) == (hash._entries_capacity == 0);
-        bool are_linker_sizes_correct = (hash._linker == nullptr) == (hash._linker_size == 0);
+        bool are_linker_sizes_correct = (hash._linker.data == nullptr) == (hash._linker.size == 0);
 
         bool are_sizes_in_range = hash._entries_size <= hash._entries_capacity;
 
@@ -150,7 +149,7 @@ namespace jot
     template <typename Key, typename Value, class Hash, class Comp> nodisc
     isize jump_table_size(Hash_Table<Key, Value, Hash, Comp> const& hash)
     {
-        return hash._linker_size;
+        return hash._linker.size;
     }
 
     template <typename Key, typename Value, class Hash, class Comp>
@@ -163,7 +162,6 @@ namespace jot
         swap(&left->_entries_size, &right->_entries_size);
         swap(&left->_entries_capacity, &right->_entries_capacity);
         swap(&left->_gravestone_count, &right->_gravestone_count);
-        swap(&left->_linker_size, &right->_linker_size);
     }
 
     template <typename Key, typename Value, class Hash, class Comp>
@@ -186,20 +184,6 @@ namespace jot
     {
         constexpr isize EMPTY_LINK = -1;
         constexpr isize GRAVESTONE_LINK = -2;
-
-        template <typename Key, typename Value, class Hash, class Comp> nodisc
-        auto linker(Hash_Table<Key, Value, Hash, Comp> const& hash)
-        {
-            Slice<const Hash_Table_Link<Key, Value>> out = {hash._linker, hash._linker_size};
-            return out;
-        }
-
-        template <typename Key, typename Value, class Hash, class Comp> nodisc
-        auto linker(Hash_Table<Key, Value, Hash, Comp>* hash)
-        {
-            Slice<Hash_Table_Link<Key, Value>> out = {hash->_linker, hash->_linker_size};
-            return out;
-        }
         
         template <typename Key, typename Value, class Hash, class Comp> nodisc
         Allocator_State_Type set_entries_capacity(Hash_Table<Key, Value, Hash, Comp>* hash, isize new_capacity) noexcept
@@ -279,7 +263,7 @@ namespace jot
 
             to_size = max(to_size, required_min_size);
 
-            Slice<Link> old_linker = linker(table);
+            Slice<Link> old_linker = table->_linker;
             Allocation_Result result = {};
             
             //if to_size == 0 we only deallocate
@@ -318,7 +302,7 @@ namespace jot
                 marks[link] = true;
             }
 
-            assert(empty_count + graveston_count + alive_count == table->_linker_size);
+            assert(empty_count + graveston_count + alive_count == table->_linker.size);
             assert(graveston_count <= table->_gravestone_count);
 
             //iterate the marks from front and back 
@@ -403,8 +387,7 @@ namespace jot
 
             table->_gravestone_count = 0;
             table->_entries_size = alive_count;
-            table->_linker_size = new_linker.size;
-            table->_linker = new_linker.data;
+            table->_linker = new_linker;
             table->_allocator->deallocate(cast_slice<u8>(old_linker), HASH_TABLE_LINKER_ALIGN);
             
             assert(is_invariant(*table));
@@ -416,18 +399,18 @@ namespace jot
         bool is_overful(Hash_Table<Key, Value, Hash, Comp> const& table)
         {
             //max 25% utlization
-            return (table._linker_size - table._gravestone_count) * HASH_TABLE_MAX_UTILIZATION_NUM <= table._entries_size * HASH_TABLE_MAX_UTILIZATION_DEN;
+            return (table._linker.size - table._gravestone_count) * HASH_TABLE_MAX_UTILIZATION_NUM <= table._entries_size * HASH_TABLE_MAX_UTILIZATION_DEN;
         }
         
         template <typename Key, typename Value, class Hash, class Comp> nodisc
         Allocator_State_Type grow(Hash_Table<Key, Value, Hash, Comp>* table) noexcept
         {
-            isize rehash_to = table->_linker_size * 2;
+            isize rehash_to = table->_linker.size * 2;
 
             //if too many gravestones keeps the same size onky clears out the grabage
             // ( gravestones / size >= MAX_NUM / MAX_DEN )
-            if(table->_gravestone_count * HASH_TABLE_MAX_GRAVESTONES_DEN >= table->_linker_size * HASH_TABLE_MAX_GRAVESTONES_NUM)
-                rehash_to = table->_linker_size;
+            if(table->_gravestone_count * HASH_TABLE_MAX_GRAVESTONES_DEN >= table->_linker.size * HASH_TABLE_MAX_GRAVESTONES_NUM)
+                rehash_to = table->_linker.size;
             
             //If zero go to base size
             if(rehash_to == 0)
@@ -461,7 +444,7 @@ namespace jot
     template <typename Key, typename Value, class Hash, class Comp> nodisc
     Allocator_State_Type reserve_jump_table(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
     {
-        if(to_fit < table->_linker_size)
+        if(to_fit < table->_linker.size)
             return Allocator_State::OK;
 
         return rehash(table, to_fit);
@@ -497,20 +480,19 @@ namespace jot
         found.entry_index = -1;
         found.finished_at = -1;
 
-        if(table._linker_size == 0)
+        if(table._linker.size == 0)
             return found;
 
-        hash_t mask = cast(hash_t) table._linker_size - 1;
-        hash_t modulated = hash & mask;
+        hash_t mask = cast(hash_t) table._linker.size - 1;
 
-        Slice<const Link> links = hash_table_internal::linker(table);
+        Slice<const Link> links = table._linker;
         Slice<const Key> keys = jot::keys(table);
 
-        hash_t i = modulated;
+        hash_t i = hash & mask;
         for(isize passed = 0;; i = (i + 1) & mask, passed ++)
         {
             Link link = links[cast(isize) i];
-            if(link == cast(Link) hash_table_internal::EMPTY_LINK || passed > table._linker_size)
+            if(link == cast(Link) hash_table_internal::EMPTY_LINK || passed > table._linker.size)
                 break;
         
             if(link == cast(Link) hash_table_internal::GRAVESTONE_LINK)
@@ -533,6 +515,48 @@ namespace jot
         found.finished_at = cast(isize) i;
         return found;
     }
+
+    
+    template <typename Key, typename Value, class Hash, class Comp, bool break_on_gravestone = false> nodisc
+    Hash_Found find_entry(Hash_Table<Key, Value, Hash, Comp> const& table, isize entry_i, hash_t hash) noexcept
+    {
+        using Link = Hash_Table_Link<Key, Value>;
+        assert(is_invariant(table));
+
+        Hash_Found found = {};
+        found.hash_index = -1;
+        found.entry_index = -1;
+        found.finished_at = -1;
+
+        if(table._linker.size == 0)
+            return found;
+
+        hash_t mask = cast(hash_t) table._linker.size - 1;
+
+        Slice<const Link> links = table._linker;
+
+        hash_t i = hash & mask;
+        for(isize passed = 0;; i = (i + 1) & mask, passed ++)
+        {
+            Link link = links[cast(isize) i];
+            if(link == cast(Link) hash_table_internal::EMPTY_LINK || passed > table._linker.size)
+                break;
+        
+            if constexpr(break_on_gravestone)
+                if(link == cast(Link) hash_table_internal::GRAVESTONE_LINK)
+                    break;
+
+            if(link == cast(Link) entry_i)
+            {
+                found.hash_index = cast(isize) i;
+                found.entry_index = link;
+                break;
+            }
+        }
+
+        found.finished_at = cast(isize) i;
+        return found;
+    }
     
     template <typename Key, typename Value, class Hash, class Comp> nodisc
     Hash_Found find(Hash_Table<Key, Value, Hash, Comp> const& table, no_infer(Key) const& key) noexcept
@@ -541,10 +565,24 @@ namespace jot
         return find(table, key, hash);
     }
 
+    //@TODO: remove
+
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    isize find_entry(Hash_Table<Key, Value, Hash, Comp> const& table, no_infer(Key) const& key) noexcept
+    {
+        return find(table, key).entry_index;
+    }
+    
+    template <typename Key, typename Value, class Hash, class Comp> nodisc
+    bool has(Hash_Table<Key, Value, Hash, Comp> const& table, no_infer(Key) const& key) noexcept
+    {
+        return find(table, key).entry_index != -1;
+    }
+
     template <typename Key, typename Value, class Hash, class Comp> nodisc
     void mark_removed(Hash_Table<Key, Value, Hash, Comp>* table, Hash_Found removed)
     {
-        assert(0 <= removed.hash_index && removed.hash_index < table->_linker_size && "out of range!");
+        assert(0 <= removed.hash_index && removed.hash_index < table->_linker.size && "out of range!");
 
         table->_linker[removed.hash_index] = cast(Hash_Table_Link<Key, Value>) hash_table_internal::GRAVESTONE_LINK;
         table->_gravestone_count += 2; //one for the link and one for the entry 
@@ -555,7 +593,7 @@ namespace jot
     template <typename Key, typename Value, class Hash, class Comp> nodisc
     Hash_Table_Entry<Key, Value> remove(Hash_Table<Key, Value, Hash, Comp>* table, Hash_Found removed)
     {
-        assert(0 <= removed.hash_index && removed.hash_index < table->_linker_size && "out of range!");
+        assert(0 <= removed.hash_index && removed.hash_index < table->_linker.size && "out of range!");
         assert(0 <= removed.entry_index && removed.entry_index < table->_entries_size && "out of range!");
         assert(table->_entries_size > 0 && "cannot remove from empty");
 
@@ -563,7 +601,7 @@ namespace jot
         isize removed_i = removed.entry_index;
 
         using Link = Hash_Table_Link<Key, Value>;
-        Slice<Link> linker  = {table->_linker,  table->_linker_size};
+        Slice<Link> linker  = table->_linker;
         Slice<Key> keys     = {table->_keys,    table->_entries_size};
         Slice<Value> values = {table->_values,  table->_entries_size};
 
@@ -578,7 +616,8 @@ namespace jot
         bool delete_last = true;
         if(removed_i != last)
         {
-            Hash_Found changed_for = find(*table, keys[last]);
+            hash_t last_hash = Hash::hash(keys[last]);
+            Hash_Found changed_for = find_entry(*table, last, last_hash);
 
             //in the case the table contains 'mark_removed' entries
             // we can no longer assure that the last key will actually exists
@@ -640,25 +679,13 @@ namespace jot
         assert(is_invariant(*this));
         cast(void) hash_table_internal::set_entries_capacity(this, cast(isize) 0);
 
-        if(this->_linker != nullptr)
+        if(this->_linker.data != nullptr)
         {
-            auto linker = hash_table_internal::linker(this);
-            Slice<u8> bytes = cast_slice<u8>(linker);
+            Slice<u8> bytes = cast_slice<u8>(this->_linker);
             this->_allocator->deallocate(bytes, HASH_TABLE_LINKER_ALIGN);
         }
     }
 
-    template <typename Key, typename Value, class Hash, class Comp> nodisc
-    isize find_entry(Hash_Table<Key, Value, Hash, Comp> const& table, no_infer(Key) const& key) noexcept
-    {
-        return find(table, key).entry_index;
-    }
-    
-    template <typename Key, typename Value, class Hash, class Comp> nodisc
-    bool has(Hash_Table<Key, Value, Hash, Comp> const& table, no_infer(Key) const& key) noexcept
-    {
-        return find(table, key).entry_index != -1;
-    }
 
     template <typename Key, typename Value, class Hash, class Comp> nodisc
     Value const& get(Hash_Table<Key, Value, Hash, Comp> const&  table, no_infer(Key) const& key, no_infer(Value) const& if_not_found) noexcept
@@ -681,7 +708,7 @@ namespace jot
     }
 
     template <typename Key, typename Value, class Hash, class Comp> nodisc
-    Allocator_State_Type set(Hash_Table<Key, Value, Hash, Comp>* table, Key key, hash_t hash, Value value) noexcept
+    Allocator_State_Type set(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, hash_t hash, no_infer(Value) value) noexcept
     {
         assert(is_invariant(*table));
         if(hash_table_internal::is_overful(*table))
@@ -698,7 +725,7 @@ namespace jot
             return Allocator_State::OK;
         }
         
-        assert(found.finished_at < table->_linker_size && "should be empty or gravestone at this point");
+        assert(found.finished_at < table->_linker.size && "should be empty or gravestone at this point");
 
         //if finished on a gravestone we can overwrite it and thus remove it 
         if(found.finished_at == cast(Hash_Table_Link<Key, Value>) hash_table_internal::GRAVESTONE_LINK)
@@ -719,6 +746,56 @@ namespace jot
     {
         hash_t hash = Hash::hash(key);
         return set<Key, Value, Hash>(table, move(&key), hash, move(&value));
+    }
+    
+    namespace multi
+    {
+        template <typename Key, typename Value, class Hash, class Comp, bool break_on_gravestone = false> nodisc
+        Hash_Found find_next(Hash_Table<Key, Value, Hash, Comp> const& table, Key const& prev_key, Hash_Found prev) noexcept
+        {
+            assert(prev.hash_index != -1);
+            assert(prev.entry_index != -1);
+
+            return find(table, prev_key, cast(hash_t) prev.hash_index + 1);
+        }
+
+        template <typename Key, typename Value, class Hash, class Comp> nodisc
+        Allocator_State_Type add_another(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, hash_t hash, no_infer(Value) value) noexcept
+        {
+            assert(is_invariant(*table));
+            if(hash_table_internal::is_overful(*table))
+            {
+                Allocator_State_Type state = hash_table_internal::grow(table);
+                if(state == ERROR)
+                    return state;
+            }
+        
+            Hash_Found found = find<Key, Value, Hash, Comp, true>(*table, key, hash);
+            while(found.entry_index != -1)
+                found = find_next<Key, Value, Hash, Comp, true>(*table, key, found);
+        
+            assert(found.finished_at < table->_linker.size && "should be empty or gravestone at this point");
+
+            //if finished on a gravestone we can overwrite it and thus remove it 
+            if(found.finished_at == cast(Hash_Table_Link<Key, Value>) hash_table_internal::GRAVESTONE_LINK)
+            {
+                assert(table->_gravestone_count > 0);
+                table->_gravestone_count -= 1;
+            }
+
+            Allocator_State_Type state = hash_table_internal::push_entry(table, move(&key), move(&value));
+            if(state == OK)
+                table->_linker[found.finished_at] = cast(Hash_Table_Link<Key, Value>) table->_entries_size - 1;
+
+            return state;
+        }
+        
+        template <typename Key, typename Value, class Hash, class Comp> nodisc
+        Allocator_State_Type add_another(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, no_infer(Value) value) noexcept
+        {
+            hash_t hash = Hash::hash(key);
+            return add_another<Key, Value, Hash>(table, move(&key), hash, move(&value));
+        }
     }
 
     //Specializations of the Hashable and Key_Comparable for some of the common types:
