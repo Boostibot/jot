@@ -85,6 +85,16 @@ namespace jot
         *null_terminate(string);
         return data(*string);
     }
+    
+    String_Builder to_builder(String string)
+    {
+        String_Builder builder;
+    
+        *push_multiple(&builder, string);
+        *null_terminate(&builder);
+
+        return builder;
+    }
 }
 
 #include "undefs.h"

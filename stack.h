@@ -548,7 +548,7 @@ namespace jot
             else if(do_copy_construct)
                 items[i] = *it;
             else
-                acumulate(&state, assign(&items[i], *it));
+                acumulate(&state, copy(&items[i], *it));
         }
 
         //insert construct leftover elements
