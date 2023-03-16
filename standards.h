@@ -1,8 +1,8 @@
 #pragma once
 #include "traits.h"
 #include "open_enum.h"
-#include "utils.h"
-#include "defines.h"
+
+#define nodisc [[nodiscard]]
 
 open_enum Open_Enum
 {
@@ -22,23 +22,10 @@ namespace jot
     template <typename T> nodisc constexpr 
     T && move(T* val) 
     { 
-        return cast(T &&) *val; 
+        return (T &&) *val; 
     };
 
     struct No_Default {};
-
-    template <typename T, typename Enable = Enabled>
-    struct Copyable
-    {
-        nodisc static constexpr
-        State copy(T* to, T const& from) noexcept
-        {
-            //static_assert(std::is_nothrow_copy_assignable_v<T>, "must be nothrow copyable! If not provide a custom overload of this function");
-            *to = from;
-
-            return OK_STATE;
-        };
-    };
 
     template <typename T, typename Enable = Enabled>
     struct Swappable
@@ -64,12 +51,6 @@ namespace jot
     template<typename T>
     static constexpr bool failable = !std::is_base_of_v<No_Default, Failable<T>>;
 
-    template <typename T> nodisc constexpr 
-    State copy(T* to, T const& from) noexcept 
-    {
-        return Copyable<T>::copy(to, from);
-    }
-
     template <typename T> constexpr 
     void swap(T* left, T* right) noexcept 
     {
@@ -85,16 +66,16 @@ namespace jot
     template <typename T, typename ... Args>
     T* construct_at(T* at, Args &&... args)
     {
-        new(at) T(cast(Args &&) args... );
+        new(at) T((Args &&) args... );
         return at;
     }
 
-    template<typename T> nodisc constexpr 
-    State copy_construct_at(T* to, no_infer(T) const& from) noexcept
+    //@TODO: remove
+    template<typename T> 
+    T* copy_construct_at(T* to, no_infer(T) const& from) noexcept
     {
-        construct_at(to);
-        return copy(to, from);
+        return construct_at(to, from);
     }
 }
 
-#include "undefs.h"
+#undef nodisc

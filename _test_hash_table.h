@@ -60,7 +60,7 @@ namespace jot::tests::hash_table
             test(empty_at(table, 101));
             test(empty_at(table, 0));
 
-            *set(&table, 1, 10);
+            set(&table, 1, 10);
             test(empty_at(table, 1) == false);
             test(value_matches_at(table, 1, 10));
             test(value_matches_at(table, 1, 100) == false);
@@ -68,8 +68,8 @@ namespace jot::tests::hash_table
             test(empty_at(table, 101));
             test(empty_at(table, 2));
 
-            *set(&table, 3, 30);
-            *set(&table, 2, 20);
+            set(&table, 3, 30);
+            set(&table, 2, 20);
 
             test(value_matches_at(table, 1, 10));
             test(empty_at(table, 442120));
@@ -78,12 +78,12 @@ namespace jot::tests::hash_table
             test(value_matches_at(table, 3, 30));
             test(empty_at(table, 5));
 
-            *set(&table, 15, 15);
-            *set(&table, 31, 15);
+            set(&table, 15, 15);
+            set(&table, 31, 15);
         
-            *set(&table, 0, 100);
+            set(&table, 0, 100);
             test(value_matches_at(table, 0, 100));
-            *set(&table, 0, 1000);
+            set(&table, 0, 1000);
             test(value_matches_at(table, 0, 1000));
             test(value_matches_at(table, 0, 100) == false);
             test(empty_at(table, 5));
@@ -104,7 +104,7 @@ namespace jot::tests::hash_table
             test(empty_at(table, keys[3]));
             test(empty_at(table, keys[5]));
 
-            *set(&table, dup(keys[0]), dup(values[0]));
+            set(&table, (keys[0]), (values[0]));
             test(empty_at(table, keys[0]) == false);
             test(value_matches_at(table, keys[0], values[0]));
             test(value_matches_at(table, keys[0], values[1]) == false);
@@ -112,8 +112,8 @@ namespace jot::tests::hash_table
             test(empty_at(table, keys[5]));
             test(empty_at(table, keys[1]));
 
-            *set(&table, dup(keys[2]), dup(values[2]));
-            *set(&table, dup(keys[1]), dup(values[1]));
+            set(&table, (keys[2]), (values[2]));
+            set(&table, (keys[1]), (values[1]));
 
             test(value_matches_at(table, keys[0], values[0]));
             test(empty_at(table, keys[8]));
@@ -122,12 +122,12 @@ namespace jot::tests::hash_table
             test(value_matches_at(table, keys[2], values[2]));
             test(empty_at(table, keys[4]));
 
-            *set(&table, dup(keys[5]), dup(values[5]));
-            *set(&table, dup(keys[7]), dup(values[7]));
+            set(&table, (keys[5]), (values[5]));
+            set(&table, (keys[7]), (values[7]));
         
-            *set(&table, dup(keys[0]), dup(values[8]));
+            set(&table, (keys[0]), (values[8]));
             test(value_matches_at(table, keys[0], values[8]));
-            *set(&table, dup(keys[0]), dup(values[9]));
+            set(&table, (keys[0]), (values[9]));
             test(value_matches_at(table, keys[0], values[9]));
             test(value_matches_at(table, keys[0], values[8]) == false);
             test(empty_at(table, keys[4]));
@@ -144,10 +144,10 @@ namespace jot::tests::hash_table
         {
             Table table;
 
-            *set(&table, 1, 10);
-            *set(&table, 2, 10);
-            *set(&table, 3, 10);
-            *set(&table, 4, 10);
+            set(&table, 1, 10);
+            set(&table, 2, 10);
+            set(&table, 3, 10);
+            set(&table, 4, 10);
 
             test(value_matches_at(table, 1, 10));
             test(value_matches_at(table, 2, 10));
@@ -164,14 +164,14 @@ namespace jot::tests::hash_table
             test(value_matches_at(table, 1, 10));
             test(value_matches_at(table, 4, 10));
 
-            *set(&table, 2, 20);
+            set(&table, 2, 20);
             test(value_matches_at(table, 2, 20));
             
-            *set(&table, 6, 60);
-            *set(&table, 7, 70);
-            *set(&table, 8, 80);
-            *set(&table, 9, 90);
-            *set(&table, 10, 100);
+            set(&table, 6, 60);
+            set(&table, 7, 70);
+            set(&table, 8, 80);
+            set(&table, 9, 90);
+            set(&table, 10, 100);
             
             test(value_matches_at(table, 9, 90));
             test(value_matches_at(table, 4, 10));
@@ -194,7 +194,7 @@ namespace jot::tests::hash_table
             test(value_matches_at(table, 4, 10));
             test(empty_at(table, 3));
 
-            *set(&table, 10, 100);
+            set(&table, 10, 100);
             test(value_matches_at(table, 10, 100));
             
             mark_removed(&table, 1);
@@ -213,30 +213,30 @@ namespace jot::tests::hash_table
         Slice<Link> linker = {table._linker, table._linker_size};
 
         String_Builder builder;
-        *reserve(&builder, linker.size * 6);
-        *format_into(&builder, '[');
+        reserve(&builder, linker.size * 6);
+        format_into(&builder, '[');
 
         isize gravestone_count = 0;
         isize alive_count = 0;
         for(isize i = 0; i < linker.size; i++)
         {
             if(i != 0)
-                *format_into(&builder, ", ");
+                format_into(&builder, ", ");
 
             if(linker[i] == cast(Link) hash_table_internal::EMPTY_LINK)
-                *format_into(&builder, '-');
+                format_into(&builder, '-');
             else if(linker[i] == cast(Link) hash_table_internal::GRAVESTONE_LINK)
             {
                 gravestone_count ++;
-                *format_into(&builder, 'R');
+                format_into(&builder, 'R');
             }
             else
             {
                 alive_count ++;
-                *format_into(&builder, cast(i64) linker[i]);
+                format_into(&builder, cast(i64) linker[i]);
             }
         }
-        *format_into(&builder, "] #A: {} #R: {}", alive_count, gravestone_count);
+        format_into(&builder, "] #A: {} #R: {}", alive_count, gravestone_count);
 
         return builder;
     }
@@ -256,10 +256,10 @@ namespace jot::tests::hash_table
         {
             Table table;
                
-            *set(&table, 1, 10);
-            *set(&table, 2, 20);
-            *set(&table, 3, 30);
-            *set(&table, 4, 40);
+            set(&table, 1, 10);
+            set(&table, 2, 20);
+            set(&table, 3, 30);
+            set(&table, 4, 40);
             
             test(value_matches_at(table, 1, 10));
             test(value_matches_at(table, 2, 20));
@@ -280,16 +280,16 @@ namespace jot::tests::hash_table
             test(value_matches_at(table, 1, 10));
             test(value_matches_at(table, 4, 40));
 
-            *set(&table, 2, 20);
+            set(&table, 2, 20);
             test(value_matches_at(table, 2, 20));
             
-            *set(&table, 6, 60);
-            *set(&table, 7, 70);
-            *set(&table, 8, 80);
-            *set(&table, 9, 90);
-            *rehash(&table);
+            set(&table, 6, 60);
+            set(&table, 7, 70);
+            set(&table, 8, 80);
+            set(&table, 9, 90);
+            rehash(&table);
 
-            *set(&table, 10, 100);
+            set(&table, 10, 100);
             
             test(value_matches_at(table, 9, 90));
             test(value_matches_at(table, 4, 40));
@@ -325,7 +325,7 @@ namespace jot::tests::hash_table
             test(value_matches_at(table, 4, 40));
             test(empty_at(table, 3));
 
-            *set(&table, 10, 100);
+            set(&table, 10, 100);
             test(value_matches_at(table, 10, 100));
             
             entry = remove(&table, find(table, 1));
@@ -359,38 +359,38 @@ namespace jot::tests::hash_table
         i64 before = trackers_alive();
         {
             Table table;
-            *set(&table, Key{1}, Val{1});
-            *set(&table, Key{2}, Val{2});
-            *set(&table, Key{3}, Val{3});
-            *set(&table, Key{4}, Val{4});
-            *set(&table, Key{5}, Val{5});
-            *set(&table, Key{6}, Val{6});
-            *set(&table, Key{7}, Val{7});
-            *set(&table, Key{8}, Val{8});
-            *set(&table, Key{9}, Val{9});
-            *set(&table, Key{10}, Val{10});
+            set(&table, Key{1}, Val{1});
+            set(&table, Key{2}, Val{2});
+            set(&table, Key{3}, Val{3});
+            set(&table, Key{4}, Val{4});
+            set(&table, Key{5}, Val{5});
+            set(&table, Key{6}, Val{6});
+            set(&table, Key{7}, Val{7});
+            set(&table, Key{8}, Val{8});
+            set(&table, Key{9}, Val{9});
+            set(&table, Key{10}, Val{10});
             
-            *set(&table, Key{11}, Val{11});
-            *set(&table, Key{12}, Val{12});
-            *set(&table, Key{13}, Val{13});
-            *set(&table, Key{14}, Val{14});
-            *set(&table, Key{15}, Val{15});
-            *set(&table, Key{16}, Val{16});
-            *set(&table, Key{17}, Val{17});
-            *set(&table, Key{18}, Val{18});
-            *set(&table, Key{19}, Val{19});
-            *set(&table, Key{20}, Val{20});
+            set(&table, Key{11}, Val{11});
+            set(&table, Key{12}, Val{12});
+            set(&table, Key{13}, Val{13});
+            set(&table, Key{14}, Val{14});
+            set(&table, Key{15}, Val{15});
+            set(&table, Key{16}, Val{16});
+            set(&table, Key{17}, Val{17});
+            set(&table, Key{18}, Val{18});
+            set(&table, Key{19}, Val{19});
+            set(&table, Key{20}, Val{20});
 
-            *set(&table, Key{21}, Val{21});
-            *set(&table, Key{22}, Val{22});
-            *set(&table, Key{23}, Val{23});
-            *set(&table, Key{24}, Val{24});
-            *set(&table, Key{25}, Val{25});
-            *set(&table, Key{26}, Val{26});
-            *set(&table, Key{27}, Val{27});
-            *set(&table, Key{28}, Val{28});
-            *set(&table, Key{29}, Val{29});
-            *set(&table, Key{30}, Val{30});
+            set(&table, Key{21}, Val{21});
+            set(&table, Key{22}, Val{22});
+            set(&table, Key{23}, Val{23});
+            set(&table, Key{24}, Val{24});
+            set(&table, Key{25}, Val{25});
+            set(&table, Key{26}, Val{26});
+            set(&table, Key{27}, Val{27});
+            set(&table, Key{28}, Val{28});
+            set(&table, Key{29}, Val{29});
+            set(&table, Key{30}, Val{30});
         }
         i64 after = trackers_alive();
         test(before == after);
@@ -430,7 +430,7 @@ namespace jot::tests::hash_table
 
         const auto incr_count_table = [](Count_Table* count_table, Key const& key){
             i32 count = get(*count_table, key, 0);
-            *set(count_table, key, count + 1);
+            set(count_table, key, count + 1);
             
             return count + 1;
         };
@@ -440,7 +440,7 @@ namespace jot::tests::hash_table
             if(count <= 1)
                 remove(count_table, key);
             else
-                *set(count_table, key, count - 1);
+                set(count_table, key, count - 1);
 
             return max(count, 0);
         };
@@ -471,7 +471,7 @@ namespace jot::tests::hash_table
                             Key key = Key{added_i};
                             Val val = Val{added_i};
 
-                            *set(&table, key, val);
+                            set(&table, key, val);
                             incr_count_table(&count_table, key);
 
                             added_i++;
@@ -486,7 +486,7 @@ namespace jot::tests::hash_table
                                 Key key = Key{added_i - 1};
 
                                 incr_count_table(&count_table, key);
-                                *multi::add_another(&table, key, key);
+                                multi::add_another(&table, key, key);
                             }
                                 
                             break;
@@ -522,15 +522,15 @@ namespace jot::tests::hash_table
                             break;
 
                         case OP_RESERVE_ENTRIES: 
-                            *reserve_entries(&table, index % max_size);
+                            reserve_entries(&table, index % max_size);
                             break;
                         
                         case OP_RESERVE_JUMP_TABLE: 
-                            *reserve_jump_table(&table, index % max_size);
+                            reserve_jump_table(&table, index % max_size);
                             break;
                             
                         case OP_REHASH: 
-                            *rehash(&table);
+                            rehash(&table);
                             break;
 
                         default: break;
@@ -629,18 +629,18 @@ namespace jot::tests::hash_table
             test_table_add_find<Hash_Table<Trc, u32, Test_Tracker_Hash_Functions>>();
             test_table_add_find<Hash_Table<Trc, Trc, Test_Tracker_Hash_Functions>>();
 
-            const auto str = [](cstring cstr){
+            const auto own = [](cstring cstr){
                 String_Builder builder;
-                *copy(&builder, String(cstr));
+                copy(&builder, String(cstr));
                 return builder;
             };
 
-            Array<String_Builder, 10> builders = {{str("1"), str("2"), str("3"), str("4"), str("5"), str("6"), str("7"), str("8"), str("9"), str("10")}};
+            Array<String_Builder, 10> builders = {{own("1"), own("2"), own("3"), own("4"), own("5"), own("6"), own("7"), own("8"), own("9"), own("10")}};
             Array<String, 10> strings = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
 
-            test_table_add_find_any<Hash_Table<String, String_Builder>>(dup(strings), dup(builders)); 
-            test_table_add_find_any<Hash_Table<String_Builder, String>>(dup(builders), dup(strings)); 
-            test_table_add_find_any<Hash_Table<String_Builder, String_Builder>>(dup(builders), dup(builders)); 
+            test_table_add_find_any<Hash_Table<String, String_Builder>>((strings), (builders)); 
+            test_table_add_find_any<Hash_Table<String_Builder, String>>((builders), (strings)); 
+            test_table_add_find_any<Hash_Table<String_Builder, String_Builder>>((builders), (builders)); 
 
             test_table_mark_remove<Hash_Table<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
             test_table_mark_remove<Hash_Table<u32, u32>>();

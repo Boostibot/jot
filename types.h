@@ -28,6 +28,11 @@ namespace jot
 
     using isize = ptrdiff_t;
     using usize = size_t;
+    
+    #ifndef __cpp_char8_t
+    using char8_t = char;
+    #endif
 }
+
 
 #define JOT_SIZE_T ::jot::isize

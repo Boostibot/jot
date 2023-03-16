@@ -13,6 +13,7 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <clocale>
 
 #include "unistd.h"
 
@@ -42,6 +43,7 @@ namespace jot
                 ::close(descriptor);
             }
         };
+
 
         //Shared flags
         namespace Flags {
@@ -272,5 +274,15 @@ namespace jot
             ::stat64(path, &stat);
             return stat;
         }
+
+        inline bool set_utf8_locale(bool english = false)
+        {
+            if(english)
+                return setlocale(LC_ALL, "en_US.UTF-8") != NULL;
+            else
+                return setlocale(LC_ALL, ".UTF-8") != NULL;
+        }
+
+        const static bool _locale_setter = set_utf8_locale(true);
     }
 }

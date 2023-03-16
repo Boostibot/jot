@@ -14,45 +14,17 @@ namespace jot
     struct Formattable : No_Default
     {
         nodisc static
-        State format(String_Appender* into, T const& value) noexcept
+        void format(String_Appender* into, T const& value)
         {
-            *push_multiple(into, "{NOFORMAT}");
-            return OK_STATE;
+            push_multiple(into, "{NOFORMAT}");
         }
     };
     
     template <typename T>
     static constexpr bool is_formattable = !std::is_base_of_v<No_Default, Formattable<T>>;
 
-    struct Format_Result
-    {
-        String_Builder builder;
-        State state = OK_STATE;
-    };
-
-    void print_into(std::FILE* stream, String str)
-    {
-        fwrite(str.data, sizeof(char), cast(size_t) str.size, stream);
-    }
-    
-    void println_into(std::FILE* stream, String str)
-    {
-        print_into(stream, str);
-        fputc('\n', stream);
-    }
-
-    void print(String str)
-    {
-        print_into(stdout, str);
-    }
-
-    void println(String str)
-    {
-        println_into(stdout, str);
-    }
-
     template<typename T> nodisc
-    State format_into(String_Appender* into, T const& arg) noexcept
+    void format_into(String_Appender* into, T const& arg)
     {
         if constexpr(std::is_array_v<T>)
         {
@@ -62,18 +34,16 @@ namespace jot
         else
             return Formattable<T>::format(into, arg);
     }
-    
 
     template<typename T> nodisc
-    Format_Result format(T const& arg) noexcept
+    String_Builder format(T const& arg)
     {
-        Format_Result result;
-        String_Appender appender = {&result.builder};
-        result.state = format_into(&appender, arg);
+        String_Builder builder;
+        String_Appender appender = {&builder};
+        format_into(&appender, arg);
 
-        return result;
+        return builder;
     }
-    
 
     constexpr Array<char, 37> LOWERCASE_NUM_CHAR_MAPPING = {{
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
@@ -92,7 +62,7 @@ namespace jot
     }};
 
     nodisc
-    State format_number_into(String_Appender* appender, i64 val, isize base = 10, String prefix = "", isize zero_pad_to = 0, Array<char, 37> const& converter = UPPERCASE_NUM_CHAR_MAPPING)
+    void format_number_into(String_Appender* appender, i64 val, isize base = 10, String prefix = "", isize zero_pad_to = 0, Array<char, 37> const& converter = UPPERCASE_NUM_CHAR_MAPPING)
     {
         assert(2 <= base && base <= 36);
 
@@ -130,14 +100,12 @@ namespace jot
         }
 
         Slice used = {buffer.data + buffer.size - used_size, used_size};
-        State state = push_multiple(appender, prefix);
-        acumulate(&state, push_multiple(appender, used));
-
-        return state;
+        push_multiple(appender, prefix);
+        push_multiple(appender, used);
     }
 
     template<typename T> nodisc 
-    State format_float_into(String_Appender* appender, T const& value, std::chars_format format = std::chars_format::fixed, int precision = 8)
+    void format_float_into(String_Appender* appender, T const& value, std::chars_format format = std::chars_format::fixed, int precision = 8)
     {
         constexpr isize chars_grow = 64; //64bit num const& binary - nothing should be bigger than this 
         constexpr isize max_tries = 2; //but just in case
@@ -145,13 +113,9 @@ namespace jot
         isize size_before = slice(appender).size;
 
         std::to_chars_result res = {};
-        State state = OK_STATE;
         for(isize current_try = 0; current_try < max_tries; current_try++)
         {
-            state = resize(appender, slice(appender).size + chars_grow);
-            if(state == ERROR)
-                return state;
-
+            resize(appender, slice(appender).size + chars_grow);
             Mutable_String into_string = slice(slice(appender), size_before);
 
             if(precision == -1)
@@ -178,7 +142,7 @@ namespace jot
     template <typename T> struct Formattable<T, Enable_If<std::is_integral_v<T>>>
     {
         nodisc static
-        State format(String_Appender* appender, T const& val) noexcept
+        void format(String_Appender* appender, T const& val)
         {
             return format_number_into(appender, cast(i64) val);
         }
@@ -187,7 +151,7 @@ namespace jot
     template <typename T> struct Formattable<T, Enable_If<std::is_floating_point_v<T>>>
     {
         nodisc static
-        State format(String_Appender* appender, T const& val) noexcept
+        void format(String_Appender* appender, T const& val)
         {
             return format_float_into(appender, val);
         }
@@ -196,7 +160,7 @@ namespace jot
     template <typename T> struct Formattable<T, Enable_If<std::is_pointer_v<T>>>
     {
         nodisc static
-        State format(String_Appender* appender, T const& val) noexcept
+        void format(String_Appender* appender, T const& val)
         {
             return format_number_into(appender, cast(isize) val, 16, "0x", 8);
         }
@@ -205,7 +169,7 @@ namespace jot
     template <> struct Formattable<String>
     {
         nodisc static
-        State format(String_Appender* appender, String str) noexcept
+        void format(String_Appender* appender, String str)
         {
             return push_multiple(appender, str);
         }
@@ -214,7 +178,7 @@ namespace jot
     template <> struct Formattable<Mutable_String>
     {
         nodisc static
-        State format(String_Appender* appender, Mutable_String str) noexcept
+        void format(String_Appender* appender, Mutable_String str)
         {
             return format_into(appender, cast(String) str);
         }
@@ -223,7 +187,7 @@ namespace jot
     template <> struct Formattable<cstring>
     {
         nodisc static
-        State format(String_Appender* appender, cstring str) noexcept
+        void format(String_Appender* appender, cstring str)
         {
             return format_into(appender, String(str));
         }
@@ -232,7 +196,7 @@ namespace jot
     template <> struct Formattable<String_Builder>
     {
         nodisc static
-        State format(String_Appender* appender, String_Builder const& builder_) noexcept
+        void format(String_Appender* appender, String_Builder const& builder_)
         {
             return format_into(appender, slice(builder_));
         }
@@ -241,7 +205,7 @@ namespace jot
     template <> struct Formattable<char>
     {
         nodisc static
-        State format(String_Appender* appender, char c) noexcept
+        void format(String_Appender* appender, char c)
         {
             return push(appender, c);
         }
@@ -250,7 +214,7 @@ namespace jot
     template <> struct Formattable<bool>
     {
         nodisc static
-        State format(String_Appender* appender, bool val) noexcept
+        void format(String_Appender* appender, bool val)
         {
             return format_into(appender, val ? "true" : "false");
         }
@@ -259,7 +223,7 @@ namespace jot
     template <> struct Formattable<nullptr_t>
     {
         nodisc static
-        State format(String_Appender* appender, nullptr_t) noexcept
+        void format(String_Appender* appender, nullptr_t)
         {
             return format_into(appender, cast(void*) nullptr);
         }
@@ -269,26 +233,25 @@ namespace jot
     struct Formattable_Range
     {
         nodisc static
-        State format(String_Appender* appender, T const& range) noexcept
+        void format(String_Appender* appender, T const& range)
         {
-            State state = push(appender, '[');
+            push(appender, '[');
 
             auto it = std::begin(range);
             const auto end = std::end(range);
             if(it != end)
             {
-                acumulate(&state, format_into(appender, *it));
+                format_into(appender, *it);
                 ++it;
 
                 for(; it != end; ++it)
                 {
-                    acumulate(&state, push_multiple(appender, String(", ")));
-                    acumulate(&state, format_into(appender, *it));
+                    push_multiple(appender, String(", "));
+                    format_into(appender, *it);
                 }
             }
 
-            acumulate(&state, push(appender, ']'));
-            return state;
+            push(appender, ']');
         }
     };
 
@@ -296,65 +259,65 @@ namespace jot
     template <typename T> 
     struct Formattable<Slice<T>> : Formattable_Range<Slice<T>> {};
 
-    open_enum Format_State
-    {
-        OPEN_ENUM_DECLARE("jot::Format_State");
-        OPEN_ENUM_ENTRY(FORMAT_ARGUMENTS_DONT_MATCH);
-        OPEN_ENUM_ENTRY(INVALID_FORMAT_SYNTAX);
-    }
-
-    namespace format_type_erasure 
+    namespace fmt_intern 
     {
         //We try to instantiate as little templates as possible
         // as such we first convert all arguments of generic format(String format...) builder
         // "Adapted" that know how to format the particular type. Then format simply calls
         // the adapted function and uses the result. This results in us only isnatntiating
         // one template for each argument type and not for each combination of argument types
-        struct Format_Adaptor
+        struct Adaptor
         {
-            using Formatting_Fn = State(*)(String_Appender*, Format_Adaptor);
-
+            using Formatting_Fn = void(*)(String_Appender*, Adaptor);
+            
             void* data = nullptr;
             Formatting_Fn function = nullptr;
-            isize array_size = -1;
+            i32 array_size = 0;
+            bool is_string = false;
+
+            Adaptor() noexcept = default;
+
+            template<typename T>
+            Adaptor(T const& val) noexcept
+            {
+                data = cast(void*) &val;
+                function = &format_adaptor<T>;
+            }
+            
+            template <class T, i32 N> nodisc
+            Adaptor(const T (&a)[N]) noexcept
+            {
+                data = cast(void*) a;
+                function = &array_format_adaptor<T>;
+                array_size = N;
+                is_string = is_string_char<T>;
+            }
+
+            template <typename T> nodisc
+            static void array_format_adaptor(String_Appender* appender, Adaptor adaptor)
+            {
+                Slice<T> slice = {cast(T*) adaptor.data, adaptor.array_size};
+                return format_into(appender, slice);
+            }
+
+            template <typename T> nodisc
+            static void format_adaptor(String_Appender* appender, Adaptor adaptor)
+            {
+                T* casted = cast(T*) adaptor.data;
+                return format_into(appender, *casted);
+            }
         };
-
-        template <typename T> nodisc
-        State array_format_adaptor(String_Appender* appender, Format_Adaptor adaptor) noexcept
+        
+        void concat_adapted_into(String_Appender* appender, Slice<Adaptor> adapted)
         {
-            Slice<T> slice = {cast(T*) adaptor.data, adaptor.array_size};
-            return format_into(appender, slice);
+            for(Adaptor const& curr_adapted : adapted)
+            {
+                if(curr_adapted.data != nullptr)
+                    curr_adapted.function(appender, curr_adapted);
+            }
         }
-
-        template <typename T> nodisc
-        State format_adaptor(String_Appender* appender, Format_Adaptor adaptor) noexcept
-        {
-            T* casted = cast(T*) adaptor.data;
-            return format_into(appender, *casted);
-        }
-
-        template<typename T> nodisc
-        Format_Adaptor make_adapted(T const& val) noexcept
-        {
-            Format_Adaptor adapted;
-            adapted.data = cast(void*) &val;
-            adapted.function = &format_adaptor<T>;
-            adapted.array_size = 0;
-            return adapted;
-        }
-
-        template <class T, isize N> nodisc
-        Format_Adaptor make_adapted(const T (&a)[N]) noexcept
-        {
-            Format_Adaptor adapted;
-            adapted.data = cast(void*) a;
-            adapted.function = &array_format_adaptor<T>;
-            adapted.array_size = N;
-            return adapted;
-        }
-
-        NO_INLINE
-        State format_adapted_into(String_Appender* appender, String format_str, Slice<Format_Adaptor> adapted) noexcept
+        
+        void format_adapted_into(String_Appender* appender, String format_str, Slice<Adaptor> adapted)
         {
             constexpr String sub_for = "{}";
 
@@ -362,131 +325,174 @@ namespace jot
             isize new_found = 0;
             isize found_count = 0;
 
-            State state = OK_STATE;
-            for(;; last = new_found + sub_for.size)
+            for(found_count;; last = new_found + sub_for.size, found_count++)
             {
                 new_found = first_index_of(format_str, sub_for, last);
                 if(new_found == -1)
-                {
-                    String till_end = slice(format_str, last);
-                    acumulate(&state, push_multiple(appender, till_end));
-
-                    if(found_count != adapted.size)
-                    {
-                        assert(false && "number of arguments and holes must match");
-                        acumulate(&state, Format_State::FORMAT_ARGUMENTS_DONT_MATCH);
-                    }
-
                     break;
-                }
 
                 if(new_found != 0 && new_found > 0 && new_found + 2 < format_str.size)
                 {
                     if (format_str[new_found - 1] == '{' && format_str[new_found + 2] == '}')
                     {
                         String in_between = slice_range(format_str, last, new_found - 1);
-                        acumulate(&state, push_multiple(appender, in_between));
-                        acumulate(&state, push_multiple(appender, sub_for));
+                        push_multiple(appender, in_between);
+                        push_multiple(appender, sub_for);
                         
                         new_found += 1;
                         continue;
                     }
                 }
 
-                assert(found_count < adapted.size && "number of arguments and holes must match");
-
                 String in_between = slice_range(format_str, last, new_found);
-                acumulate(&state, push_multiple(appender, in_between));
+                push_multiple(appender, in_between);
 
-                Format_Adaptor const& curr_adapted = adapted[found_count];
-                acumulate(&state, curr_adapted.function(appender, curr_adapted));
-
-                found_count ++;
+                if(found_count < adapted.size)
+                {
+                    Adaptor const& curr_adapted = adapted[found_count];
+                    if(curr_adapted.data != nullptr)
+                        curr_adapted.function(appender, curr_adapted);
+                }
             }
+            
+            String till_end = slice(format_str, last);
+            push_multiple(appender, till_end);
+            concat_adapted_into(appender, slice(adapted, found_count));
+        }
 
-            return state;
+        NO_INLINE
+        void format_adapted_into(String_Appender* appender, Slice<Adaptor> adapted)
+        {
+            if(adapted.size == 0)
+                return;
+
+            if(adapted[0].is_string)
+            {
+                Slice<Adaptor> rest = slice(adapted, 1);
+                String format = {cast(cstring) adapted[0].data, adapted[0].array_size};
+                format_adapted_into(appender, format, rest);
+            }
+            else
+            {
+                concat_adapted_into(appender, adapted);
+            }
         }
     }
     
     nodisc
-    State format_into(String_Appender* appender, String format_str)
+    void format_into(String_Appender* appender, String format_str)
     {
         return push_multiple(appender, format_str);
     }
     
     nodisc
-    Format_Result format(String format_str)
+    String_Builder format(String str)
     {
-        Format_Result result;
-        result.state = push_multiple(&result.builder, format_str);
-        return result;
+        String_Builder builder;
+        push_multiple(&builder, str);
+        return builder;
     }
 
-    template<typename... Ts> nodisc
-    State format_into(String_Appender* appender, String format_str, Ts const&... args)
+    //We dont use variadics here even though this is exactly what they were intendend for.
+    //The problem with variadics is that for each combination of types we get template instantiation.
+    //When using fmt functions this adds up QUICK so having instead a single templated constructor in any is much better idea 
+    #define ADAPTOR_10_ARGS_DECL \
+        fmt_intern::Adaptor const& a1 = {}, fmt_intern::Adaptor const& a2 = {}, fmt_intern::Adaptor const& a3 = {}, fmt_intern::Adaptor const& a4 = {}, fmt_intern::Adaptor const& a5 = {}, \
+        fmt_intern::Adaptor const& a6 = {}, fmt_intern::Adaptor const& a7 = {}, fmt_intern::Adaptor const& a8 = {}, fmt_intern::Adaptor const& a9 = {}, fmt_intern::Adaptor const& a10 = {} \
+        
+    #define ADAPTOR_10_ARGS a1, a2, a3, a4, a5, a6, a7, a8, a9, a10
+
+    void format_into(String_Appender* appender, ADAPTOR_10_ARGS_DECL)
     {
-        using namespace format_type_erasure;
+        using namespace fmt_intern;
+        
+        Adaptor adapted_storage[] = {ADAPTOR_10_ARGS};
+        Slice<Adaptor> adapted_slice = {adapted_storage, 10};
 
-        Format_Adaptor adapted_storage[] = {make_adapted(args)...};
-        Slice<Format_Adaptor> adapted_slice = {adapted_storage, sizeof...(args)};
-
-        return format_adapted_into(appender, format_str, adapted_slice);
+        return format_adapted_into(appender, adapted_slice);
     }
     
-    template<typename... Ts> nodisc
-    State format_into(String_Builder* into, Ts const&... args) noexcept
+    void format_into(String_Builder* into, ADAPTOR_10_ARGS_DECL) noexcept
     {
         String_Appender appender(into);
-        return format_into(&appender, args...);
+        return format_into(&appender, ADAPTOR_10_ARGS);
     }
 
-    template<typename... Ts> nodisc
-    Format_Result format(String format_str, Ts const&... args)
+    nodisc
+    String_Builder format(ADAPTOR_10_ARGS_DECL)
     {
-        using namespace format_type_erasure;
-        Format_Result result;
-        String_Appender appender = {&result.builder};
-
-        Format_Adaptor adapted_storage[] = {make_adapted(args)...};
-        Slice<Format_Adaptor> adapted_slice = {adapted_storage, sizeof...(args)};
-
-        result.state = format_adapted_into(&appender, format_str, adapted_slice);
-        return result;
+        using namespace fmt_intern;
+        String_Builder builder;
+        String_Appender appender = {&builder};
+        format_into(&appender, ADAPTOR_10_ARGS);
+        return builder;
     }
     
-    //@NOTE: Code duplication here since we want to ensure fastest possible 
-    // compilation times and as such we imit the call stack depth of functions with
-    // variadic arguments to two
-    template<typename... Ts> 
-    State print_into(std::FILE* stream, Ts const&... types)
+    void print_into(std::FILE* stream, String str)
     {
-        Format_Result result = format(types...);
-        print_into(stream, slice(result.builder));
-        return result.state;
+        fwrite(str.data, sizeof(char), cast(size_t) str.size, stream);
     }
     
-    template<typename... Ts> 
-    State println_into(std::FILE* stream, Ts const&... types)
+    void println_into(std::FILE* stream, String str)
     {
-        Format_Result result = format(types...);
-        println_into(stream, slice(result.builder));
-        return result.state;
-    }
-    
-    template<typename... Ts>
-    State print(Ts const&... types)
-    {
-        Format_Result result = format(types...);
-        print(slice(result.builder));
-        return result.state;
+        print_into(stream, str);
+        fputc('\n', stream);
     }
 
-    template <typename... Ts>
-    State println(Ts const&... types)
+    void print_into(std::FILE* stream, ADAPTOR_10_ARGS_DECL)
     {
-        Format_Result result = format(types...);
-        println(slice(result.builder));
-        return result.state;
+        String_Builder builder = format(ADAPTOR_10_ARGS);
+        print_into(stream, slice(builder));
+    }
+    
+    void println_into(std::FILE* stream, ADAPTOR_10_ARGS_DECL)
+    {
+        String_Builder builder = format(ADAPTOR_10_ARGS);
+        push(&builder, '\n');
+        print_into(stream, slice(builder));
+    }
+
+    void print(ADAPTOR_10_ARGS_DECL)
+    {
+        print_into(stdout, ADAPTOR_10_ARGS);
+    }
+    
+    void println(ADAPTOR_10_ARGS_DECL)
+    {
+        println_into(stdout, ADAPTOR_10_ARGS);
+    }
+
+    //mre specific overloads so that we dont waste time 
+    void print(String str) noexcept
+    {
+        print_into(stdout, str);
+    }
+
+    void println(String str) noexcept
+    {
+        println_into(stdout, str);
+    }
+
+    void print(cstring str) noexcept
+    {
+        print_into(stdout, String(str));
+    }
+
+    void println(cstring str) noexcept
+    {
+        println_into(stdout, String(str));
+    }
+    
+    inline bool set_utf8_locale(bool english = false)
+    {
+        if(english)
+            return setlocale(LC_ALL, "en_US.UTF-8") != NULL;
+        else
+            return setlocale(LC_ALL, ".UTF-8") != NULL;
+    }
+
+    namespace {
+        const static bool _locale_setter = set_utf8_locale(true);
     }
 }
 

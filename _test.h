@@ -85,36 +85,60 @@ namespace jot::tests
         bool operator ==(const Tracker& other) const { return this->val == other.val; };
         bool operator !=(const Tracker& other) const { return this->val != other.val; };
     };
-
-    template <typename T>
-    struct Copyable<No_Copy<T>>
+    
+    template<typename T> T dup(T const& val)
     {
-        using No_Copy = jot::tests::No_Copy<T>;
+        return T(val);
+    }
 
-        static constexpr
-        State copy(No_Copy* to, No_Copy const& from) noexcept
-        {
-            to->val = from.val;
-            return OK_STATE;
-        };
-    };
-
-    template <typename T, isize N>
-    struct Copyable<Array<T, N>>
+    template<typename T> No_Copy<T> dup(No_Copy<T> const& track)
     {
-        static constexpr
-        State copy(Array<T, N>* to, Array<T, N> const& from) noexcept
-        {
-            State state = OK_STATE;
-            for(isize i = 0; i < N; i++)
-            {
-                State new_state = Copyable<T>::copy(&(*to)[i], from[i]);
-                acumulate(&state, new_state);
-            }
+        return No_Copy<T>{track.val}; 
+    }
+    
+    template<typename T> Tracker<T> dup(Tracker<T> const& track)
+    {
+        return Tracker<T>{track.val}; 
+    }
 
-            return state;
-        };
-    };
+    template <typename T, isize N> Array<T, N> dup(Array<T, N> const& arr)
+    {
+        State state = OK_STATE;
+        Array<T, N> duped = {};
+        for(isize i = 0; i < N; i++)
+            duped[i] = dup(arr[i]);
+
+        return duped; 
+    }
+    //template <typename T>
+    //struct Copyable<No_Copy<T>>
+    //{
+    //    using No_Copy = jot::tests::No_Copy<T>;
+
+    //    static constexpr
+    //    State copy(No_Copy* to, No_Copy const& from) noexcept
+    //    {
+    //        to->val = from.val;
+    //        return OK_STATE;
+    //    };
+    //};
+
+    //template <typename T, isize N>
+    //struct Copyable<Array<T, N>>
+    //{
+    //    static constexpr
+    //    State copy(Array<T, N>* to, Array<T, N> const& from) noexcept
+    //    {
+    //        State state = OK_STATE;
+    //        for(isize i = 0; i < N; i++)
+    //        {
+    //            State new_state = Copyable<T>::copy(&(*to)[i], from[i]);
+    //            acumulate(&state, new_state);
+    //        }
+
+    //        return state;
+    //    };
+    //};
 
     #define test(cond) force(cond)
 }

@@ -64,36 +64,75 @@ namespace jot
 
         return -1;
     }
-
-
-    //adds null termination to the string if it
-    // already doesnt have one
-    nodisc inline 
-    State null_terminate(String_Builder* string) noexcept
+    
+    template <typename T> inline 
+    void append_multiple(Stack<T>* stack, Slice<const Slice<const T>> parts)
     {
-        State state = reserve(string, size(*string) + 1);
-        if(state == ERROR)
-            return state;
+        isize base_size = size(stack);
+        isize size_sum = 0;
+        for(isize i = 0; i < parts.size; i++)
+            size_sum += parts[i].size;
 
-        data(string)[size(*string)] = '\0';
-        return state;
+        resize_for_overwrite(stack, base_size + size_sum);
+        isize curr_size = base_size;
+        for(isize i = 0; i < parts.size; i++)
+        {
+            Slice<T> copy_to = slice(slice(stack), curr_size);
+            copy_items(&copy_to, parts[i]);
+            curr_size += parts[i].size;
+        }
     }
-
-    nodisc
-    cstring to_cstr(String_Builder* string)
+    template <typename T> nodisc inline 
+    Stack<T> concat(Slice<const Slice<const T>> parts)
     {
-        *null_terminate(string);
-        return data(*string);
+        Stack<T> stack;
+        append_multiple(&stack, parts);
+        return stack;
     }
     
-    String_Builder to_builder(String string)
+    template <typename T> nodisc inline 
+    Stack<T> concat(Slice<const T> a1, Slice<const T> a2)
     {
-        String_Builder builder;
+        Slice<const T> strings[] = {a1, a2};
+        Slice<const Slice<const T>> parts = slice(strings);
+        return concat(parts);
+    }
     
-        *push_multiple(&builder, string);
-        *null_terminate(&builder);
+    template <typename T> nodisc inline 
+    Stack<T> concat(Slice<const T> a1, Slice<const T> a2, Slice<const T> a3)
+    {
+        Slice<const T> strings[] = {a1, a2, a3};
+        Slice<const Slice<const T>> parts = slice(strings);
+        return concat(parts);
+    }
+    
+    template <typename T> nodisc inline 
+    Stack<T> concat(Slice<const T> a1, Slice<const T> a2, Slice<const T> a3, Slice<const T> a4)
+    {
+        Slice<const T> strings[] = {a1, a2, a3, a4};
+        Slice<const Slice<const T>> parts = slice(strings);
+        return concat(parts);
+    }
+    
+    template <typename T> nodisc inline 
+    Stack<T> concat(Slice<const T> a1, Slice<const T> a2, Slice<const T> a3, Slice<const T> a4, Slice<const T> a5)
+    {
+        Slice<const T> strings[] = {a1, a2, a3, a4, a5};
+        Slice<const Slice<const T>> parts = slice(strings);
+        return concat(parts);
+    }
 
-        return builder;
+    template <typename T> nodisc inline 
+    Stack<T> concat(Slice<const T> a1, Slice<const T> a2, Slice<const T> a3, Slice<const T> a4, Slice<const T> a5, Slice<const T> a6)
+    {
+        Slice<const T> strings[] = {a1, a2, a3, a4, a5, a6};
+        Slice<const Slice<const T>> parts = slice(strings);
+        return concat(parts);
+    }
+
+    String_Builder own(cstring string)
+    {
+        return own(String(string));
     }
 }
 

@@ -16,12 +16,29 @@ namespace jot
     #ifndef JOT_SIZE_T
         using isize = ptrdiff_t;
     #endif
+    
+    template <typename T>
+    struct String_Character_Type 
+    { 
+        static constexpr bool is_string_char = false; 
+    };
 
-    nodisc constexpr 
-    isize strlen(const char* str)
+    template <> struct String_Character_Type<char>     { static constexpr bool is_string_char = true;  };
+    template <> struct String_Character_Type<wchar_t>  { static constexpr bool is_string_char = true;  };
+    template <> struct String_Character_Type<char16_t> { static constexpr bool is_string_char = true;  };
+    template <> struct String_Character_Type<char32_t> { static constexpr bool is_string_char = true;  };
+    #ifdef __cpp_char8_t
+    template <> struct String_Character_Type<char8_t>  { static constexpr bool is_string_char = true;  };
+    #endif
+
+    template<typename T>
+    static constexpr bool is_string_char = String_Character_Type<std::remove_const_t<T>>::is_string_char;
+
+    template<typename T, std::enable_if_t<is_string_char<T>, bool> = true> nodisc constexpr 
+    isize strlen(const T* str)
     {
         isize size = 0;
-        while(str[size] != '\0')
+        while(str[size] != 0)
         {
             size++;
         }
@@ -41,8 +58,8 @@ namespace jot
         constexpr Slice(T* data, isize size) 
             : data(data), size(size) {}
 
-        template<typename T, std::enable_if_t<std::is_same_v<T, const char>, bool> = true>
-        constexpr Slice(T* str)
+        template<typename C, std::enable_if_t<std::is_same_v<C, T> && is_string_char<T> && std::is_const_v<T>, bool> = true>
+        constexpr Slice(C* str)
             : data(str), size(strlen(str)) {}
 
         template<typename T>
@@ -63,31 +80,27 @@ namespace jot
         #include "slice_op_text.h"
     };
 
+    Slice(const char*)      -> Slice<const char>;
+    Slice(const wchar_t*)   -> Slice<const wchar_t>;
+    Slice(const char16_t*)  -> Slice<const char16_t>;
+    Slice(const char32_t*)  -> Slice<const char32_t>;
+    
+    #ifdef __cpp_char8_t
+    Slice(const char8_t*)   -> Slice<const char8_t>;
+    #endif
 
-    Slice(const char*) -> Slice<const char>;
-
-    nodisc constexpr 
-    Slice<const char> slice(const char* str) 
+    template<typename T, std::enable_if_t<is_string_char<T>, bool> = true> nodisc constexpr
+    Slice<const T> slice(const T* str) 
     {
-        return {str, strlen(str)};
-    }
-
-    template<typename Cont> nodisc constexpr 
-    auto slice(Cont const& sliced) 
-    {
-        using T_ref = decltype(*sliced.data);
-        using T = std::remove_reference_t<T_ref>;
-        return Slice<T>{sliced.data, sliced.size};
-    }
-
-    template<typename Cont> nodisc constexpr 
-    auto slice(Cont* sliced) 
-    {
-        using T_ref = decltype(*sliced->data);
-        using T = std::remove_reference_t<T_ref>;
-        return Slice<T>{sliced->data, sliced->size};
+        return Slice<const T>(str);
     }
     
+    template<typename T, isize N> nodisc constexpr
+    Slice<const T> slice(const T (&a)[N])
+    {
+        return Slice<const T>(a, N);
+    }
+
     constexpr bool is_const_eval(bool if_not_present = false) noexcept {
         #ifdef __cpp_lib_is_constant_evaluated
             return std::is_constant_evaluated();
