@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <iterator>
 
+#include "slice.h"
+
 namespace jot
 {
     #ifndef JOT_SIZE_T
@@ -23,6 +25,18 @@ namespace jot
     //deduction guide
     template <class First, class... Rest>
     Array(First, Rest...) -> Array<First, 1 + sizeof...(Rest)>;
+
+    template<typename T, isize N> [[nodiscard]]
+    Slice<const T> slice(Array<T, N> const& arr) 
+    {
+        return Slice<const T>{arr.data, N};
+    }
+
+    template<typename T, isize N> [[nodiscard]]
+    Slice<T> slice(Array<T, N>* arr) 
+    {
+        return Slice<T>{arr->data, N};
+    }
 }
 
 namespace std
@@ -34,4 +48,3 @@ namespace std
     auto data(jot::Array<T, N> const& arr)     noexcept {return arr.data;}
 }
 
-#include "undefs.h"

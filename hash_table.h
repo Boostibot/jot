@@ -421,7 +421,7 @@ namespace jot
     }
     
     template <typename Key, typename Value, class Hash, class Comp> nodisc
-    Allocator_State_Type rehash(Hash_Table<Key, Value, Hash, Comp>* table, isize to_size) noexcept
+    Allocator_State_Type rehash_failing(Hash_Table<Key, Value, Hash, Comp>* table, isize to_size) noexcept
     {
         using Link = Hash_Table_Link<Key, Value>;
         isize rehash_to = HASH_TABLE_LINKER_BASE_SIZE;
@@ -433,41 +433,75 @@ namespace jot
 
         return hash_table_internal::unsafe_rehash(table, rehash_to);
     }
-    
-    template <typename Key, typename Value, class Hash, class Comp> nodisc
-    Allocator_State_Type rehash(Hash_Table<Key, Value, Hash, Comp>* table) noexcept
-    {
-        isize rehash_to = jump_table_size(*table);
-        return hash_table_internal::unsafe_rehash(table, rehash_to);
-    }
 
     template <typename Key, typename Value, class Hash, class Comp> nodisc
-    Allocator_State_Type reserve_jump_table(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
+    Allocator_State_Type reserve_jump_table_failing(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
     {
         if(to_fit < table->_linker.size)
             return Allocator_State::OK;
 
-        return rehash(table, to_fit);
+        return rehash_failing(table, to_fit);
     }
 
     template <typename Key, typename Value, class Hash, class Comp> nodisc
-    Allocator_State_Type reserve_entries(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
+    Allocator_State_Type reserve_entries_failing(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
     {
         return hash_table_internal::reserve_entries(table, to_fit);
     }
 
+    constexpr inline 
+    isize calculate_jump_table_size(isize entries_size) noexcept
+    {
+        return entries_size * HASH_TABLE_MAX_UTILIZATION_DEN / HASH_TABLE_MAX_UTILIZATION_NUM;
+    }
+
     template <typename Key, typename Value, class Hash, class Comp> nodisc
-    Allocator_State_Type reserve(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
+    Allocator_State_Type reserve_failing(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit) noexcept
     {
         //we reserve such that inserting to_fit element swill not result in a reallocation of entries nor rehashing
-        isize jump_table_size = to_fit * HASH_TABLE_MAX_UTILIZATION_DEN / HASH_TABLE_MAX_UTILIZATION_NUM;
-        Allocator_State_Type state1 = reserve_jump_table(table, jump_table_size);
-        Allocator_State_Type state2 = reserve_entries(table, to_fit);
+        isize jump_table_size = calculate_jump_table_size(to_fit);
+        Allocator_State_Type state1 = reserve_jump_table_failing(table, jump_table_size);
+        Allocator_State_Type state2 = reserve_entries_failing(table, to_fit);
 
         if(state1 == ERROR)
             return state1;
 
         return state2;
+    }
+
+    template <typename Key, typename Value, class Hash, class Comp>
+    void reserve_entries(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit)
+    {
+        State state = reserve_failing(table, to_fit);
+        force(state == OK_STATE && "reserve failed!");
+    }
+    
+    template <typename Key, typename Value, class Hash, class Comp>
+    void reserve_jump_table(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit)
+    {
+        State state = reserve_failing(table, to_fit);
+        force(state == OK_STATE && "reserve failed!");
+    }
+    
+    template <typename Key, typename Value, class Hash, class Comp>
+    void rehash(Hash_Table<Key, Value, Hash, Comp>* table, isize to_size)
+    {
+        State state = rehash_failing(table, to_size);
+        force(state == OK_STATE && "rehashing failed!");
+    }
+
+    template <typename Key, typename Value, class Hash, class Comp> 
+    void rehash(Hash_Table<Key, Value, Hash, Comp>* table)
+    {
+        isize rehash_to = jump_table_size(*table);
+        rehash(table, rehash_to);
+    }
+    
+    template <typename Key, typename Value, class Hash, class Comp>
+    void reserve(Hash_Table<Key, Value, Hash, Comp>* table, isize to_fit)
+    {
+        State state = reserve_failing(table, to_fit);
+        force(state == OK_STATE && "reserve failed!");
     }
 
     template <typename Key, typename Value, class Hash, class Comp, bool break_on_gravestone = false> nodisc
@@ -707,22 +741,21 @@ namespace jot
         return move(&values(table)[index]);
     }
 
-    template <typename Key, typename Value, class Hash, class Comp> nodisc
-    Allocator_State_Type set(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, hash_t hash, no_infer(Value) value) noexcept
+    template <typename Key, typename Value, class Hash, class Comp>
+    void set(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, hash_t hash, no_infer(Value) value)
     {
         assert(is_invariant(*table));
         if(hash_table_internal::is_overful(*table))
         {
             Allocator_State_Type state = hash_table_internal::grow(table);
-            if(state == ERROR)
-                return state;
+            force(state == OK && "allocation failed!");
         }
 
         Hash_Found found = find<Key, Value, Hash, Comp, true>(*table, key, hash);
         if(found.entry_index != -1)
         {
             values(table)[found.entry_index] = move(&value);
-            return Allocator_State::OK;
+            return;
         }
         
         assert(found.finished_at < table->_linker.size && "should be empty or gravestone at this point");
@@ -735,14 +768,12 @@ namespace jot
         }
 
         Allocator_State_Type state = hash_table_internal::push_entry(table, move(&key), move(&value));
-        if(state == OK)
-            table->_linker[found.finished_at] = cast(Hash_Table_Link<Key, Value>) table->_entries_size - 1;
-
-        return state;
+        force(state == OK && "allocation failed!");
+        table->_linker[found.finished_at] = cast(Hash_Table_Link<Key, Value>) table->_entries_size - 1;
     }
     
     template <typename Key, typename Value, class Hash, class Comp> nodisc
-    Allocator_State_Type set(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, no_infer(Value) value) noexcept
+    void set(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, no_infer(Value) value)
     {
         hash_t hash = Hash::hash(key);
         return set<Key, Value, Hash>(table, move(&key), hash, move(&value));
@@ -759,15 +790,14 @@ namespace jot
             return find(table, prev_key, cast(hash_t) prev.hash_index + 1);
         }
 
-        template <typename Key, typename Value, class Hash, class Comp> nodisc
-        Allocator_State_Type add_another(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, hash_t hash, no_infer(Value) value) noexcept
+        template <typename Key, typename Value, class Hash, class Comp>
+        void add_another(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, hash_t hash, no_infer(Value) value)
         {
             assert(is_invariant(*table));
             if(hash_table_internal::is_overful(*table))
             {
                 Allocator_State_Type state = hash_table_internal::grow(table);
-                if(state == ERROR)
-                    return state;
+                force(state == OK && "allocation failed!");
             }
         
             Hash_Found found = find<Key, Value, Hash, Comp, true>(*table, key, hash);
@@ -784,14 +814,12 @@ namespace jot
             }
 
             Allocator_State_Type state = hash_table_internal::push_entry(table, move(&key), move(&value));
-            if(state == OK)
-                table->_linker[found.finished_at] = cast(Hash_Table_Link<Key, Value>) table->_entries_size - 1;
-
-            return state;
+            force(state == OK && "allocation failed!");
+            table->_linker[found.finished_at] = cast(Hash_Table_Link<Key, Value>) table->_entries_size - 1;
         }
         
         template <typename Key, typename Value, class Hash, class Comp> nodisc
-        Allocator_State_Type add_another(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, no_infer(Value) value) noexcept
+        void add_another(Hash_Table<Key, Value, Hash, Comp>* table, no_infer(Key) key, no_infer(Value) value) noexcept
         {
             hash_t hash = Hash::hash(key);
             return add_another<Key, Value, Hash>(table, move(&key), hash, move(&value));

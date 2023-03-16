@@ -102,13 +102,13 @@ namespace jot
         force(failed(state) == false);
     }
     
-    template<typename T> nodisc constexpr
-    T dup(T const& in)
-    {
-        T copied;
-        *copy(&copied, in);
-        return copied;
-    }
+    //template<typename T> nodisc constexpr
+    //T dup(T const& in)
+    //{
+    //    T copied;
+    //    *copy(&copied, in);
+    //    return copied;
+    //}
 }
 
 #include "undefs.h"
