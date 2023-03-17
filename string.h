@@ -66,27 +66,54 @@ namespace jot
     }
     
     template <typename T> inline 
-    void append_multiple(Stack<T>* stack, Slice<const Slice<const T>> parts)
+    void append_multiple(Stack<T>* stack, Slice<const Slice<const T>> parts, Slice<const T> separator = {})
     {
         isize base_size = size(stack);
         isize size_sum = 0;
         for(isize i = 0; i < parts.size; i++)
             size_sum += parts[i].size;
 
+        if(parts.size > 0)
+            size_sum += separator.size * (parts.size - 1);
+
         resize_for_overwrite(stack, base_size + size_sum);
         isize curr_size = base_size;
-        for(isize i = 0; i < parts.size; i++)
+        if(separator.size == 0)
         {
-            Slice<T> copy_to = slice(slice(stack), curr_size);
-            copy_items(&copy_to, parts[i]);
-            curr_size += parts[i].size;
+            for(isize i = 0; i < parts.size; i++)
+            {
+                Slice<T> copy_to = slice(slice(stack), curr_size);
+                copy_items(&copy_to, parts[i]);
+                curr_size += parts[i].size;
+            }
+        }
+        else
+        {
+            isize i = 0;
+            if(parts.size > 0)
+            {
+                Slice<T> part_to = slice(slice(stack), curr_size);
+                copy_items(&part_to, parts[i]);
+                curr_size += parts[i].size;
+            }
+
+            for(i = 1; i < parts.size; i++)
+            {
+                Slice<T> part_to = slice(slice(stack), curr_size);
+                copy_items(&part_to, parts[i]);
+                curr_size += parts[i].size;
+                
+                Slice<T> sep_to = slice(slice(stack), curr_size);
+                copy_items(&part_to, separator);
+                curr_size += separator.size;
+            }
         }
     }
     template <typename T> nodisc inline 
-    Stack<T> concat(Slice<const Slice<const T>> parts)
+    Stack<T> concat(Slice<const Slice<const T>> parts, Slice<const T> separator = {})
     {
         Stack<T> stack;
-        append_multiple(&stack, parts);
+        append_multiple(&stack, parts, separator);
         return stack;
     }
     
@@ -113,16 +140,6 @@ namespace jot
     {
         Slice<const T> strings[] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10};
         Slice<const Slice<const T>> parts = slice(strings);
-        return concat(parts);
-    }
-    
-    nodisc inline 
-    String_Builder concat(
-        cstring a1 = {}, cstring a2 = {}, cstring a3 = {}, cstring a4 = {}, cstring a5 = {}, 
-        cstring a6 = {}, cstring a7 = {}, cstring a8 = {}, cstring a9 = {}, cstring a10 = {})
-    {
-        String strings[] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10};
-        Slice<const String> parts = slice(strings);
         return concat(parts);
     }
 

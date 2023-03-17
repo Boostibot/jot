@@ -290,8 +290,12 @@ namespace jot
             {
                 data = cast(void*) a;
                 function = &array_format_adaptor<T>;
-                array_size = N;
-                is_string = is_string_char<T>;
+                
+                assert(N != 0 && "size must not be 0 shouldnt even be possible");
+                bool is_null_terminated = a[N - 1] == 0;
+
+                is_string = is_string_char<T> && is_null_terminated;
+                array_size = N - cast(i32) is_string; //if is string we dont include the null termination char
             }
 
             template <typename T> nodisc
@@ -309,16 +313,18 @@ namespace jot
             }
         };
         
-        void concat_adapted_into(String_Appender* appender, Slice<Adaptor> adapted)
+        static void concat_adapted_into(String_Appender* appender, Slice<Adaptor> adapted)
         {
             for(Adaptor const& curr_adapted : adapted)
             {
-                if(curr_adapted.data != nullptr)
-                    curr_adapted.function(appender, curr_adapted);
+                if(curr_adapted.data == nullptr)
+                    break;
+
+                curr_adapted.function(appender, curr_adapted);
             }
         }
         
-        void format_adapted_into(String_Appender* appender, String format_str, Slice<Adaptor> adapted)
+        static void format_adapted_into(String_Appender* appender, String format_str, Slice<Adaptor> adapted)
         {
             constexpr String sub_for = "{}";
 
@@ -362,7 +368,7 @@ namespace jot
         }
 
         NO_INLINE
-        void format_adapted_into(String_Appender* appender, Slice<Adaptor> adapted)
+        static void format_adapted_into(String_Appender* appender, Slice<Adaptor> adapted)
         {
             if(adapted.size == 0)
                 return;
@@ -380,13 +386,12 @@ namespace jot
         }
     }
     
-    nodisc
-    void format_into(String_Appender* appender, String format_str)
+    inline void format_into(String_Appender* appender, String format_str)
     {
         return push_multiple(appender, format_str);
     }
     
-    nodisc
+    nodisc inline 
     String_Builder format(String str)
     {
         String_Builder builder;
@@ -403,7 +408,7 @@ namespace jot
         
     #define ADAPTOR_10_ARGS a1, a2, a3, a4, a5, a6, a7, a8, a9, a10
 
-    void format_into(String_Appender* appender, ADAPTOR_10_ARGS_DECL)
+    inline void format_into(String_Appender* appender, ADAPTOR_10_ARGS_DECL)
     {
         using namespace fmt_intern;
         
@@ -413,13 +418,13 @@ namespace jot
         return format_adapted_into(appender, adapted_slice);
     }
     
-    void format_into(String_Builder* into, ADAPTOR_10_ARGS_DECL) noexcept
+    inline void format_into(String_Builder* into, ADAPTOR_10_ARGS_DECL) noexcept
     {
         String_Appender appender(into);
         return format_into(&appender, ADAPTOR_10_ARGS);
     }
 
-    nodisc
+    inline nodisc
     String_Builder format(ADAPTOR_10_ARGS_DECL)
     {
         using namespace fmt_intern;
@@ -429,62 +434,62 @@ namespace jot
         return builder;
     }
     
-    void print_into(std::FILE* stream, String str)
+    inline void print_into(std::FILE* stream, String str)
     {
         fwrite(str.data, sizeof(char), cast(size_t) str.size, stream);
     }
     
-    void println_into(std::FILE* stream, String str)
+    inline void println_into(std::FILE* stream, String str)
     {
         print_into(stream, str);
         fputc('\n', stream);
     }
 
-    void print_into(std::FILE* stream, ADAPTOR_10_ARGS_DECL)
+    inline void print_into(std::FILE* stream, ADAPTOR_10_ARGS_DECL)
     {
         String_Builder builder = format(ADAPTOR_10_ARGS);
         print_into(stream, slice(builder));
     }
     
-    void println_into(std::FILE* stream, ADAPTOR_10_ARGS_DECL)
+    inline void println_into(std::FILE* stream, ADAPTOR_10_ARGS_DECL)
     {
         String_Builder builder = format(ADAPTOR_10_ARGS);
         push(&builder, '\n');
         print_into(stream, slice(builder));
     }
 
-    void print(ADAPTOR_10_ARGS_DECL)
+    inline void print(ADAPTOR_10_ARGS_DECL)
     {
         print_into(stdout, ADAPTOR_10_ARGS);
     }
     
-    void println(ADAPTOR_10_ARGS_DECL)
+    inline void println(ADAPTOR_10_ARGS_DECL)
     {
         println_into(stdout, ADAPTOR_10_ARGS);
     }
 
     //more specific overloads so that we dont waste time 
-    void print(String str) noexcept
+    inline void print(String str) noexcept
     {
         print_into(stdout, str);
     }
 
-    void println(String str) noexcept
+    inline void println(String str) noexcept
     {
         println_into(stdout, str);
     }
 
-    void print(cstring str) noexcept
+    inline void print(cstring str) noexcept
     {
         print_into(stdout, String(str));
     }
 
-    void println(cstring str) noexcept
+    inline void println(cstring str) noexcept
     {
         println_into(stdout, String(str));
     }
 
-    void println() noexcept
+    inline void println() noexcept
     {
         fputc('\n', stdout);
     }

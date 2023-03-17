@@ -35,10 +35,10 @@ namespace jot
     static constexpr bool is_string_char = String_Character_Type<std::remove_const_t<T>>::is_string_char;
 
     template<typename T, std::enable_if_t<is_string_char<T>, bool> = true> nodisc constexpr 
-    isize strlen(const T* str)
+    isize strlen(const T* str, isize max_size = (isize) 1 << 62)
     {
         isize size = 0;
-        while(str[size] != 0)
+        while(size < max_size && str[size] != 0)
         {
             size++;
         }
@@ -65,7 +65,7 @@ namespace jot
         template<typename T>
         constexpr operator Slice<const T>() const noexcept 
         { 
-            return Slice<const T>{this->data, this->size}; 
+            return Slice<const T>(this->data, this->size); 
         }
         
         constexpr bool operator ==(Slice const& other) const noexcept 
@@ -95,10 +95,16 @@ namespace jot
         return Slice<const T>(str);
     }
     
-    template<typename T, isize N> nodisc constexpr
+    template<typename T, isize N, std::enable_if_t<!is_string_char<T>, bool> = true> nodisc constexpr
     Slice<const T> slice(const T (&a)[N])
     {
         return Slice<const T>(a, N);
+    }
+    
+    template<typename T, isize N> nodisc constexpr
+    Slice<T> slice(T (*a)[N])
+    {
+        return Slice<T>(*a, N);
     }
 
     constexpr bool is_const_eval(bool if_not_present = false) noexcept {

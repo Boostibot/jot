@@ -379,6 +379,22 @@ namespace jot
     }
     
     template<class T> nodisc
+    Stack<T> own(Slice<const T> from, Allocator* alloc)
+    {
+        Stack<T> out(alloc);
+        copy(&out, from);
+        return out;
+    }
+    
+    template<class T> nodisc
+    Stack<T> own(Slice<T> from, Allocator* alloc)
+    {
+        Stack<T> out(alloc);
+        copy(&out, Slice<const T>(from));
+        return out;
+    }
+
+    template<class T> nodisc
     Stack<T> own(Slice<const T> from)
     {
         Stack<T> out;
