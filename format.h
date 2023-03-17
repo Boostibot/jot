@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <charconv> //get rid of this!
+#include <clocale>
 
 #include "array.h"
 #include "traits.h"
@@ -397,7 +398,7 @@ namespace jot
     //The problem with variadics is that for each combination of types we get template instantiation.
     //When using fmt functions this adds up QUICK so having instead a single templated constructor in any is much better idea 
     #define ADAPTOR_10_ARGS_DECL \
-        fmt_intern::Adaptor const& a1 = {}, fmt_intern::Adaptor const& a2 = {}, fmt_intern::Adaptor const& a3 = {}, fmt_intern::Adaptor const& a4 = {}, fmt_intern::Adaptor const& a5 = {}, \
+        fmt_intern::Adaptor const& a1     , fmt_intern::Adaptor const& a2 = {}, fmt_intern::Adaptor const& a3 = {}, fmt_intern::Adaptor const& a4 = {}, fmt_intern::Adaptor const& a5 = {}, \
         fmt_intern::Adaptor const& a6 = {}, fmt_intern::Adaptor const& a7 = {}, fmt_intern::Adaptor const& a8 = {}, fmt_intern::Adaptor const& a9 = {}, fmt_intern::Adaptor const& a10 = {} \
         
     #define ADAPTOR_10_ARGS a1, a2, a3, a4, a5, a6, a7, a8, a9, a10
@@ -462,7 +463,7 @@ namespace jot
         println_into(stdout, ADAPTOR_10_ARGS);
     }
 
-    //mre specific overloads so that we dont waste time 
+    //more specific overloads so that we dont waste time 
     void print(String str) noexcept
     {
         print_into(stdout, str);
@@ -481,6 +482,11 @@ namespace jot
     void println(cstring str) noexcept
     {
         println_into(stdout, String(str));
+    }
+
+    void println() noexcept
+    {
+        fputc('\n', stdout);
     }
     
     inline bool set_utf8_locale(bool english = false)

@@ -105,28 +105,24 @@ namespace jot
         Slice<const Slice<const T>> parts = slice(strings);
         return concat(parts);
     }
-    
-    template <typename T> nodisc inline 
-    Stack<T> concat(Slice<const T> a1, Slice<const T> a2, Slice<const T> a3, Slice<const T> a4)
-    {
-        Slice<const T> strings[] = {a1, a2, a3, a4};
-        Slice<const Slice<const T>> parts = slice(strings);
-        return concat(parts);
-    }
-    
-    template <typename T> nodisc inline 
-    Stack<T> concat(Slice<const T> a1, Slice<const T> a2, Slice<const T> a3, Slice<const T> a4, Slice<const T> a5)
-    {
-        Slice<const T> strings[] = {a1, a2, a3, a4, a5};
-        Slice<const Slice<const T>> parts = slice(strings);
-        return concat(parts);
-    }
 
     template <typename T> nodisc inline 
-    Stack<T> concat(Slice<const T> a1, Slice<const T> a2, Slice<const T> a3, Slice<const T> a4, Slice<const T> a5, Slice<const T> a6)
+    Stack<T> concat(
+        Slice<const T> a1, Slice<const T> a2, Slice<const T> a3, Slice<const T> a4, Slice<const T> a5 = {}, 
+        Slice<const T> a6 = {}, Slice<const T> a7 = {}, Slice<const T> a8 = {}, Slice<const T> a9 = {}, Slice<const T> a10 = {})
     {
-        Slice<const T> strings[] = {a1, a2, a3, a4, a5, a6};
+        Slice<const T> strings[] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10};
         Slice<const Slice<const T>> parts = slice(strings);
+        return concat(parts);
+    }
+    
+    nodisc inline 
+    String_Builder concat(
+        cstring a1 = {}, cstring a2 = {}, cstring a3 = {}, cstring a4 = {}, cstring a5 = {}, 
+        cstring a6 = {}, cstring a7 = {}, cstring a8 = {}, cstring a9 = {}, cstring a10 = {})
+    {
+        String strings[] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10};
+        Slice<const String> parts = slice(strings);
         return concat(parts);
     }
 
