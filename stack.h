@@ -819,9 +819,21 @@ namespace jot
     }
     
     template<class T> nodisc
+    isize size(Stack_Appender<T>* appender)
+    {
+        return size(*appender);
+    }
+    
+    template<class T> nodisc
     isize capacity(Stack_Appender<T> const& appender)
     {
         return capacity(*appender._stack) - appender._from_index;
+    }
+
+    template<class T> nodisc
+    isize capacity(Stack_Appender<T>* appender)
+    {
+        return capacity(*appender);
     }
 
     template<class T> nodisc
@@ -848,6 +860,18 @@ namespace jot
         return push(appender->_stack, move(&what));
     }
     
+    template<class T> 
+    void reserve(Stack_Appender<T>* appender, isize to)
+    {
+        return reserve(appender->_stack, to + appender->_from_index);
+    }
+    
+    template<class T> nodisc
+    Allocator_State_Type reserve_failing(Stack_Appender<T>* appender, isize to) noexcept
+    {
+        return reserve_failing(appender->_stack, to + appender->_from_index);
+    }
+
     template<class T> 
     void resize(Stack_Appender<T>* appender, isize to)
     {

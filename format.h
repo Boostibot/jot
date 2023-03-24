@@ -494,6 +494,8 @@ namespace jot
         fputc('\n', stdout);
     }
     
+    #ifndef SET_UTF8_LOCALE
+    #define SET_UTF8_LOCALE
     inline bool set_utf8_locale(bool english = false)
     {
         if(english)
@@ -505,6 +507,7 @@ namespace jot
     namespace {
         const static bool _locale_setter = set_utf8_locale(true);
     }
+    #endif // !SET_UTF8_LOCALE
 }
 
 #include "undefs.h"

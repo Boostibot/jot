@@ -13,9 +13,9 @@
 
 namespace jot
 {
-    #ifndef JOT_SIZE_T
+    //#ifndef JOT_SIZE_T
         using isize = ptrdiff_t;
-    #endif
+    //#endif
     
     template <typename T>
     struct String_Character_Type 
