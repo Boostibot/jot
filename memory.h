@@ -309,7 +309,28 @@ namespace jot
                 hidden::SCRATCH_ALLOCATOR = old_allocator;
             }
         };
+
+
+        //Since Allocator* alloc = default_allocator() is not valid constant expression it cannot be used
+        // as default argument. This means that we have to create two versions of every function that would
+        // ideally have default allocator argument. These two classes solve this for tme most common cases
+        struct Default_Alloc
+        {
+            Allocator* val = default_allocator();
+            Default_Alloc() = default;
+            Default_Alloc(Allocator* alloc) : val(alloc) {} 
+        };
+
+        struct Scratch_Alloc
+        {
+            Allocator* val = scratch_allocator();
+            Scratch_Alloc() = default;
+            Scratch_Alloc(Allocator* alloc) : val(alloc) {} 
+        };
     }
+
+    using memory_globals::default_allocator;
+    using memory_globals::scratch_allocator;
 
     template<typename T> nodisc constexpr
     bool is_in_slice(T* ptr, Slice<T> slice)

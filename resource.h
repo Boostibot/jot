@@ -46,14 +46,6 @@ namespace jot
             return val;    
         }
 
-        T& operator*() noexcept {
-            return val;
-        }
-        
-        T const& operator*() const noexcept {
-            return val;
-        }
-
         static T&& move(T* ptr)
         {
             return (T&&) *ptr;

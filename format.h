@@ -194,12 +194,12 @@ namespace jot
         }
     };
     
-    template <> struct Formattable<String_Builder>
+    template <typename T> struct Formattable<Stack<T>>
     {
         nodisc static
-        void format(String_Appender* appender, String_Builder const& builder_)
+        void format(String_Appender* appender, Stack<T> const& stack)
         {
-            return format_into(appender, slice(builder_));
+            return format_into(appender, slice(stack));
         }
     };
 

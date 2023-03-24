@@ -110,9 +110,9 @@ namespace jot
         }
     }
     template <typename T> nodisc inline 
-    Stack<T> concat(Slice<const Slice<const T>> parts, Slice<const T> separator = {})
+    Stack<T> concat(Slice<const Slice<const T>> parts, Slice<const T> separator = {}, memory_globals::Default_Alloc alloc = {})
     {
-        Stack<T> stack;
+        Stack<T> stack(alloc.val);
         append_multiple(&stack, parts, separator);
         return stack;
     }

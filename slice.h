@@ -107,6 +107,13 @@ namespace jot
         return Slice<T>(*a, N);
     }
 
+    //surprisingly useful
+    template<typename T> nodisc constexpr
+    Slice<T> slice(Slice<T> s)
+    {
+        return s;
+    }
+
     constexpr bool is_const_eval(bool if_not_present = false) noexcept {
         #ifdef __cpp_lib_is_constant_evaluated
             return std::is_constant_evaluated();

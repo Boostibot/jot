@@ -30,7 +30,7 @@ namespace jot
         Node* last = nullptr;
     };
 
-    //Checks if last node is reachable from first
+    //Checks if last node is reachable from first.
     // null - null is also valid chain but any other combination
     // of null and not null is not
     template<typename Node> nodisc
@@ -66,6 +66,10 @@ namespace jot
             return last.next == nullptr;
     }
         
+
+    //Adds chain between (and including) first_inserted - last_inserted between before
+    // and after after. Both before and after can be nullptr in that case they are treated 
+    // as the start/end of the list and properly handled
     template<typename Node> 
     void link_chain(Node* before, Node* first_inserted, Node* last_inserted, Node* after)
     {
@@ -74,16 +78,25 @@ namespace jot
         
         last_inserted->next = after;
         if(before != nullptr)
+        {
+            assert(before->next == after && "before and after must be adjecent!");
             before->next = first_inserted;
+        }
             
         if constexpr(Node::is_bidirectional)
         {
             first_inserted->prev = before;
             if(after != nullptr)
+            {
+                assert(after->prev == before && "before and after must be adjecent!");
                 after->prev = last_inserted;
+            }
         }
     }
 
+    //Removes a chain between (and including) first_inserted - last_inserted.
+    // Both before and after can be nullptr in that case they are treated as start/end of
+    // list and properly handled
     template<typename Node> 
     void unlink_chain(Node* before, Node* first_inserted, Node* last_inserted, Node* after)
     {
@@ -91,33 +104,43 @@ namespace jot
 
         last_inserted->next = nullptr;
         if(before != nullptr)
+        {
+            assert(before->first_inserted == after && "before and first_inserted must be adjecent!");
             before->next = after;
+        }
 
         if constexpr(Node::is_bidirectional)
         {
             first_inserted->prev = nullptr;
             if(after != nullptr)
+            {
+                assert(after->prev == last_inserted && "last_inserted and after must be adjecent!");
                 after->prev = before;
+            }
         }
     }
+
+    //Unlinks node after extract_after (which has to be what) properly unlinking it from the
+    // chain and returning it. extract_after can be nullptr in which case it is treated as the start 
+    // of the chain and what has to be the first node. what cannot be nullptr
     template<typename Node> 
-    Node* extract_node(Chain<Node>* from, Node* extact_after, Node* what) 
+    Node* extract_node(Chain<Node>* from, Node* extract_after, Node* what) 
     {
         assert(is_valid_chain(from->first, from->last));
-        assert(what != nullptr);
+        assert(what != nullptr && "cannot be nullptr");
         assert(from->first != nullptr && "cant extract from empty chain");
 
         //if is start of chain
-        if(extact_after == nullptr)
+        if(extract_after == nullptr)
             from->first = what->next;
         else
-            assert(extact_after->next == what);
+            assert(extract_after->next == what);
             
         //if is end of chain
         if(what == from->last)
-            from->last = extact_after;
+            from->last = extract_after;
 
-        unlink_chain(extact_after, what, what, what->next);
+        unlink_chain(extract_after, what, what, what->next);
             
         if(from->first == nullptr || from->last == nullptr)
         {
@@ -129,11 +152,15 @@ namespace jot
         return what;
     }
 
+    //Links what node after insert_after properly linking it to the rest of the chain.
+    // if the insert after is nullptr it is inserted as the first node to the chain.
+    // what cannot be nullptr and must be isolated node (not part of any chain)
     template<typename Node>
     void insert_node(Chain<Node>* to, Node* insert_after, Node* what)
     {
         assert(is_valid_chain(to->first, to->last));
-        assert(what != nullptr && is_isolated(*what) && "must be isolated");
+        assert(what != nullptr && "cannot be nullptr");
+        assert(is_isolated(*what) && "must be isolated");
 
         if(to->first == nullptr)
         {

@@ -147,11 +147,12 @@ namespace jot
     }
 
     constexpr inline
-    isize calculate_stack_growth(isize curr_size, isize to_fit)
+    isize calculate_stack_growth(isize curr_size, isize to_fit, isize growth_num = 3, isize growth_den = 2, isize grow_lin = 8)
     {
+        //with default values for small sizes grows fatser than classic factor of 2 for big slower
         isize size = curr_size;
         while(size < to_fit)
-            size = size * 3 / 2 + 8; //for small sizes grows fatser than classic factor of 2 for big slower
+            size = size * growth_num / growth_den + grow_lin; 
 
         return size;
     }
@@ -379,33 +380,17 @@ namespace jot
     }
     
     template<class T> nodisc
-    Stack<T> own(Slice<const T> from, Allocator* alloc)
+    Stack<T> own(Slice<const T> from, memory_globals::Default_Alloc alloc = {})
     {
-        Stack<T> out(alloc);
+        Stack<T> out(alloc.val);
         copy(&out, from);
         return out;
     }
     
     template<class T> nodisc
-    Stack<T> own(Slice<T> from, Allocator* alloc)
+    Stack<T> own(Slice<T> from, memory_globals::Default_Alloc alloc = {})
     {
         Stack<T> out(alloc);
-        copy(&out, Slice<const T>(from));
-        return out;
-    }
-
-    template<class T> nodisc
-    Stack<T> own(Slice<const T> from)
-    {
-        Stack<T> out;
-        copy(&out, from);
-        return out;
-    }
-    
-    template<class T> nodisc
-    Stack<T> own(Slice<T> from)
-    {
-        Stack<T> out;
         copy(&out, Slice<const T>(from));
         return out;
     }
@@ -422,7 +407,6 @@ namespace jot
             jot::swap(&left->_allocator, &right->_allocator);
         }
     };
-
 }
 
 namespace std 
