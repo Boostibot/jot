@@ -17,6 +17,8 @@
 #include "unistd.h"
 
 #define cast(a) (a)
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
 
 namespace jot 
 {
@@ -128,10 +130,7 @@ namespace jot
         Current = SEEK_END,
     };
 
-    typedef enum_detail::File_Open_Mode File_Open_Mode;
-
-    #define max(a, b) ((a) > (b) ? (a) : (b))
-    #define min(a, b) ((a) < (b) ? (a) : (b))
+    using File_Open_Mode = enum_detail::File_Open_Mode;
 
     static const File_Mode DEFAULT_OPEN_MODE = 0644;
 
@@ -178,7 +177,7 @@ namespace jot
     //Truncates file specified by fd to specified size in bytes
     inline bool truncate(File* fd, long size) noexcept
     {
-        return ::ftruncate(fd->descriptor, (long) size) == 0;
+        return ::ftruncate(fd->descriptor, cast(long) size) == 0;
     }
 
     //deletes a name and possibly the file it refers to
