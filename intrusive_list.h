@@ -71,7 +71,7 @@ namespace jot
     // and after after. Both before and after can be nullptr in that case they are treated 
     // as the start/end of the list and properly handled
     template<typename Node> 
-    void link_chain(Node* before, Node* first_inserted, Node* last_inserted, Node* after)
+    void link_chain(Node* before, Node* first_inserted, Node* last_inserted, Node* after) noexcept
     {
         assert(first_inserted != nullptr && last_inserted != nullptr && "must not be null");
         assert(is_isolated(*first_inserted, *last_inserted) && "must be isolated");
@@ -98,14 +98,14 @@ namespace jot
     // Both before and after can be nullptr in that case they are treated as start/end of
     // list and properly handled
     template<typename Node> 
-    void unlink_chain(Node* before, Node* first_inserted, Node* last_inserted, Node* after)
+    void unlink_chain(Node* before, Node* first_inserted, Node* last_inserted, Node* after) noexcept
     {
         assert(first_inserted != nullptr && last_inserted != nullptr && "must not be null");
 
         last_inserted->next = nullptr;
         if(before != nullptr)
         {
-            assert(before->first_inserted == after && "before and first_inserted must be adjecent!");
+            assert(before->next == first_inserted && "before and first_inserted must be adjecent!");
             before->next = after;
         }
 
@@ -124,7 +124,7 @@ namespace jot
     // chain and returning it. extract_after can be nullptr in which case it is treated as the start 
     // of the chain and what has to be the first node. what cannot be nullptr
     template<typename Node> 
-    Node* extract_node(Chain<Node>* from, Node* extract_after, Node* what) 
+    Node* extract_node(Chain<Node>* from, Node* extract_after, Node* what) noexcept
     {
         assert(is_valid_chain(from->first, from->last));
         assert(what != nullptr && "cannot be nullptr");
@@ -156,7 +156,7 @@ namespace jot
     // if the insert after is nullptr it is inserted as the first node to the chain.
     // what cannot be nullptr and must be isolated node (not part of any chain)
     template<typename Node>
-    void insert_node(Chain<Node>* to, Node* insert_after, Node* what)
+    void insert_node(Chain<Node>* to, Node* insert_after, Node* what) noexcept
     {
         assert(is_valid_chain(to->first, to->last));
         assert(what != nullptr && "cannot be nullptr");
@@ -173,7 +173,7 @@ namespace jot
         //if is start of chain
         if(insert_after == nullptr)
         {
-            link_chain<Node>(nullptr, what, what, to->first->next);
+            link_chain<Node>(nullptr, what, what, to->first);
             to->first = what;
         }
         //if is end of chain

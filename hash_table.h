@@ -356,8 +356,8 @@ namespace jot
             }
 
             //mark occurences of each entry index in a bool array
-            Slice<bool> marks = trim(cast_slice<bool>(result.items), table->_entries_size);
-            null_items<bool>(&marks);
+            Slice<bool> marks = head(cast_slice<bool>(result.items), table->_entries_size);
+            null_items(marks);
 
             isize empty_count = 0;
             isize graveston_count = 0;
@@ -430,7 +430,7 @@ namespace jot
 
             //fill new_linker to empty
             Slice<Link> new_linker = cast_slice<Link>(result.items);
-            fill(&new_linker, cast(Link) EMPTY_LINK);
+            fill(new_linker, cast(Link) EMPTY_LINK);
 
             //rehash every entry up to alive_count
             hash_t mask = cast(hash_t) new_linker.size - 1;

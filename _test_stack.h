@@ -5,7 +5,7 @@
 #include "array.h"
 #include "_test.h"
 #include "stack.h"
-
+#include "format.h"
 
 namespace jot::tests::stack
 {
@@ -450,7 +450,8 @@ namespace jot::tests::stack
         
         {
             Array trimmed = {dup(vals[0]), dup(vals[1]), dup(vals[2])};
-            Slice single = trim(slice(&trimmed), 1);
+            Slice single = head(slice(trimmed));
+
             Stack stack;
             
             splice(&stack, 0, 0, dup(trimmed));
@@ -478,10 +479,12 @@ namespace jot::tests::stack
     }
     
 
-    void test_stress()
+    void test_stress(bool print)
     {
         using Track = Tracker<isize>;
         std::mt19937 gen;
+
+        if(print) println("test_stress()");
 
         constexpr isize OP_PUSH1 = 0;
         constexpr isize OP_PUSH2 = 1;
@@ -499,19 +502,19 @@ namespace jot::tests::stack
         std::uniform_int_distribution<unsigned> val_distribution(0);
 
         isize max_size = 1000;
-        const auto test_batch = [&](isize block_size){
+        const auto test_batch = [&](isize block_size, isize i){
             i64 before = trackers_alive();
 
             {
                 Array<Track, 30> to_insert = {
-                    Track{1}, Track{2}, Track{3}, Track{4}, Track{5}, 
-                    Track{6}, Track{7}, Track{8}, Track{9}, Track{10},
+                    1, 2, 3, 4, 5, 
+                    6, 7, 8, 9, 10,
 
-                    Track{1}, Track{2}, Track{3}, Track{4}, Track{5}, 
-                    Track{6}, Track{7}, Track{8}, Track{9}, Track{10},
+                    1, 2, 3, 4, 5, 
+                    6, 7, 8, 9, 10,
 
-                    Track{1}, Track{2}, Track{3}, Track{4}, Track{5}, 
-                    Track{6}, Track{7}, Track{8}, Track{9}, Track{10},
+                    1, 2, 3, 4, 5, 
+                    6, 7, 8, 9, 10,
                 };
 
                 Stack<Track> stack;
@@ -594,6 +597,8 @@ namespace jot::tests::stack
 
                     test(is_invariant(stack));
                 }
+                
+                if(print) println("  i: {}\t batch: {}\t final_size: {}", i, block_size, size(stack));
             }
             
             i64 after = trackers_alive();
@@ -602,31 +607,52 @@ namespace jot::tests::stack
 
         for(isize i = 0; i < 100; i++)
         {
-            test_batch(10);
-            test_batch(40);
-            test_batch(160);
-            test_batch(640);
+            test_batch(10, i);
+            test_batch(40, i);
+            test_batch(160, i);
+            test_batch(640, i);
         }
     }
 
     template<typename T>
     void test_stack(Array<T, 6> vals)
     {
+        isize mem_before = default_allocator()->bytes_allocated();
+
         test_push_pop<T>(dup(vals));
         test_copy<T>(dup(vals));
         test_resize<T>(dup(vals));
         test_reserve<T>(dup(vals));
         test_insert_remove<T>(dup(vals));
         test_splice<T>(dup(vals));
+        
+        isize mem_after = default_allocator()->bytes_allocated();
+        test(mem_before = mem_after);
     }
 
-    void test_stack()
+    void test_stack(Test_Flags flags)
     {
-        test_stack(Array{10, 20, 30, 40, 50, 60});
-        test_stack(Array{53, -121, 110, 45464, -1313131, 1});
-        test_stack(Array{'a', 'b', 'c', 'd', 'e', 'f'});
-        test_stack(Array{Tracker{1}, Tracker{2}, Tracker{3}, Tracker{6346}, Tracker{-422}, Tracker{12}});
-        //test_stack(Array{No_Copy{1}, No_Copy{2}, No_Copy{3}, No_Copy{6346}, No_Copy{-422}, No_Copy{12}});
-        test_stress();
+        bool print = !(flags & Test_Flags::SILENT);
+
+        Array<i32, 6>           arr1 = {10, 20, 30, 40, 50, 60};
+        Array<char, 6>          arr2 = {'a', 'b', 'c', 'd', 'e', 'f'};
+        Array<Test_String, 6>   arr3 = {"a", "b", "c", "d", "e", "some longer string..."};
+        Array<Tracker<i32>, 6>  arr4 = {10, 20, 30, 40, 50, 60};
+
+        if(print) println("\ntest_stack()");
+        if(print) println("  type: int");
+        test_stack(arr1);
+        
+        if(print) println("  type: char");
+        test_stack(arr2);
+        
+        if(print) println("  type: Test_String");
+        test_stack(arr3);
+
+        if(print) println("  type: Tracker<int>");
+        test_stack(arr4);
+
+        if(flags & Test_Flags::STRESS)
+            test_stress(print);
     }
 }

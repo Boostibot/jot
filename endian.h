@@ -5,7 +5,7 @@
 #include "array.h"
 #include "types.h"
 #include "bits.h"
-#include "slice.h"
+#include "slice_ops.h"
 #include "defines.h"
 
 namespace jot 
@@ -90,8 +90,8 @@ namespace jot
         Slice<u8> rep_s = slice(&rep);
         isize offset = offset_from_low_bytes(input.size, rep.size, endian);
 
-        Slice<u8> remaining = slice(rep_s, offset);
-        copy_bytes(remaining, trim(input, remaining.size));
+        Slice<u8> remaining = tail(rep_s, offset);
+        copy_items(remaining, head(input, remaining.size));
 
         if(endian == local_endian)
             return bit_cast<Int>(rep);
@@ -116,8 +116,8 @@ namespace jot
         else
             rep = bit_cast<Rep>(byteswap(integer));
 
-        Slice<u8> sliced = slice(*output, offset);
-        copy_bytes(&sliced, rep_s);
+        Slice<u8> sliced = tail(*output, offset);
+        copy_items(&sliced, rep_s);
     }
 
     template <typename Int> nodisc constexpr

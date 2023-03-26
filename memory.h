@@ -1,5 +1,7 @@
 #pragma once
 
+#include <new>
+
 #include "open_enum.h"
 #include "option.h"
 #include "utils.h"
@@ -378,7 +380,7 @@ namespace jot
         u8* aligned = align_forward(space.data, align_to);
         isize offset = cast(isize) min(space.size, ptrdiff(aligned, space.data));
 
-        return slice(space, offset);
+        return tail(space, offset);
     }
 
     //Allocate linearry from a buffer. Once the buffer is filled no more
@@ -402,12 +404,12 @@ namespace jot
 
         Slice<u8> available_slice() const 
         {
-            return slice(buffer, filled_to);
+            return tail(buffer, filled_to);
         }
 
         Slice<u8> used_slice() const 
         {
-            return trim(buffer, filled_to);
+            return head(buffer, filled_to);
         }
 
         Slice<u8> last_alloced_slice() const 
@@ -427,7 +429,7 @@ namespace jot
             if(aligned.size < size)
                 return parent->allocate(size, align);
 
-            Slice<u8> returned_slice = trim(aligned, size);
+            Slice<u8> returned_slice = head(aligned, size);
             last_alloc = filled_to;
 
             isize total_alloced_bytes = returned_slice.data + returned_slice.size - available.data;

@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <clocale>
+#include <cstddef>
 
 #include "unistd.h"
 

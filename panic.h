@@ -14,7 +14,7 @@ namespace jot
         uint32_t line;
     };
 
-    #define GET_LINE_INFO() Line_Info{__FILE__, __FUNCTION__, (uint32_t) (__LINE__)}
+    #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, (uint32_t) (__LINE__)}
 
     struct Panic
     {
@@ -28,6 +28,6 @@ namespace jot
         T value;
     };
 
-    #define panic(message)          throw Panic{message, GET_LINE_INFO()}
-    #define panic_any(val, message) throw Any_Panic<decltype(val)>{Panic{message, GET_LINE_INFO()}, val}
+    #define panic(message)          throw ::jot::Panic{message, GET_LINE_INFO()}
+    #define panic_any(val, message) throw ::jot::Any_Panic<decltype(val)>{::jot::Panic{message, GET_LINE_INFO()}, val}
 }
