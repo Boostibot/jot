@@ -3,9 +3,22 @@
 #include "types.h"
 #include "array.h"
 #include "standards.h"
+#include "string.h"
+#include "format.h"
 
 namespace jot::tests
 {
+    namespace test_internal
+    {
+        enum Test_Flags : u32
+        {
+            SILENT = 1,
+            STRESS = 2,
+        };
+    }
+
+    using test_internal::Test_Flags;
+
     template<typename T>
     struct No_Copy
     {
@@ -20,6 +33,22 @@ namespace jot::tests
 
         constexpr bool operator==(const No_Copy& other) const noexcept { return other.val == this->val; };
         constexpr bool operator!=(const No_Copy& other) const noexcept { return other.val != this->val; };
+    };
+
+    struct Test_String
+    {
+        String_Builder content;
+
+        Test_String() = default;
+        Test_String(cstring str)
+        {
+            content = own(str);
+        }
+
+        bool operator==(Test_String const& other) const
+        {
+            return compare(slice(content), slice(other.content)) == 0;
+        }
     };
 
     struct Tracker_Stats
@@ -110,35 +139,29 @@ namespace jot::tests
 
         return duped; 
     }
-    //template <typename T>
-    //struct Copyable<No_Copy<T>>
-    //{
-    //    using No_Copy = jot::tests::No_Copy<T>;
-
-    //    static constexpr
-    //    State copy(No_Copy* to, No_Copy const& from) noexcept
-    //    {
-    //        to->val = from.val;
-    //        return OK_STATE;
-    //    };
-    //};
-
-    //template <typename T, isize N>
-    //struct Copyable<Array<T, N>>
-    //{
-    //    static constexpr
-    //    State copy(Array<T, N>* to, Array<T, N> const& from) noexcept
-    //    {
-    //        State state = OK_STATE;
-    //        for(isize i = 0; i < N; i++)
-    //        {
-    //            State new_state = Copyable<T>::copy(&(*to)[i], from[i]);
-    //            acumulate(&state, new_state);
-    //        }
-
-    //        return state;
-    //    };
-    //};
 
     #define test(cond) force(cond)
+}
+
+namespace jot
+{
+    template <typename T> 
+    struct Formattable<tests::Tracker<T>>
+    {
+        static
+        void format(String_Appender* appender, tests::Tracker<T> tracker) noexcept
+        {
+            format_into(appender, "Tracker{ ", tracker.val, " }");
+        }
+    };
+
+    template <> 
+    struct Formattable<tests::Test_String>
+    {
+        static
+        void format(String_Appender* appender, tests::Test_String str) noexcept
+        {
+            format_into(appender, str.content);
+        }
+    };
 }

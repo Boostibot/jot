@@ -22,10 +22,10 @@ using const_iterator = const T*;
 
 #if __cplusplus >= 202002L
 using iterator_category = std::contiguous_iterator_tag;
-#endif
 
 using reverse_iterator       = std::reverse_iterator<iterator>;
 using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+#endif
 
 [[nodiscard]] constexpr 
 iterator begin() noexcept 
@@ -51,7 +51,6 @@ const_iterator end() const noexcept
     return this->DATA + this->SIZE;
 }
 
-//for isize
 [[nodiscard]] constexpr  
 T const& operator[](isize index) const noexcept  
 { 

@@ -1,13 +1,26 @@
 #pragma once
 
+#include <iterator>
+
 #include "utils.h"
-#include "slice.h"
+#include "slice_ops.h"
 #include "memory.h"
 #include "defines.h"
 
 namespace jot
 {
     const u8 NULL_TERMINATION_ARR[8] = {'\0'};
+    
+    //we need to differentiate between string types and other types so that we can
+    // properly null terminate the Stack (Stack is also used as a string type)
+    template <typename T>
+    struct String_Character_Type 
+    { 
+        static constexpr bool is_string_char = false; 
+    };
+
+    template<typename T>
+    static constexpr bool is_string_char = String_Character_Type<T>::is_string_char;
 
     //Contiguos dynamic array.
     //Acts in exactly the same as std::vector but is not freely copyable and comaprable
@@ -39,7 +52,7 @@ namespace jot
         
         #define DATA _data
         #define SIZE _size
-        #include "slice_op_text.h"
+        #include "slice_operator_text.h"
     };
 
     template<class T> nodisc
@@ -486,19 +499,19 @@ namespace jot
 
         if(size_delta > 0)
         {
-            Slice<T> move_from = slice(slice(stack), at);
+            Slice<T> move_from = tail(slice(stack), at);
             Slice<T> move_to = {move_from.data + size_delta, move_from.size};
-            move_items<T>(&move_to, &move_from);
+            move_items<T>(move_to, move_from);
         }
         else
         {
-            Slice<T> move_to = slice(slice(stack), at);
-            Slice<T> move_from = slice(move_to, -size_delta); //delta is now negative
-            move_items<T>(&move_to, &move_from);
+            Slice<T> move_to = tail(slice(stack), at);
+            Slice<T> move_from = tail(move_to, -size_delta); //delta is now negative
+            move_items<T>(move_to, move_from);
         }
 
         Slice<T> insert_to = {data(stack) + at, inserted.size};
-        copy_items<T>(&insert_to, inserted);
+        copy_items<T>(insert_to, inserted);
 
         stack->_size = final_size;
         stack_internal::null_terminate(stack);
@@ -644,9 +657,9 @@ namespace jot
 
         if constexpr(is_contiguous_iterator && is_byte_copyable<T>)
         {
-            Slice empty_space = slice(capacity_slice, size(*stack));
-            Slice inserted_slice = Slice{it, inserted_size};
-            copy_items<T>(&empty_space, inserted_slice);
+            Slice empty_space = tail(capacity_slice, size(*stack));
+            Slice<const T> inserted_slice = {&*it, inserted_size};
+            copy_items<T>(empty_space, inserted_slice);
         }
         else
         {
@@ -742,7 +755,7 @@ namespace jot
 
         Slice<T> move_from = slice_range(slice(stack), at, stack->_size - 1);
         Slice<T> move_to = slice_range(slice(stack), at + 1, stack->_size);
-        move_items(&move_to, &move_from);
+        move_items(move_to, move_from);
 
         stack->_data[at] = move(&what);
         stack->_size += 1;
@@ -760,9 +773,10 @@ namespace jot
         
         Slice<T> move_from = slice_range(slice(stack), at + 1, stack->_size);
         Slice<T> move_to = slice_range(slice(stack), at, stack->_size - 1);
-        move_items(&move_to, &move_from);
+        move_items(move_to, move_from);
 
-        (last(stack))->~T();
+        T* last_ = last(stack);
+        last_->~T();
         stack->_size -= 1;
         stack_internal::null_terminate(stack);
         assert(is_invariant(*stack));
@@ -839,13 +853,13 @@ namespace jot
     template<class T> nodisc
     Slice<const T> slice(Stack_Appender<T> const& appender) 
     {
-        return slice(slice(*appender._stack), appender._from_index);
+        return tail(slice(*appender._stack), appender._from_index);
     }
 
     template<class T> nodisc
     Slice<T> slice(Stack_Appender<T>* appender) 
     {
-        return slice(slice(appender->_stack), appender->_from_index);
+        return tail(slice(appender->_stack), appender->_from_index);
     }
 
     template <class T, class Inserted> nodisc

@@ -10,15 +10,6 @@
 
 namespace jot
 {
-    template <typename T> 
-    struct Formattable<tests::Tracker<T>>
-    {
-        nodisc static
-        State format(String_Appender* appender, tests::Tracker<T> tracker) noexcept
-        {
-            return Formattable<T>::format(appender, tracker.val);
-        }
-    };
     
     template <typename T> 
     struct Hashable<tests::Tracker<T>>
@@ -570,15 +561,15 @@ namespace jot::tests::hash_table
                             break;
 
                         case OP_RESERVE_ENTRIES: 
-                            reserve_entries(&table, index % max_size, {});
+                            reserve_entries(&table, index % max_size);
                             break;
                         
                         case OP_RESERVE_JUMP_TABLE: 
-                            reserve_jump_table(&table, index % max_size, {});
+                            reserve_jump_table(&table, index % max_size);
                             break;
                             
                         case OP_REHASH: 
-                            rehash(&table, {});
+                            rehash(&table);
                             break;
 
                         default: break;

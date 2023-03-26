@@ -14,7 +14,7 @@ namespace jot
     template <typename T, typename Enable = Enabled>
     struct Formattable : No_Default
     {
-        nodisc static
+        static
         void format(String_Appender* into, T const& value)
         {
             push_multiple(into, "{NOFORMAT}");
@@ -30,10 +30,10 @@ namespace jot
         if constexpr(std::is_array_v<T>)
         {
             auto slice = Slice{arg, std::extent_v<T>};
-            return Formattable<decltype(slice)>::format(into, arg);
+            Formattable<decltype(slice)>::format(into, arg);
         }
         else
-            return Formattable<T>::format(into, arg);
+            Formattable<T>::format(into, arg);
     }
 
     template<typename T> nodisc
@@ -100,7 +100,7 @@ namespace jot
             used_size ++;
         }
 
-        Slice used = {buffer.data + buffer.size - used_size, used_size};
+        String used = {buffer.data + buffer.size - used_size, used_size};
         push_multiple(appender, prefix);
         push_multiple(appender, used);
     }
@@ -117,7 +117,7 @@ namespace jot
         for(isize current_try = 0; current_try < max_tries; current_try++)
         {
             resize(appender, slice(appender).size + chars_grow);
-            Mutable_String into_string = slice(slice(appender), size_before);
+            Mutable_String into_string = tail(slice(appender), size_before);
 
             if(precision == -1)
                 res = std::to_chars(into_string.data, into_string.data + into_string.size, value, format);
@@ -133,107 +133,10 @@ namespace jot
         return resize(appender, new_size);
     }
     
-    
-    struct Not_Integral {};
-    struct Not_Floating_Point {};
-    struct Not_Pointer {};
-    struct Not_Formattable_Range {};
-    struct Not_Formattable_Array {};
-
-    template <typename T> struct Formattable<T, Enable_If<std::is_integral_v<T>>>
-    {
-        nodisc static
-        void format(String_Appender* appender, T const& val)
-        {
-            return format_number_into(appender, cast(i64) val);
-        }
-    };
-
-    template <typename T> struct Formattable<T, Enable_If<std::is_floating_point_v<T>>>
-    {
-        nodisc static
-        void format(String_Appender* appender, T const& val)
-        {
-            return format_float_into(appender, val);
-        }
-    };
-
-    template <typename T> struct Formattable<T, Enable_If<std::is_pointer_v<T>>>
-    {
-        nodisc static
-        void format(String_Appender* appender, T const& val)
-        {
-            return format_number_into(appender, cast(isize) val, 16, "0x", 8);
-        }
-    };
-
-    template <> struct Formattable<String>
-    {
-        nodisc static
-        void format(String_Appender* appender, String str)
-        {
-            return push_multiple(appender, str);
-        }
-    };
-    
-    template <> struct Formattable<Mutable_String>
-    {
-        nodisc static
-        void format(String_Appender* appender, Mutable_String str)
-        {
-            return format_into(appender, cast(String) str);
-        }
-    };
-
-    template <> struct Formattable<cstring>
-    {
-        nodisc static
-        void format(String_Appender* appender, cstring str)
-        {
-            return format_into(appender, String(str));
-        }
-    };
-    
-    template <typename T> struct Formattable<Stack<T>>
-    {
-        nodisc static
-        void format(String_Appender* appender, Stack<T> const& stack)
-        {
-            return format_into(appender, slice(stack));
-        }
-    };
-
-    template <> struct Formattable<char>
-    {
-        nodisc static
-        void format(String_Appender* appender, char c)
-        {
-            return push(appender, c);
-        }
-    };
-    
-    template <> struct Formattable<bool>
-    {
-        nodisc static
-        void format(String_Appender* appender, bool val)
-        {
-            return format_into(appender, val ? "true" : "false");
-        }
-    };
-
-    template <> struct Formattable<nullptr_t>
-    {
-        nodisc static
-        void format(String_Appender* appender, nullptr_t)
-        {
-            return format_into(appender, cast(void*) nullptr);
-        }
-    };
-    
     template <typename T> 
     struct Formattable_Range
     {
-        nodisc static
+        static
         void format(String_Appender* appender, T const& range)
         {
             push(appender, '[');
@@ -256,6 +159,106 @@ namespace jot
         }
     };
 
+    template <typename T> struct Formattable<T, Enable_If<std::is_integral_v<T>>>
+    {
+        static
+        void format(String_Appender* appender, T const& val)
+        {
+            return format_number_into(appender, cast(i64) val);
+        }
+    };
+
+    template <typename T> struct Formattable<T, Enable_If<std::is_floating_point_v<T>>>
+    {
+        static
+        void format(String_Appender* appender, T const& val)
+        {
+            return format_float_into(appender, val);
+        }
+    };
+
+    template <typename T> struct Formattable<T, Enable_If<std::is_pointer_v<T>>>
+    {
+        static
+        void format(String_Appender* appender, T const& val)
+        {
+            return format_number_into(appender, cast(isize) val, 16, "0x", 8);
+        }
+    };
+
+    template <> struct Formattable<String>
+    {
+        static
+        void format(String_Appender* appender, String str)
+        {
+            return push_multiple(appender, str);
+        }
+    };
+    
+    template <> struct Formattable<Mutable_String>
+    {
+        static
+        void format(String_Appender* appender, Mutable_String str)
+        {
+            return format_into(appender, cast(String) str);
+        }
+    };
+
+    template <> struct Formattable<cstring>
+    {
+        static
+        void format(String_Appender* appender, cstring str)
+        {
+            return format_into(appender, String(str));
+        }
+    };
+    
+    template <typename T> struct Formattable<Stack<T>>
+    {
+        static
+        void format(String_Appender* appender, Stack<T> const& stack)
+        {
+            return format_into(appender, slice(stack));
+        }
+    };
+
+    template <> struct Formattable<char>
+    {
+        static
+        void format(String_Appender* appender, char c)
+        {
+            return push(appender, c);
+        }
+    };
+    
+    template <> struct Formattable<bool>
+    {
+        static
+        void format(String_Appender* appender, bool val)
+        {
+            return format_into(appender, val ? "true" : "false");
+        }
+    };
+
+    template <> struct Formattable<nullptr_t>
+    {
+        static
+        void format(String_Appender* appender, nullptr_t)
+        {
+            return format_into(appender, cast(void*) nullptr);
+        }
+    };
+    
+    template <typename T, isize N> struct Formattable<Array<T, N>>
+    {
+        static
+        void format(String_Appender* appender, Array<T, N> const& arr)
+        {
+            //regardless of string or not string we always format Arrays as ranges
+            Slice<const T> s = slice(arr);
+            Formattable_Range<Slice<const T>>::format(appender, s);
+        }
+    };
     
     template <typename T> 
     struct Formattable<Slice<T>> : Formattable_Range<Slice<T>> {};
@@ -362,9 +365,9 @@ namespace jot
                 }
             }
             
-            String till_end = slice(format_str, last);
+            String till_end = tail(format_str, last);
             push_multiple(appender, till_end);
-            concat_adapted_into(appender, slice(adapted, found_count));
+            concat_adapted_into(appender, tail(adapted, found_count));
         }
 
         NO_INLINE
@@ -375,7 +378,7 @@ namespace jot
 
             if(adapted[0].is_string)
             {
-                Slice<Adaptor> rest = slice(adapted, 1);
+                Slice<Adaptor> rest = tail(adapted);
                 String format = {cast(cstring) adapted[0].data, adapted[0].array_size};
                 format_adapted_into(appender, format, rest);
             }
@@ -477,6 +480,16 @@ namespace jot
     inline void println(String str) noexcept
     {
         println_into(stdout, str);
+    }
+
+    inline void print(Mutable_String str) noexcept
+    {
+        print_into(stdout, cast(String) str);
+    }
+
+    inline void println(Mutable_String str) noexcept
+    {
+        println_into(stdout, cast(String) str);
     }
 
     inline void print(cstring str) noexcept

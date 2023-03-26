@@ -2,15 +2,16 @@
 
 #include <cassert>
 #include <cstdint>
-#include <iterator>
 
-#include "slice.h"
+#if __cplusplus >= 202002L
+#include <iterator>
+#endif
+
+#define JOT_ARRAY_INCLUDED
 
 namespace jot
 {
-    #ifndef JOT_SIZE_T
-        using isize = ptrdiff_t;
-    #endif
+    using isize = ptrdiff_t;
 
     template<typename T, isize size_>
     struct Array
@@ -19,13 +20,14 @@ namespace jot
         static constexpr isize capacity = size;
         T data[size > 0 ? size : 1];
         
-        #include "slice_op_text.h"
+        #include "slice_operator_text.h"
     };
 
     //deduction guide
     template <class First, class... Rest>
     Array(First, Rest...) -> Array<First, 1 + sizeof...(Rest)>;
 
+    #ifdef JOT_SLICE_INCLUDED
     template<typename T, isize N> [[nodiscard]]
     Slice<const T> slice(Array<T, N> const& arr) 
     {
@@ -37,6 +39,7 @@ namespace jot
     {
         return Slice<T>{arr->data, N};
     }
+    #endif // JOT_SLICE_INCLUDED
 }
 
 namespace std
