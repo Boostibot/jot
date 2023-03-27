@@ -655,13 +655,14 @@ namespace jot::tests::hash_table
             test_batch(640, DO_MULTIADD | DO_REMOVE | DO_MARK_REMOVED);
         }
     }
-
-    void test_hash_table()
+    
+    void test_hash_table(u32 flags)
     {
+        bool print = !(flags & Test_Flags::SILENT);
         isize memory_before = memory_globals::default_allocator()->bytes_allocated();
 
         {
-            test_many_add();
+            if(print) println("\test_hash_table()");
 
             using Trc = Tracker<i32>;
             test_table_add_find<Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
@@ -669,6 +670,15 @@ namespace jot::tests::hash_table
             test_table_add_find<Map<u32, Trc>>();
             test_table_add_find<Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>>();
             test_table_add_find<Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>>();
+            
+            if(print) println("  test_table_add_find() type: Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>");
+            if(print) println("  test_table_add_find() type: Map<u32, u32>");
+            if(print) println("  test_table_add_find() type: Map<u32, Trc>");
+            if(print) println("  test_table_add_find() type: Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>");
+            if(print) println("  test_table_add_find() type: Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>");
+            
+            if(print) println("  test_many_add()");
+            test_many_add();
 
             const auto own = [](cstring cstr){
                 String_Builder builder;
@@ -682,24 +692,43 @@ namespace jot::tests::hash_table
             test_table_add_find_any<Map<String, String_Builder>>(strings, builders); 
             test_table_add_find_any<Map<String_Builder, String>>(builders, strings); 
             test_table_add_find_any<Map<String_Builder, String_Builder>>(builders, builders); 
+            
+            if(print) println("  test_table_add_find_any() type: Map<String, String_Builder>");
+            if(print) println("  test_table_add_find_any() type: Map<String_Builder, String>");
+            if(print) println("  test_table_add_find_any() type: Map<String_Builder, String_Builder>");
 
             test_table_mark_remove<Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
             test_table_mark_remove<Map<u32, u32>>();
             test_table_mark_remove<Map<u32, Trc>>();
             test_table_mark_remove<Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>>();
             test_table_mark_remove<Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>>();
+            
+            if(print) println("  test_table_mark_remove() type: Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>");
+            if(print) println("  test_table_mark_remove() type: Map<u32, u32>");
+            if(print) println("  test_table_mark_remove() type: Map<u32, Trc>");
+            if(print) println("  test_table_mark_remove() type: Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>");
+            if(print) println("  test_table_mark_remove() type: Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>");
 
             test_table_remove<Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
             test_table_remove<Map<u32, u32>>();
             test_table_remove<Map<u32, Trc>>();
             test_table_remove<Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>>();
             test_table_remove<Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>>();
-
-            test_stress<false>();
-            test_stress<true>();
+            
+            if(print) println("  test_table_remove() type: Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>");
+            if(print) println("  test_table_remove() type: Map<u32, u32>");
+            if(print) println("  test_table_remove() type: Map<u32, Trc>");
+            if(print) println("  test_table_remove() type: Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>");
+            if(print) println("  test_table_remove() type: Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>");
+            
+            if(flags & Test_Flags::STRESS)
+            {
+                test_stress<false>();
+                test_stress<true>();
+            }
         }
 
-
+        
         isize memory_after = memory_globals::default_allocator()->bytes_allocated();
         test(memory_before == memory_after);
     }

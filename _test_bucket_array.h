@@ -221,17 +221,27 @@ namespace jot::tests::bucket_array
             test_batch(640*16, i);
         }
     }
-
-
-    void test_bucket_array()
+    
+    void test_bucket_array(u32 flags)
     {
+        bool print = !(flags & Test_Flags::SILENT);
+
         Array<i32, 10>          arr1 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
         Array<Test_String, 10>  arr2 = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
         Array<Tracker<i32>, 10> arr3 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+        
+        if(print) println("\test_bucket_array()");
+        if(print) println("  type: i32");
         test_insert_remove(arr1);
+
+        if(print) println("  type: Test_String");
         test_insert_remove(arr2);
+        
+        if(print) println("  type: Tracker<i32>");
         test_insert_remove(arr3);
-        stress_test();
+
+        if(flags & Test_Flags::STRESS)
+            stress_test(print);
     }
 }
 

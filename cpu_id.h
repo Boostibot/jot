@@ -1,18 +1,75 @@
 #pragma once
+
 //C/C++ header for checking and working with cpu id
 //see https://en.wikipedia.org/wiki/CPUID for more info
 
+//List of supported compilers/targets:
+// (w) - works:         properly reports cpu
+// (c) - compiles:      compiles but all functions return empty 
+//                      (can be stil used for runtime testing of flags which will never pass)
+// (d) - doesnt compile
+
+// MSVC:
+//  - x86/x64/x86_64:   w
+//  - arm64 + C:        w
+//  - arm64 + C++:      c
+//
+// GCC/CLang:
+//  - x86/x64/x86_64:   w
+//  - arm32             c
+//  - arm64             c
+//  - risc              c
+//  - mips              c
+//  - power             c
+//  - clang wasm        d (missing string.h?)
+//  - clang armv7       d (missing string.h?)
+//  - other             c
+//
+// MinGW GCC/MinGW Clang:
+//  - x86/x64:          w
+//
+
 //CPU_ID_DISSABLE Dissables all non-standard parts of this file.
 // All functions will in that case return an empty/false but 
-// the resulting program will still be comiplable and will require very little
-// changes if any to work properly.
-//Also makes it very probable that all the functions will get inlined (cince they are empty)
+// the resulting program will still be compilable
+// Also makes it very probable that all the functions will get inlined (since they are empty)
 #if 0
 #define CPU_ID_DISSABLE
+#define CPU_ID_USE_WIN32
+#define CPU_ID_USE_X86_ASM
 #endif 
 
 #include <stdint.h>
 #include <string.h>
+
+//checks for x86 or x64 or x86_64
+//see https://sourceforge.net/p/predef/wiki/Architectures/
+#if defined(i386) || defined(__i386) || defined(__i386__) ||  /*GNU C*/ \
+    defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__) || /*GNU C*/ \
+    defined(_M_I86) || defined(_M_IX86) || defined(_M_IX86) || defined(_M_X64) || /*visual studio and others*/ \
+    defined(__x86_64__) || /*Clang*/ \
+    defined(_X86_)  /*MinGW*/ 
+
+    #define CPU_ID__X86_64
+#endif
+
+//if predefined by the programmer do nothing - this lets us override default 
+#if defined(CPU_ID_DISSABLE) || defined(CPU_ID_USE_WIN32) || defined(CPU_ID_USE_X86_ASM)
+    //nothing
+#elif defined(_MSC_VER)
+    //if arm and c++ dissable (I am not sure why it compiles with C but not C++)
+    #if !defined(CPU_ID__X86_64) && defined(__cplusplus)
+        #define CPU_ID_DISSABLE
+    #else
+        #define CPU_ID_USE_WIN32
+    #endif
+#else
+    #if defined(CPU_ID__X86_64)
+        #define CPU_ID_USE_X86_ASM
+    #else
+        #define CPU_ID_DISSABLE
+    #endif
+#endif
 
 #if defined(_WIN32) && !defined(CPU_ID_DISSABLE)
 #include <limits.h>
@@ -31,22 +88,27 @@ static
 CPU_Id cpu_id(uint32_t in_eax, uint32_t in_ecx)
 {
     CPU_Id id = {0};
+
     (void) in_eax;
     (void) in_ecx;
-
-    #ifndef CPU_ID_DISSABLE 
+    #if defined(CPU_ID_DISSABLE)
+        //nothing
+        
+    #elif defined(CPU_ID_USE_WIN32)
         id.eax = in_eax;
         id.ecx = in_ecx;
-        #ifdef _WIN32
-            __cpuidex((int *) (void*) &id, (int)in_eax, (int)in_ecx);
-        #else
-            asm volatile("cpuid"
-                : "=a" (id.eax),
-                  "=b" (id.ebx),
-                  "=c" (id.ecx),
-                  "=d" (id.edx)
-                : "0" (in_eax), "2" (in_ecx));
-        #endif
+        __cpuidex((int *) (void*) &id, (int)in_eax, (int)in_ecx);
+
+    #elif defined(CPU_ID_USE_X86_ASM)
+        id.eax = in_eax;
+        id.ecx = in_ecx;
+        asm volatile("cpuid"
+            : "=a" (id.eax),
+                "=b" (id.ebx),
+                "=c" (id.ecx),
+                "=d" (id.edx)
+            : "0" (in_eax), "2" (in_ecx));
+
     #endif
     return id;
 }
@@ -169,27 +231,27 @@ typedef struct CPU_Info
 
 typedef enum CPU_Feature_Flag
 {
-    CPU_FEATURE_MMX_EDX1 = 1 << 23,
-    CPU_FEATURE_SSE_EDX1 = 1 << 25,
-    CPU_FEATURE_SSE2_EDX1 = 1 << 26,
+    CPU_FEATURE_MMX_EDX1 = 1ull << 23,
+    CPU_FEATURE_SSE_EDX1 = 1ull << 25,
+    CPU_FEATURE_SSE2_EDX1 = 1ull << 26,
 
-    CPU_FEATURE_SSE3_ECX1 = 1 << 0,
-    CPU_FEATURE_FMA_ECX1 = 1 << 12,
-    CPU_FEATURE_SSE4_1_ECX1 = 1 << 19,
-    CPU_FEATURE_SSE4_2_ECX1 = 1 << 20,
-    CPU_FEATURE_POPCNT_ECX1 = 1 << 23,
-    CPU_FEATURE_AVX_ECX1 = 1 << 28,
-    CPU_FEATURE_F16C_ECX1 = 1 << 29,
+    CPU_FEATURE_SSE3_ECX1 = 1ull << 0,
+    CPU_FEATURE_FMA_ECX1 = 1ull << 12,
+    CPU_FEATURE_SSE4_1_ECX1 = 1ull << 19,
+    CPU_FEATURE_SSE4_2_ECX1 = 1ull << 20,
+    CPU_FEATURE_POPCNT_ECX1 = 1ull << 23,
+    CPU_FEATURE_AVX_ECX1 = 1ull << 28,
+    CPU_FEATURE_F16C_ECX1 = 1ull << 29,
 
-    CPU_FEATURE_AVX2_EBX2 = 1 << 5,
-    CPU_FEATURE_AVX512_F_EBX2 = 1 << 16,
-    CPU_FEATURE_AVX512_DQ_EBX2 = 1 << 17,
-    CPU_FEATURE_AVX512_IFMA_EBX2 = 1 << 21,
+    CPU_FEATURE_AVX2_EBX2 = 1ull << 5,
+    CPU_FEATURE_AVX512_F_EBX2 = 1ull << 16,
+    CPU_FEATURE_AVX512_DQ_EBX2 = 1ull << 17,
+    CPU_FEATURE_AVX512_IFMA_EBX2 = 1ull << 21,
 
-    CPU_FEATURE_AVX512_VBMI_ECX2 = 1 << 1,
-    CPU_FEATURE_AVX512_VBMI2_ECX2 = 1 << 6,
+    CPU_FEATURE_AVX512_VBMI_ECX2 = 1ull << 1,
+    CPU_FEATURE_AVX512_VBMI2_ECX2 = 1ull << 6,
 
-    CPU_FEATURE_AVX512_BF16_EBX3 = 1 << 5,
+    CPU_FEATURE_AVX512_BF16_EBX3 = 1ull << 5,
 } CPU_Feature_Flag;
 
 static
@@ -245,6 +307,7 @@ static const CPU_Info CPU_INFO = cpu_info();
 #endif
 
 #ifdef CPU_ID_EXAMPLE
+
 #include <stdio.h>
 
 int main()
@@ -274,4 +337,4 @@ int main()
     return (int) max_cpuid_function();
 }
 
-#endif
+#endif // CPU_ID_EXAMPLE

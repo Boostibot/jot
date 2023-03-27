@@ -1,18 +1,10 @@
 #pragma once
 
-#if defined(BUCKET_ARRAY_NO_FFS) || !defined(_MSC_VER)
-#else
-#define _DO_BUCKET_ARRAY_FFS
-#endif
-
-#ifdef _DO_BUCKET_ARRAY_FFS
-#include <intrin.h>
-#endif 
-
-#include "jot/memory.h"
-#include "jot/intrusive_list.h"
-#include "jot/stack.h"
-#include "jot/defines.h"
+#include "memory.h"
+#include "intrusive_list.h"
+#include "stack.h"
+#include "intrin.h"
+#include "defines.h"
 
 namespace jot
 {
@@ -483,54 +475,19 @@ namespace jot
             
             for(isize i = 0; i < slot_block_size; i++)
             {
-                #if !defined(BUCKET_ARRAY_NO_FFS) && defined(_MSC_VER)
-                    u64* block = &to_bucket->used_slots[i];
-                    unsigned long bit_pos = 0;
-                    bool was_found = _BitScanForward64(&bit_pos, ~*block) != 0;
-                            
-                    if(was_found)
-                    {
-                        u64 bit = cast(u64) 1 << bit_pos;
-                        *block |= bit;
-                        found_index = 64 * i + bit_pos;
-                        
-                        i = slot_block_size;
-                        break;
-                    }
-                #elif !defined(BUCKET_ARRAY_NO_FFS) && (defined(__clang__) || defined(__GNUC__))
-                    #error "@TODO"
-                #else
-                // if the block is completely used skip it
                 u64* block = &to_bucket->used_slots[i];
-                if(*block == cast(u64) -1)
-                    continue;
-                    
-                //perform a single binary search step on the block
-                const u64 half_bits = cast(u64) -1 >> 32; //contains: 0000'1111 (except 32 1s and 0s)
-                isize from = 0;
-                u64 after_and = ~*block & half_bits;
-                if((~*block & half_bits) == 0)
-                    from = 32;
-                else
-                    from = 0;
-            
-                //performs linear search 
-                isize to = from + 32;
-                for(isize j = from; j < to; j++)
-                {
-                    u64 bit = cast(u64) 1 << j;
-                    if((*block & bit) == 0)
-                    {
-                        //mark it as used
-                        *block |= bit;
-                        found_index = 64 * i + j;
+                size_t bit_pos = 0;
+                bool was_found = intrin__find_first_set_64(&bit_pos, ~*block);
 
-                        //exit all loops
-                        i = slot_block_size;
-                        break;
-                    }
+                if(was_found)
+                {
+                    u64 bit = cast(u64) 1 << bit_pos;
+                    *block |= bit;
+                    found_index = 64 * i + bit_pos;
+                        
+                    i = slot_block_size;
+                    break;
                 }
-                #endif // defined(BUCKET_ARRAY_NO_FFS) || !defined(_MSC_VER)
             }
             assert(found_index != -1 && "should have been found");
             assert(found_index < to_bucket->size && "has corrupted used_slots bits");

@@ -630,7 +630,7 @@ namespace jot::tests::stack
         test(mem_before = mem_after);
     }
 
-    void test_stack(Test_Flags flags)
+    void test_stack(u32 flags)
     {
         bool print = !(flags & Test_Flags::SILENT);
 
@@ -640,7 +640,7 @@ namespace jot::tests::stack
         Array<Tracker<i32>, 6>  arr4 = {10, 20, 30, 40, 50, 60};
 
         if(print) println("\ntest_stack()");
-        if(print) println("  type: int");
+        if(print) println("  type: i32");
         test_stack(arr1);
         
         if(print) println("  type: char");
@@ -649,7 +649,7 @@ namespace jot::tests::stack
         if(print) println("  type: Test_String");
         test_stack(arr3);
 
-        if(print) println("  type: Tracker<int>");
+        if(print) println("  type: Tracker<i32>");
         test_stack(arr4);
 
         if(flags & Test_Flags::STRESS)
