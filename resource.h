@@ -62,8 +62,13 @@ namespace jot
             if(program != -1)
                 glDeleteProgram(program);
         };
+        
+        static GLuint program_def() 
+        { 
+            return (GLuint) -1;
+        };
 
-        Resource<GLuint, program_delete> program = -1;
+        Resource<GLuint, program_delete, program_def> program;
         String_Builder vertex_path = {};
         String_Builder fragment_path = {};
         String_Builder geometry_path = {};
