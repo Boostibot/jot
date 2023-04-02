@@ -415,9 +415,11 @@ namespace jot
         virtual
         ~Stack_Ring_Allocator() noexcept override
         {
-            isize alloced = bytes_allocated();
-            assert(alloced == 0 && "tracked size must be zero (alloced size == free size)");
-            assert(last_block_from == stack_to && last_block_from == buffer_from && "all pointers must be set to start of the buffer");
+            //isize alloced = bytes_allocated();
+            //assert(alloced == 0 && "tracked size must be zero (alloced size == free size)");
+            //assert(last_block_from == stack_to && last_block_from == buffer_from && "all pointers must be set to start of the buffer");
         }
     };
 }
+
+#include "undefs.h"

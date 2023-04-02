@@ -3,9 +3,9 @@
 #include <new>
 
 #include "open_enum.h"
-#include "option.h"
 #include "utils.h"
 #include "slice.h"
+#include "standards.h"
 #include "types.h"
 #include "defines.h"
 
@@ -42,24 +42,10 @@ namespace jot
         Slice<u8> items;
     };
 
-    template<>
-    struct Failable<Allocator_State_Type>
+    template <typename T>
+    struct Nullable
     {
-        nodisc static constexpr 
-        bool failed(Allocator_State_Type state) noexcept 
-        {
-            return state != Allocator_State::OK;
-        }
-    };
-
-    template<>
-    struct Failable<Allocation_Result>
-    {
-        nodisc static constexpr 
-        bool failed(Allocation_Result result) noexcept 
-        {
-            return result.state != Allocator_State::OK;
-        }
+        T value;
     };
     
     nodisc inline constexpr 
@@ -262,13 +248,13 @@ namespace jot
 
     namespace memory_globals
     {
-        static New_Delete_Allocator NEW_DELETE_ALLOCATOR;
-        static Failing_Allocator    FAILING_ALLOCATOR;
+        inline static New_Delete_Allocator NEW_DELETE_ALLOCATOR;
+        inline static Failing_Allocator    FAILING_ALLOCATOR;
         
         namespace hidden
         {
-            thread_local static Allocator* DEFAULT_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
-            thread_local static Allocator* SCRATCH_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
+            thread_local inline static Allocator* DEFAULT_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
+            thread_local inline static Allocator* SCRATCH_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
         }
 
         nodisc inline Allocator* default_allocator() noexcept 
@@ -449,7 +435,8 @@ namespace jot
             if(is_in_slice(allocated.data, buffer) == false)
                 return parent->deallocate(allocated, align);
 
-            if(allocated == last_alloced_slice())  
+            Slice<u8> last = last_alloced_slice();
+            if(allocated.data == last.data && allocated.size == last.size)  
                 filled_to = last_alloc;
             
             return Allocator_State::OK;
@@ -463,7 +450,7 @@ namespace jot
             if(is_in_slice(allocated.data, buffer) == false)
                 return parent->resize(allocated, used_align, new_size);
 
-            if(allocated != last_slice)
+            if(allocated.data != last_slice.data || allocated.size != last_slice.size)  
                 return Allocation_Result{Allocator_State::NOT_RESIZABLE};
 
             isize new_filled_to = last_alloc + new_size;

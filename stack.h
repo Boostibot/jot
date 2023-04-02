@@ -1,15 +1,13 @@
 #pragma once
 
-#include <iterator>
-
-#include "utils.h"
-#include "slice_ops.h"
-#include "memory.h"
+//#include <iterator>
+#include "stack_base.h"
+#include "panic.h"
 #include "defines.h"
 
 namespace jot
 {
-    const u8 NULL_TERMINATION_ARR[8] = {'\0'};
+    inline const u8 NULL_TERMINATION_ARR[8] = {'\0'};
     
     //we need to differentiate between string types and other types so that we can
     // properly null terminate the Stack (Stack is also used as a string type)
@@ -43,16 +41,13 @@ namespace jot
         Stack(Stack && other) noexcept;
         Stack(Stack const& other);
 
-        Stack(T* data, isize size, isize capacity, Allocator* allocator) noexcept
-            : _data{data}, _size{size}, _capacity{capacity}, _allocator{allocator} {}
-
         ~Stack() noexcept;
         Stack& operator=(Stack && other) noexcept;
         Stack& operator=(Stack const& other);
         
         #define DATA _data
         #define SIZE _size
-        #include "slice_operator_text.h"
+        #include "slice_members_text.h"
     };
 
     template<class T> nodisc
@@ -158,138 +153,6 @@ namespace jot
 
         return size_inv && capa_inv && data_inv && espcape_inv;
     }
-
-    constexpr inline
-    isize calculate_stack_growth(isize curr_size, isize to_fit, isize growth_num = 3, isize growth_den = 2, isize grow_lin = 8)
-    {
-        //with default values for small sizes grows fatser than classic factor of 2 for big slower
-        isize size = curr_size;
-        while(size < to_fit)
-            size = size * growth_num / growth_den + grow_lin; 
-
-        return size;
-    }
-
-    template<class T>
-    struct Set_Capacity_Result
-    {
-        Allocator_State_Type state = Allocator_State::OK;
-        Slice<T> items;
-        bool adress_changed = true;
-    };
-
-    template<class T> nodisc
-    Set_Capacity_Result<T> set_capacity_allocation_stage(Allocator* allocator, Slice<T>* old_slice, isize align, isize new_capacity, bool try_resize) noexcept
-    {
-        Set_Capacity_Result<T> result;
-        if(new_capacity == 0)
-        {
-            result.state = Allocator_State::OK;
-            result.items = Slice<T>();
-            result.adress_changed = false;
-            return result;
-        }
-
-        if(old_slice->size != 0 && try_resize)
-        {
-            assert(old_slice->data != nullptr);
-            Slice<u8> old_data = cast_slice<u8>(*old_slice);
-            Allocation_Result resize_res = allocator->resize(old_data, align, new_capacity * cast(isize) sizeof(T));
-            if(resize_res.state == Allocator_State::OK)
-            {
-                result.state = Allocator_State::OK;
-                result.items = cast_slice<T>(resize_res.items);
-                result.adress_changed = false;
-
-                assert(result.items.size >= new_capacity);
-                assert(result.items.data == nullptr ? new_capacity == 0 : true);
-
-                return result;
-            }
-        }
-            
-        Allocation_Result allocation_res = allocator->allocate(new_capacity * cast(isize) sizeof(T), align);
-        result.state = allocation_res.state;
-        result.items = cast_slice<T>(allocation_res.items);
-        result.adress_changed = true;
-
-        return result;
-    }
-        
-    template<class T>
-    void set_capacity_deallocation_stage(Allocator* allocator, Slice<T>* old_slice, isize filled_to, isize align, Set_Capacity_Result<T>* result) noexcept
-    {
-        assert(result->state == OK && "must be okay!");
-
-        T* RESTRICT new_data = result->items.data;
-        T* RESTRICT old_data = old_slice->data;
-            
-        isize new_capacity = result->items.size;
-        if(result->adress_changed)
-        {
-            assert((are_aliasing<T>(*old_slice, result->items) == false));
-
-            isize copy_to = min(filled_to, new_capacity);
-            if constexpr(is_byte_copyable<T>)
-            {
-                std::memcpy(new_data, old_data, copy_to * sizeof(T));
-            }
-            else
-            {
-                for (isize i = 0; i < copy_to; i++)
-                    construct_at(new_data + i, move(old_data + i));
-            }
-            
-            if constexpr(std::is_trivially_destructible_v<T> == false)
-                for(isize i = 0; i < filled_to; i++)
-                    old_data[i].~T();
-        }
-        else
-        {
-            if constexpr(std::is_trivially_destructible_v<T> == false)
-                for(isize i = new_capacity; i < filled_to; i++)
-                    old_data[i].~T();
-        }
-
-        if(old_slice->size != 0)
-        {
-            assert(old_slice->data != nullptr);
-            allocator->deallocate(cast_slice<u8>(*old_slice), align);
-        }
-    }
-      
-    //fast path for destroying of stacks (instead of set_capacity which is longer)
-    template<class T>
-    Allocator_State_Type destroy_and_deallocate(Allocator* allocator, Slice<T>* old_slice, isize filled_to, isize align) noexcept
-    {
-        if constexpr(std::is_trivially_destructible_v<T> == false)
-            for(isize i = 0; i < filled_to; i++)
-                (*old_slice)[i].~T();
-
-        if(old_slice->size != 0)
-        {
-            assert(old_slice->data != nullptr);
-            return allocator->deallocate(cast_slice<u8>(*old_slice), align);
-        }
-
-        return Allocator_State::OK;
-    }
-
-    // Can be used for arbitrary growing/shrinking of data
-    // When old_slice is null only allocates the data
-    // When new_capacity is 0 only deallocates the data
-    // Destroys elements when shrinking but does not construct new ones when growing 
-    //  (because doesnt know how to)
-    template<class T> nodisc
-    Set_Capacity_Result<T> set_capacity(Allocator* allocator, Slice<T>* old_slice, isize filled_to, isize align, isize new_capacity, bool try_resize) noexcept
-    {
-        Set_Capacity_Result<T> result = set_capacity_allocation_stage(allocator, old_slice, align, new_capacity, try_resize);
-        if(result.state == ERROR)
-            return result;
-
-        set_capacity_deallocation_stage(allocator, old_slice, filled_to, align, &result);
-        return result;
-    }
         
     namespace stack_internal 
     {
@@ -321,7 +184,7 @@ namespace jot
             Set_Capacity_Result<T> result = set_capacity(stack->_allocator, &old_slice, stack->_size, DEF_ALIGNMENT<T>, 
                 new_capacity, is_data_size_saving || is_constructor_call_saving);
 
-            if(result.state == ERROR)
+            if(result.state != Allocator_State::OK)
                 return result.state;
 
             stack->_data = result.items.data;
@@ -334,12 +197,11 @@ namespace jot
     template<class T>
     Allocator_State_Type reserve_failing(Stack<T>* stack, isize to_fit) noexcept
     {
-        assert(is_invariant(*stack));
-
         isize null_terminate_space = cast(isize) is_string_char<T>;
         if (stack->_capacity >= to_fit + null_terminate_space)
             return Allocator_State::OK;
-
+            
+        assert(is_invariant(*stack));
         isize realloc_to = calculate_stack_growth(stack->_size, to_fit + null_terminate_space);
         Allocator_State_Type state = stack_internal::set_capacity(stack, realloc_to);
         assert(is_invariant(*stack));
@@ -406,6 +268,18 @@ namespace jot
         Stack<T> out(alloc);
         copy(&out, Slice<const T>(from));
         return out;
+    }
+
+    template<class T> nodisc
+    Stack<T> own_scratch(Slice<const T> from, memory_globals::Default_Alloc alloc = {})
+    {
+        return own(from, alloc.val);
+    }
+    
+    template<class T> nodisc
+    Stack<T> own_scratch(Slice<T> from, memory_globals::Default_Alloc alloc = {})
+    {
+        return own(from, alloc.val);
     }
 
     template <typename T>
@@ -485,129 +359,7 @@ namespace jot
         assert(is_invariant(stack));
         return stack._size == 0;
     }
-
-    template <class T>
-    void splice_bytes(Stack<T>* stack, isize at, isize replace_size, Slice<const T> inserted)
-    { 
-        assert(is_invariant(*stack));
-        Slice<T> items = slice(stack);
-
-        const isize size_delta = inserted.size - replace_size;
-        const isize final_size = items.size + size_delta;
-        
-        reserve(stack, final_size);
-
-        if(size_delta > 0)
-        {
-            Slice<T> move_from = tail(slice(stack), at);
-            Slice<T> move_to = {move_from.data + size_delta, move_from.size};
-            move_items<T>(move_to, move_from);
-        }
-        else
-        {
-            Slice<T> move_to = tail(slice(stack), at);
-            Slice<T> move_from = tail(move_to, -size_delta); //delta is now negative
-            move_items<T>(move_to, move_from);
-        }
-
-        Slice<T> insert_to = {data(stack) + at, inserted.size};
-        copy_items<T>(insert_to, inserted);
-
-        stack->_size = final_size;
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
-    }
     
-    template <class T, class Inserted>
-    void splice(Stack<T>* stack, isize at, isize replace_size, Inserted && inserted)
-    {       
-        Slice<T> items = slice(stack); //for bounds checks
-        assert(is_invariant(*stack));
-        
-        auto it = std::begin(inserted);
-        constexpr bool do_move_construct = std::is_rvalue_reference_v<decltype(inserted)>;
-        constexpr bool is_contiguous_iterator = std::is_pointer_v<decltype(it)>;
-        
-        const isize inserted_size = cast(isize) std::size(inserted);
-
-        if constexpr(is_byte_copyable<T>)
-            if(is_contiguous_iterator)
-                return splice_bytes(stack, at, replace_size, Slice<const T>{it, inserted_size});
-        
-        const isize insert_to = at + inserted_size;
-        const isize replace_to = at + replace_size;
-        const isize remaining = items.size - replace_to;
-        const isize final_size = items.size + inserted_size - replace_size;
-
-        assert(0 <= at && at <= items.size);
-        assert(0 <= replace_to && replace_to <= items.size);
-
-        isize move_inserted_size = 0;
-
-        if(inserted_size > replace_size)
-        {
-            reserve(stack, final_size);
-
-            items = slice(stack);
-            const isize constructed = inserted_size - replace_size;
-            const isize constructed_in_shift = min(constructed, remaining); 
-            const isize construction_gap = constructed - constructed_in_shift;
-
-            move_inserted_size = inserted_size - construction_gap;
-
-            //construct some elements by shifting right previous elements into them
-            const isize to = final_size - constructed_in_shift;
-            for (isize i = final_size; i-- > to; )
-            {
-                if constexpr(do_move_construct)
-                    construct_at(items.data + i, move(&items[i - constructed]));
-                else
-                    construct_at(items.data + i, items[i - constructed]);
-            }
-
-            //shifting right rest of the elems to make space for insertion
-            for(isize i = items.size; i-- > insert_to; )
-                items[i] = move(&items[i - constructed]);
-        }
-        else
-        {
-            move_inserted_size = inserted_size; 
-
-            //move elems left to the freed space
-            const isize removed = replace_size - inserted_size;
-            for (isize i = insert_to; i < final_size; i++)
-                items[i] = move(&items[i + removed]);
-
-            //Destroy all excess elems
-            stack_internal::destroy_items(stack, final_size, stack->_size);
-        }
-
-        stack->_size = final_size;
-
-        //insert the added elems into constructed slots
-        const isize move_assign_to = at + move_inserted_size;
-        for (isize i = at; i < move_assign_to; i++, ++it)
-        {
-            if constexpr(do_move_construct)
-                items[i] = move(&*it);
-            else
-                items[i] = *it;
-        }
-
-        //insert construct leftover elements
-        for (isize i = move_assign_to; i < insert_to; i++, ++it)
-        {
-            //T* prev = items.data + i;
-            if constexpr(do_move_construct)
-                construct_at(items.data + i, move(&*it));
-            else
-                construct_at(items.data + i, *it);
-        }
-        
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
-    }
-
     template<class T>
     void push(Stack<T>* stack, no_infer(T) what)
     {
@@ -639,40 +391,43 @@ namespace jot
         return ret;
     }
 
-    template <class T, class Inserted>
-    void push_multiple(Stack<T>* stack, Inserted && inserted)
+    template <class T>
+    void push_multiple(Stack<T>* stack, Slice<const T> inserted)
     {
-        isize inserted_size = cast(isize) std::size(inserted);
-        reserve(stack, size(*stack) + inserted_size);
+        reserve(stack, stack->_size + inserted.size);
 
-        auto it = std::begin(inserted);
-        auto end = std::end(inserted);
-        using Iter_Val = std::remove_reference_t<decltype(*it)>;
-
-        constexpr bool is_contiguous_iterator = std::is_pointer_v<decltype(it)>;
-        constexpr bool do_move_construct = std::is_rvalue_reference_v<decltype(inserted)>;
-
-        static_assert(std::is_same_v<T, std::remove_cv_t<Iter_Val>>, "must be compatible!");
-        Slice<T> capacity_slice = {data(stack), capacity(*stack)};
-
-        if constexpr(is_contiguous_iterator && is_byte_copyable<T>)
-        {
-            Slice empty_space = tail(capacity_slice, size(*stack));
-            Slice<const T> inserted_slice = {&*it, inserted_size};
-            copy_items<T>(empty_space, inserted_slice);
-        }
+        assert(stack->_capacity >= stack->_size + inserted.size && "after reserve there should be enough size");
+        Slice<T> availible_slice = {stack->_data + stack->_size, inserted.size};
+        if constexpr(is_byte_copyable<T>)
+            copy_items(availible_slice, inserted);
         else
         {
-            for(isize i = size(*stack); it != end; ++it, ++ i)
-            {
-                if constexpr(do_move_construct)
-                    construct_at(capacity_slice.data + i, move(&*it));
-                else
-                    construct_at(capacity_slice.data + i, *it);
-            }
+            for(isize i = 0; i < inserted.size; i++)
+                construct_at(availible_slice.data + i, inserted.data[i]);
+        }
+        
+        stack->_size += inserted.size;
+        stack_internal::null_terminate(stack);
+        assert(is_invariant(*stack));
+    }
+    
+    template <class T>
+    void push_multiple_move(Stack<T>* stack, Slice<T> inserted)
+    {
+        reserve(stack, stack->_size + inserted.size);
+
+        assert(stack->_capacity >= stack->_size + inserted.size && "after reserve there should be enough size");
+        Slice<T> availible_slice = {stack->_data + stack->_size, inserted.size};
+        
+        if constexpr(is_byte_copyable<T>)
+            move_items(availible_slice, inserted);
+        else
+        {
+            for(isize i = 0; i < inserted.size; i++)
+                construct_at(availible_slice.data + i, move(inserted.data + i));
         }
 
-        stack->_size += inserted_size;
+        stack->_size += inserted.size;
         stack_internal::null_terminate(stack);
         assert(is_invariant(*stack));
     }
@@ -682,8 +437,10 @@ namespace jot
     {
         assert(count <= size(*stack));
         stack_internal::destroy_items(stack, stack->_size - count, stack->_size);
+
         stack->_size -= count;
         stack_internal::null_terminate(stack);
+        assert(is_invariant(*stack));
     }
     
     template<class T> 
@@ -701,7 +458,7 @@ namespace jot
 
         reserve(stack, to);
 
-        if(is_byte_nullable<T> && is_zero)
+        if constexpr(is_byte_nullable<T> && is_zero)
         {
             if(stack->_size < to)
                 memset(stack->_data + stack->_size, 0, (to - stack->_size)*sizeof(T));
@@ -733,7 +490,7 @@ namespace jot
     template<class T> 
     void resize_for_overwrite(Stack<T>* stack, isize to)
     {
-        if(std::is_trivially_constructible_v<T> == false)
+        if constexpr(std::is_trivially_constructible_v<T> == false)
             return resize(stack, to);
 
         reserve(stack, to);
@@ -862,10 +619,16 @@ namespace jot
         return tail(slice(appender->_stack), appender->_from_index);
     }
 
-    template <class T, class Inserted> nodisc
-    void push_multiple(Stack_Appender<T>* appender, Inserted && inserted)
+    template <class T>
+    void push_multiple(Stack_Appender<T>* appender, Slice<const T> inserted)
     {
-        return push_multiple(appender->_stack, cast(Inserted&&) inserted);
+        return push_multiple(appender->_stack, inserted);
+    }
+    
+    template <class T>
+    void push_multiple_move(Stack_Appender<T>* appender, Slice<T> inserted)
+    {
+        return push_multiple_move(appender->_stack, inserted);
     }
 
     template<class T>

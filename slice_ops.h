@@ -119,6 +119,12 @@ namespace jot
     }
     
     template<typename T> constexpr 
+    void copy_items(Slice<T> to, Slice<T> from) noexcept
+    {
+        return copy_items<T>(to, cast(Slice<const T>) from);
+    }
+    
+    template<typename T> constexpr 
     void copy_items_no_alias(Slice<T> to, Slice<const T> from) noexcept
     {
         assert(are_aliasing(*to, from) == false && "must not alias");

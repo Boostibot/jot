@@ -65,7 +65,8 @@ namespace jot::tests
     };
 
     Tracker_Stats tracker_stats;
-    i64 trackers_alive()
+
+    inline i64 trackers_alive()
     {
         return tracker_stats.alive;
     }
@@ -132,7 +133,6 @@ namespace jot::tests
 
     template <typename T, isize N> Array<T, N> dup(Array<T, N> const& arr)
     {
-        State state = OK_STATE;
         Array<T, N> duped = {};
         for(isize i = 0; i < N; i++)
             duped[i] = dup(arr[i]);

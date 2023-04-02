@@ -33,22 +33,9 @@ namespace jot
             return Slice<const T>{this->data, this->size}; 
         }
 
-        #include "slice_operator_text.h"
+        #include "slice_members_text.h"
     };
-
-    template<typename T> constexpr 
-    bool operator ==(Slice<T> const& a, Slice<T> const& b) noexcept 
-    {
-        return a.data == b.data && a.size == b.size;
-    }
     
-    template<typename T> constexpr 
-    bool operator !=(Slice<T> const& a, Slice<T> const& b) noexcept 
-    {
-        return a.data != b.data || a.size != b.size;
-    }
-    
-    //
     template<typename T, isize N> nodisc constexpr
     Slice<const T> slice(const T (&a)[N])
     {
@@ -60,11 +47,11 @@ namespace jot
     {
         return Slice<T>{*a, N};
     }
-
-    //surprisingly useful
+    
     template<typename T> nodisc constexpr
-    Slice<T> slice(Slice<T> s)
+    Slice<T> slice(Slice<T> s) 
     {
+        //surprisingly useful
         return s;
     }
 

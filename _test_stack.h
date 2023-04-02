@@ -52,7 +52,8 @@ namespace jot::tests::stack
         
         {
             Stack<T> stack;
-            push_multiple(&stack, dup(vals));
+            Array<T, 6> dupped = dup(vals);
+            push_multiple_move(&stack, slice(&dupped));
             test(size(stack) == 6);
             
             test(stack[0] == vals[0]);
@@ -69,8 +70,9 @@ namespace jot::tests::stack
             pop_multiple(&stack, 3);
             test(size(stack) == 1);
             test(stack[0] == vals[0]);
-            
-            push_multiple(&stack, dup(vals));
+
+            dupped = dup(vals);
+            push_multiple_move(&stack, slice(&dupped));
             test(size(stack) == 7);
             test(stack[0] == vals[0]);
             test(stack[1] == vals[0]);
@@ -338,7 +340,8 @@ namespace jot::tests::stack
         //unordered insert remove
         {
             Stack stack;
-            push_multiple(&stack, dup(vals));
+            auto dupped = dup(vals);
+            push_multiple_move(&stack, slice(&dupped));
             test(size(stack) == 6);
 
             test(unordered_remove(&stack, 3) == vals[3]);
@@ -394,91 +397,7 @@ namespace jot::tests::stack
         test(before == after);
     }
     
-    template<typename T>
-    void test_splice(Array<T, 6> vals)
-    {
-        using Stack = Stack<T>;
-        i64 before = trackers_alive();
-
-        {
-            Array trimmed = {dup(vals[0]), dup(vals[1]), dup(vals[2])};
-            Stack stack;
-            splice(&stack, 0, 0, dup(trimmed));
-
-            test(size(stack) == 3);
-            test(stack[0] == vals[0]);
-            test(stack[1] == vals[1]);
-            test(stack[2] == vals[2]);
-
-            Slice<T> empty;
-            splice(&stack, 3, 0, dup(empty));
-            test(size(stack) == 3);
-            test(stack[0] == vals[0]);
-            test(stack[1] == vals[1]);
-            test(stack[2] == vals[2]);
-
-            splice(&stack, 3, 0, dup(trimmed));
-            test(size(stack) == 6);
-            test(stack[0] == vals[0]);
-            test(stack[1] == vals[1]);
-            test(stack[2] == vals[2]);
-            test(stack[3] == vals[0]);
-            test(stack[4] == vals[1]);
-            test(stack[5] == vals[2]);
-
-            splice(&stack, 3, 2, dup(empty));
-            test(size(stack) == 4);
-            test(stack[0] == vals[0]);
-            test(stack[1] == vals[1]);
-            test(stack[2] == vals[2]);
-            test(stack[3] == vals[2]);
-
-            splice(&stack, 2, 2, dup(trimmed));
-            test(size(stack) == 5);
-            test(stack[0] == vals[0]);
-            test(stack[1] == vals[1]);
-            test(stack[2] == vals[0]);
-            test(stack[3] == vals[1]);
-            test(stack[4] == vals[2]);
-
-            splice(&stack, 0, 2, dup(trimmed));
-            test(size(stack) == 6);
-            test(stack[3] == vals[0]);
-            test(stack[4] == vals[1]);
-            test(stack[5] == vals[2]);
-        }
-        
-        {
-            Array trimmed = {dup(vals[0]), dup(vals[1]), dup(vals[2])};
-            Slice single = head(slice(trimmed));
-
-            Stack stack;
-            
-            splice(&stack, 0, 0, dup(trimmed));
-            test(size(stack) == 3);
-            splice(&stack, 1, 0, dup(single));
-            test(size(stack) == 4);
-            test(stack[0] == trimmed[0]);
-            test(stack[1] == trimmed[0]);
-            test(stack[2] == trimmed[1]);
-            test(stack[3] == trimmed[2]);
-            
-            splice(&stack, 3, 0, dup(trimmed));
-            test(size(stack) == 7);
-            test(stack[0] == trimmed[0]);
-            test(stack[1] == trimmed[0]);
-            test(stack[2] == trimmed[1]);
-            test(stack[3] == trimmed[0]);
-            test(stack[4] == trimmed[1]);
-            test(stack[5] == trimmed[2]);
-            test(stack[6] == trimmed[2]);
-            
-        }
-        i64 after = trackers_alive();
-        test(before == after);
-    }
-    
-
+    static
     void test_stress(bool print)
     {
         using Track = Tracker<isize>;
@@ -502,7 +421,7 @@ namespace jot::tests::stack
         std::uniform_int_distribution<unsigned> val_distribution(0);
 
         isize max_size = 1000;
-        const auto test_batch = [&](isize block_size, isize i){
+        const auto test_batch = [&](isize block_size, isize k){
             i64 before = trackers_alive();
 
             {
@@ -575,20 +494,9 @@ namespace jot::tests::stack
                             break;
                         }
                         
+                        //Doesnt exist anymore
                         case OP_SPLICE:
                         {
-                            isize at = index % size_incr;
-                            isize remaining = size - at;
-                            isize replace_size = index % (remaining + 1);
-
-                            //so that the inserting is 'fair' - we insert and replace on average the same ammount of 
-                            // elements
-                            replace_size = replace_size % to_insert.size; 
-                            isize inserted_size = index % to_insert.size;
-
-                            Array duped = dup(to_insert);
-                            Slice<Track> inserted = {duped.data, inserted_size};
-                            splice(&stack, at, replace_size, move(&inserted));
                             break;
                         }
 
@@ -598,7 +506,7 @@ namespace jot::tests::stack
                     test(is_invariant(stack));
                 }
                 
-                if(print) println("  i: {}\t batch: {}\t final_size: {}", i, block_size, size(stack));
+                if(print) println("  i: {}\t batch: {}\t final_size: {}", k, block_size, size(stack));
             }
             
             i64 after = trackers_alive();
@@ -624,12 +532,12 @@ namespace jot::tests::stack
         test_resize<T>(dup(vals));
         test_reserve<T>(dup(vals));
         test_insert_remove<T>(dup(vals));
-        test_splice<T>(dup(vals));
         
         isize mem_after = default_allocator()->bytes_allocated();
-        test(mem_before = mem_after);
+        test(mem_before == mem_after);
     }
-
+    
+    static
     void test_stack(u32 flags)
     {
         bool print = !(flags & Test_Flags::SILENT);

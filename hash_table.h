@@ -156,11 +156,6 @@ namespace jot
     constexpr static isize HASH_TABLE_LINKER_ALIGN = 32;
     constexpr static isize HASH_TABLE_LINKER_BASE_SIZE = 16;
 
-    //rehashes to same size if gravestones make more than
-    // HASH_TABLE_MAX_GRAVESTONES.num / HASH_TABLE_MAX_GRAVESTONES.den portion
-    constexpr static Ratio HASH_TABLE_MAX_GRAVESTONES = {1, 4}; 
-    constexpr static Ratio HASH_TABLE_MAX_UTILIZATION = {1, 4}; 
-
     template <class Info> nodisc
     bool is_invariant(Hash_Table<Info> const& hash)
     {
@@ -274,11 +269,11 @@ namespace jot
             Slice<Value> old_values = Slice<Value>{hash->_values, hash->_entries_capacity};
 
             Set_Capacity_Result<Stored_Key> key_res = set_capacity_allocation_stage(alloc, &old_keys, align, new_capacity, true);
-            if(key_res.state == ERROR)
+            if(key_res.state != Allocator_State::OK)
                 return key_res.state;
                 
             Set_Capacity_Result<Value> value_res = set_capacity_allocation_stage(alloc, &old_values, align, new_capacity, true);
-            if(value_res.state == ERROR)
+            if(value_res.state != Allocator_State::OK)
             {
                 Slice<u8> raw_keys = cast_slice<u8>(key_res.items);
                 alloc->deallocate(raw_keys, align);
@@ -316,7 +311,7 @@ namespace jot
             assert(is_invariant(*hash));
             isize size = hash->_entries_size;
             Allocator_State_Type state = hash_table_internal::reserve_entries(hash, size + 1, growth);
-            if(state == ERROR)
+            if(state != Allocator_State::OK)
                 return state;
 
             new (&hash->_keys[size]) Info_Stored_Key(move(&key));
@@ -542,7 +537,7 @@ namespace jot
         Allocator_State_Type state1 = reserve_jump_table_failing(table, jump_table_size, growth);
         Allocator_State_Type state2 = reserve_entries_failing(table, to_fit, growth);
 
-        if(state1 == ERROR)
+        if(state1 != Allocator_State::OK)
             return state1;
 
         return state2;
@@ -551,22 +546,22 @@ namespace jot
     template <class Info>
     void reserve_entries(Hash_Table<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
     {
-        State state = reserve_failing(table, to_fit, growth);
-        force(state == OK_STATE && "reserve failed!");
+        Allocator_State_Type state = reserve_failing(table, to_fit, growth);
+        force(state == Allocator_State::OK && "reserve failed!");
     }
     
     template <class Info>
     void reserve_jump_table(Hash_Table<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
     {
-        State state = reserve_failing(table, to_fit, growth);
-        force(state == OK_STATE && "reserve failed!");
+        Allocator_State_Type state = reserve_failing(table, to_fit, growth);
+        force(state == Allocator_State::OK && "reserve failed!");
     }
     
     template <class Info>
     void rehash(Hash_Table<Info>* table, isize to_size, Hash_Table_Growth const& growth = {})
     {
-        State state = rehash_failing(table, to_size, growth);
-        force(state == OK_STATE && "rehashing failed!");
+        Allocator_State_Type state = rehash_failing(table, to_size, growth);
+        force(state == Allocator_State::OK && "rehashing failed!");
     }
 
     template <class Info> 
@@ -579,8 +574,8 @@ namespace jot
     template <class Info>
     void reserve(Hash_Table<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
     {
-        State state = reserve_failing(table, to_fit, growth);
-        force(state == OK_STATE && "reserve failed!");
+        Allocator_State_Type state = reserve_failing(table, to_fit, growth);
+        force(state == Allocator_State::OK && "reserve failed!");
     }
 
     template <class Info, bool break_on_gravestone = false> nodisc
@@ -874,24 +869,6 @@ namespace jot
         Info_Key casted = Info::Cast::key_cast(key);
         return get(table, casted, if_not_found);
     }
-
-    //@UNUSED
-    template <class Info> nodisc
-    Info_Value move_out(Hash_Table<Info>* table, Info_Key const& key, Info_Value if_not_found) noexcept
-    {
-        isize index = find(*table, key).entry_index;
-        if(index == -1)
-            return if_not_found;
-
-        return move(&values(table)[index]);
-    }
-    
-    template <class Info, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-    Info_Value move_out(Hash_Table<Info>* table, Info_Stored_Key const& key, Info_Value if_not_found) noexcept
-    {
-        Info_Key casted = Info::Cast::key_cast(key);
-        return move_out(table, casted, move(&if_not_found));
-    }
     
     template <class Info>
     void grow_if_overfull(Hash_Table<Info>* table, Hash_Table_Growth const& growth = {}) 
@@ -900,7 +877,7 @@ namespace jot
         if(hash_table_internal::is_overful(*table, growth))
         {
             Allocator_State_Type state = hash_table_internal::grow(table, growth);
-            force(state == OK && "allocation failed!");
+            force(state == Allocator_State::OK && "allocation failed!");
         }
     }
 
@@ -918,7 +895,7 @@ namespace jot
         }
 
         Allocator_State_Type state = hash_table_internal::push_entry(table, move(&key), move(&value), growth);
-        force(state == OK && "allocation failed!");
+        force(state == Allocator_State::OK && "allocation failed!");
         table->_linker[at.finished_at] = cast(Info_Link) table->_entries_size - 1;
     }
  

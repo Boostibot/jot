@@ -20,7 +20,7 @@ namespace jot
         static constexpr isize capacity = size;
         T data[size > 0 ? size : 1];
         
-        #include "slice_operator_text.h"
+        #include "slice_members_text.h"
     };
 
     //deduction guide

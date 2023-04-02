@@ -238,13 +238,13 @@ namespace jot
             if(used_to > available_to)
             {
                 Allocator_State_Type state = obtain_block_and_update(size, align);
-                if(state == ERROR)
+                if(state != Allocator_State::OK)
                     return Allocation_Result{state};
 
                 return allocate(size, align);
             }
 
-            Slice<u8> alloced = Slice{aligned, size};
+            Slice<u8> alloced = {aligned, size};
             available_from = used_to;
             last_allocation = aligned;
 
@@ -401,7 +401,7 @@ namespace jot
             isize required_size = max(effective_size, chunk_size);
 
             Allocation_Result result = parent->allocate(required_size, ARENA_BLOCK_ALIGN);
-            if(result.state == ERROR)
+            if(result.state != Allocator_State::OK)
                 return Obtained_Arena_Block{nullptr, result.state, true};
 
             Arena_Block* block = cast(Arena_Block*) cast(void*) result.items.data;
@@ -419,7 +419,7 @@ namespace jot
         {
             assert(is_invariant());
             Obtained_Arena_Block obtained = extract_or_allocate_block(size, align);
-            if(obtained.state == ERROR)
+            if(obtained.state != Allocator_State::OK)
                 return obtained.state;
 
             assert(obtained.block != nullptr);

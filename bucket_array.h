@@ -1,14 +1,13 @@
 #pragma once
 
 #include "memory.h"
-#include "intrusive_list.h"
+#include "intrusive_index_list.h"
 #include "stack.h"
 #include "intrin.h"
 #include "defines.h"
 
 namespace jot
 {
-
     // BUCKET ARRAY
     // 
     // We keep an array of buckets each containing some number of slots
@@ -49,241 +48,74 @@ namespace jot
     //       it possible to drive down the ratio of 'stored data size' / 'total data structure size'
     //       as close to 0 as desired)
     
+    #define BUCKET_ARRAY_PEDANTIC_GET
+
     #if 0
-    #define INTRUSIVE_INDEX_LIST_PEDANTIC 
-    #define BUCKET_ARRAY_PEDANTIC
+    #define BUCKET_ARRAY_PEDANTIC_GET
+    #define BUCKET_ARRAY_PEDANTIC_LIST
     #endif
 
-    namespace bucket_array_internal
-    {
-        static constexpr u32 EMPTY_LINK = -1;
-
-        
-        struct Bucket
-        {
-            void* data = nullptr;
-            u64* used_slots = nullptr;
-            u32 used_count = 0;
-            u32 size = 0;
-            
-            u32 next = EMPTY_LINK;
-            u32 prev = EMPTY_LINK;
-        };
-        
-
-        //@TODO: make intrusive_index_list
-        struct Index_Chain
-        {
-            u32 first = EMPTY_LINK;
-            u32 last = EMPTY_LINK;
-        };
-        
-        inline 
-        bool is_isolated(u32 node, const Bucket arr[]) noexcept
-        {
-            const Bucket* bucket = &arr[node];
-            return bucket->prev == EMPTY_LINK && bucket->next == EMPTY_LINK;
-        }
-        
-        inline 
-        bool is_isolated(u32 first, u32 last, const Bucket arr[]) noexcept
-        {
-            return arr[first].prev == EMPTY_LINK && arr[last].next == EMPTY_LINK;
-        }
-
-        inline 
-        bool is_connected(u32 first, u32 last, const Bucket arr[]) noexcept
-        {
-            u32 current = first;
-            u32 prev = EMPTY_LINK;
-
-            while(current != EMPTY_LINK && prev != last)
-            {
-                prev = current;
-                current = arr[current].next;
-            }
-
-            return prev == last;
-        }
-
-        inline 
-        bool _check_is_connected(u32 first, u32 last, const Bucket arr[]) noexcept
-        {
-            #ifdef INTRUSIVE_INDEX_LIST_PEDANTIC
-            return is_connected(first, last, arr);
-            #else
-            return true;
-            #endif
-
-        }
-
-        static
-        void link_chain(u32 before, u32 first_inserted, u32 last_inserted, u32 after, Bucket arr[]) noexcept
-        {
-            assert(first_inserted != EMPTY_LINK && last_inserted != EMPTY_LINK && "must not be null");
-        
-            arr[last_inserted].next = after;
-            if(before != EMPTY_LINK)
-            {
-                assert(arr[before].next == after && "before and after must be adjecent!");
-                arr[before].next = first_inserted;
-            }
-            
-            arr[first_inserted].prev = before;
-            if(after != EMPTY_LINK)
-            {
-                assert(arr[after].prev == before && "before and after must be adjecent!");
-                arr[after].prev = last_inserted;
-            }
-        }
-        
-        static
-        void unlink_chain(u32 before, u32 first_inserted, u32 last_inserted, u32 after, Bucket arr[]) noexcept
-        {
-            assert(first_inserted != EMPTY_LINK && last_inserted != EMPTY_LINK && "must not be null");
-
-            arr[last_inserted].next = EMPTY_LINK;
-            if(before != EMPTY_LINK)
-            {
-                assert(arr[before].next == first_inserted && "before and first_inserted must be adjecent!");
-                arr[before].next = after;
-            }
-
-            arr[first_inserted].prev = EMPTY_LINK;
-            if(after != EMPTY_LINK)
-            {
-                assert(arr[after].prev == last_inserted && "last_inserted and after must be adjecent!");
-                arr[after].prev = before;
-            }
-        }
-
-        static
-        u32 extract_node(Index_Chain* from, u32 extract_after, u32 what, Bucket arr[]) noexcept
-        {
-            assert(what != EMPTY_LINK && "cannot be nullptr");
-            assert(from->first != EMPTY_LINK && "cant extract from empty chain");
-            assert(_check_is_connected(from->first, from->last, arr));
-
-            //if is start of chain
-            if(extract_after == EMPTY_LINK)
-                from->first = arr[what].next;
-            else
-                assert(arr[extract_after].next == what);
-            
-            //if is end of chain
-            if(what == from->last)
-                from->last = extract_after;
-
-            unlink_chain(extract_after, what, what, arr[what].next, arr);
-            
-            if(from->first == EMPTY_LINK || from->last == EMPTY_LINK)
-            {
-                from->first = EMPTY_LINK;
-                from->last = EMPTY_LINK;
-            }
-        
-            assert(is_isolated(what, arr));
-            assert(_check_is_connected(from->first, from->last, arr));
-            
-            return what;
-        }
-
-        static
-        void insert_node(Index_Chain* to, u32 insert_after, u32 what, Bucket arr[]) noexcept
-        {
-            assert(what != EMPTY_LINK && "cannot be nullptr");
-            assert(is_isolated(what, arr) && "must be isolated");
-            assert(_check_is_connected(to->first, to->last, arr));
-
-            if(to->first == EMPTY_LINK)
-            {
-                assert(insert_after == EMPTY_LINK);
-                to->first = what;
-                to->last = what;
-                return;
-            }
-
-            //if is start of chain
-            if(insert_after == EMPTY_LINK)
-            {
-                link_chain(EMPTY_LINK, what, what, to->first, arr);
-                to->first = what;
-            }
-            //if is end of chain
-            else if(insert_after == to->last)
-            {
-                link_chain(insert_after, what, what, EMPTY_LINK, arr);
-                to->last = what;
-            }
-            else
-            {
-                link_chain(insert_after, what, what, arr[insert_after].next, arr);
-            }
-            
-            assert(_check_is_connected(to->first, to->last, arr));
-        }
-
-
-    }
-
-    // We use the most efficient strcuture for indexing which is just two ints 
-    //  (i64 because we want to be general)
-    // This however may be inefficient in terms of space as 99% of the time
-    //  the number the number of elements will fit in i32. As such we provide 
-    //  functions to convert from/to a compressed index into a Bucket_Index.
-    // The interface for the compressed index is still isize (i64) but we can
-    //  store it as anything we know will be enough for our number of elements.
     struct Bucket_Index
     {   
         isize bucket_i = -1;
         isize slot_i = -1;
     };
-
+    
     inline
-    Bucket_Index to_bucket_index(isize index, isize bucket_size)
+    Bucket_Index to_bucket_index(isize index, isize log2_bucket_size)
     {
-        assert(index > 0);
+        assert(0 < log2_bucket_size && log2_bucket_size < 64);
 
-        //usize uindex = cast(usize) index;
-        //usize bucket_size_mask = cast(usize) bucket_size - 1;
-
-        //Bucket_Index out;
-        //out.bucket_i = uindex & ~bucket_size_mask;
-        //out.slot_i = uindex & bucket_size_mask;
-        
-        assert(index > 0 && "invalid index");
+        assert(index >= 0 && "invalid index");
+        usize mask = ~(cast(usize) -1 << log2_bucket_size);
 
         Bucket_Index out = {};
-        out.bucket_i = index / bucket_size;
-        out.slot_i = index % bucket_size;
+        out.bucket_i = index >> log2_bucket_size;
+        out.slot_i = index & mask;
 
         return out;
     }
     
     inline
-    isize from_bucket_index(Bucket_Index index, isize bucket_size)
+    isize from_bucket_index(Bucket_Index index, isize log2_bucket_size)
     {
-        assert(index.bucket_i > 0);
-        assert(0 <= index.slot_i && index.slot_i < bucket_size);
+        assert(0 <= index.bucket_i);
+        assert(0 <= index.slot_i && (index.slot_i >> log2_bucket_size) == 0 && "must be within range!");
+        assert(0 < log2_bucket_size && log2_bucket_size < 64);
 
-        usize out = index.bucket_i * bucket_size + index.slot_i;
+        usize out = (index.bucket_i << log2_bucket_size) + index.slot_i;
         return out;
     }
-    
+
     namespace bucket_array_internal
     {
+        using Mask = u64;
+        static constexpr isize MASK_BITS = sizeof(Mask) * 8;
+
+        struct Bucket
+        {
+            void* data = nullptr;
+            Mask* mask = nullptr;
+            u32 used_count = 0;
+            u32 has_allocation = 0;
+            
+            u32 next = -1;
+            u32 prev = -1;
+        };
+
         struct Untyped_Bucket_Array
         {
             Stack<Bucket> _buckets = {}; //4
             Index_Chain _open_buckets = {}; //1
-            isize _max_bucket_size = 0; //1
             isize _total_used = 0;      //1
             isize _total_capacity = 0;  //1
+            u8 _log2_bucket_size = 0; //1/8
+            u32 _max_bucket_size = 0;
 
-            Untyped_Bucket_Array(isize max_bucket_size = 256, memory_globals::Default_Alloc alloc = {}) noexcept 
-                : _buckets(alloc.val), _max_bucket_size(max_bucket_size)
+            Untyped_Bucket_Array(isize log2_bucket_size, memory_globals::Default_Alloc alloc = {}) noexcept 
+                : _buckets(alloc.val), _log2_bucket_size(cast(u8) log2_bucket_size)
             {
-                //assert(is_power_of_two(bucket_size) && "bucket size must be power of two!");
+                assert(0 < log2_bucket_size && log2_bucket_size < 32 && "size must be positive and must be smaller than 32 bit number!");
             }
 
             ~Untyped_Bucket_Array() noexcept
@@ -295,34 +127,12 @@ namespace jot
         static_assert(sizeof(Untyped_Bucket_Array) <= 64, "must be max 64B for good performence");
 
         static constexpr isize USED_SLOTS_ALIGN = 16; //should be enough for all SIMD instructions
-        
-        static 
-        void free_data(Untyped_Bucket_Array* bucket_array, isize slot_size, isize slots_align) noexcept
-        {
-            for(isize i = 0; i < size(bucket_array->_buckets); i++)
-            {
-                Bucket* bucket = &bucket_array->_buckets[i];
-                assert(bucket->used_slots != nullptr && "shoudl be init");
-                assert(bucket->data != nullptr && "shoudl be init");
 
-                isize data_size = bucket->size * slot_size;
-                isize used_slots_size = div_round_up(bucket->size, 64)*64;
-                Slice<u8> data = {cast(u8*) bucket->data, data_size};
-                Slice<u8> used_slots = {cast(u8*) bucket->used_slots, used_slots_size};
-                    
-                Allocator* alloc = bucket_array->_buckets._allocator;
-                alloc->deallocate(data, slots_align);
-                alloc->deallocate(used_slots, USED_SLOTS_ALIGN);
-            }
-
-            bucket_array->_total_used = 0;
-        }
-
-        #ifdef BUCKET_ARRAY_PEDANTIC
+        #ifdef BUCKET_ARRAY_PEDANTIC_LIST
             #define BUCKET_ARRAY_DEFAULT_PEDANTIC_VALUE true
         #else
             #define BUCKET_ARRAY_DEFAULT_PEDANTIC_VALUE false
-        #endif BUCKET_ARRAY_PEDANTIC
+        #endif
         
         #define _UC_COMPARE_CONST 8
         #define cmp_uc(a, cmp, b) ((a) / _UC_COMPARE_CONST) cmp ((b) / _UC_COMPARE_CONST)
@@ -331,6 +141,7 @@ namespace jot
         bool is_invariant(Untyped_Bucket_Array const& bucket_array, bool pedantic = BUCKET_ARRAY_DEFAULT_PEDANTIC_VALUE) noexcept
         {
             Slice<const Bucket> arr = slice(bucket_array._buckets);
+            isize bucket_size = cast(isize) 1 << bucket_array._log2_bucket_size;
             u32 first = bucket_array._open_buckets.first;
             u32 last = bucket_array._open_buckets.last;
 
@@ -338,31 +149,31 @@ namespace jot
             bool is_sorted = true;
             bool is_conencted = true;
             bool is_isolated = true;
-            bool first_last_match = (first == EMPTY_LINK) == (last == EMPTY_LINK);
+            bool first_last_match = (first == NULL_LIST_INDEX) == (last == NULL_LIST_INDEX);
             bool total_size_matches = true;
             bool total_capacity_matches = true;
             
             const Bucket* first_bucket = nullptr;
             const Bucket* last_bucket = nullptr;
 
-            if(first != EMPTY_LINK && last != EMPTY_LINK)
+            if(first != NULL_LIST_INDEX && last != NULL_LIST_INDEX)
             {
                 first_bucket = &arr[first];
                 last_bucket = &arr[last];
             
-                is_isolated = first_bucket->prev == EMPTY_LINK && last_bucket->next == EMPTY_LINK;
+                is_isolated = first_bucket->prev == NULL_LIST_INDEX && last_bucket->next == NULL_LIST_INDEX;
                 assert(is_isolated);
             }
             
             if(pedantic)
             {
                 u32 curr = first;
-                u32 prev = EMPTY_LINK;
+                u32 prev = NULL_LIST_INDEX;
 
-                while(curr != EMPTY_LINK && prev != last)
+                while(curr != NULL_LIST_INDEX && prev != last)
                 {
 
-                    if(prev != EMPTY_LINK)
+                    if(prev != NULL_LIST_INDEX)
                     {
                         const Bucket* curr_bucket = &arr[curr];
                         const Bucket* prev_bucket = &arr[prev]; 
@@ -382,12 +193,9 @@ namespace jot
                 assert(is_sorted);
 
                 isize total_size = 0;
-                isize total_capacity = 0;
+                isize total_capacity = arr.size * bucket_size;
                 for(isize i = 0; i < arr.size; i++)
-                {
                     total_size += arr[i].used_count;
-                    total_capacity += arr[i].size;
-                }
 
                 total_size_matches = total_size == bucket_array._total_used;
                 total_capacity_matches = total_capacity == bucket_array._total_capacity;
@@ -406,39 +214,97 @@ namespace jot
                 && first_last_match;
         }
 
-        static 
-        u32 add_bucket(Untyped_Bucket_Array* to, isize new_bucket_size, isize slot_size, isize slots_align) 
+        //Allocates contiguously space for total_block_size elements and adds total_block_size / bucket_size blocks to the block stack.
+        nodisc static
+        Allocator_State_Type add_bucket_block(Untyped_Bucket_Array* bucket_array, isize total_block_size, isize slot_size, isize slots_align) noexcept
         {
-            assert(new_bucket_size > 0 && slot_size > 0 && slots_align > 0);
+            assert(total_block_size > 0 && slot_size > 0 && slots_align > 0);
 
-            Allocator* alloc = to->_buckets._allocator;
-            isize data_size = new_bucket_size * slot_size;
-            isize used_slots_size = div_round_up(new_bucket_size, 64) * sizeof(u64);
+            Allocator* alloc = bucket_array->_buckets._allocator;
+            Stack<Bucket>* buckets = &bucket_array->_buckets;
+
+            isize bucket_size = cast(isize) 1 << bucket_array->_log2_bucket_size;
+            isize bucket_count = div_round_up(total_block_size, bucket_size);
+
+            isize single_mask_size = div_round_up(bucket_size, MASK_BITS);
+            isize new_block_size = bucket_count * bucket_size;
+
+            isize data_size = new_block_size * slot_size;
+            isize masks_size = single_mask_size * bucket_count * sizeof(Mask);
+            
+            Allocator_State_Type bucket_reserve = reserve_failing(buckets, bucket_count + size(buckets));
+            if(bucket_reserve != Allocator_State::OK)
+                return bucket_reserve;
 
             Allocation_Result data = alloc->allocate(data_size, slots_align);
-            Allocation_Result used_slots = alloc->allocate(used_slots_size, USED_SLOTS_ALIGN);
-            
-            if(data.state != OK || used_slots.state != OK)
-            {
-                if(data.state == OK)
-                    alloc->deallocate(data.items, slots_align);
-                    
-                if(used_slots.state == OK)
-                    alloc->deallocate(used_slots.items, USED_SLOTS_ALIGN);
+            if(data.state != Allocator_State::OK)
+                return data.state;
 
-                panic("allocation failed!");
+            Allocation_Result mask = alloc->allocate(masks_size, USED_SLOTS_ALIGN);
+            if(mask.state != Allocator_State::OK)
+            {
+                alloc->deallocate(data.items, slots_align);
+                return mask.state;
+            }
+            
+            null_items(mask.items);
+
+            u8* curr_data = data.items.data;
+            Mask* curr_mask = cast(Mask*) mask.items.data;
+            for(isize i = 0; i < bucket_count; i++)
+            {
+                Bucket bucket;
+                bucket.used_count = 0;
+                bucket.data = cast(void*) curr_data;
+                bucket.mask = curr_mask;
+                bucket.has_allocation = i == 0; 
+
+                push(&bucket_array->_buckets, bucket);
+
+                curr_data += bucket_size * slot_size;
+                curr_mask += single_mask_size;
             }
 
-            Bucket bucket;
-            bucket.size = cast(u32) new_bucket_size;
-            bucket.data = cast(void*) data.items.data;
-            bucket.used_slots = cast(u64*) used_slots.items.data;
-            null_items(used_slots.items);
-            
-            push(&to->_buckets, bucket);
-            to->_total_capacity += new_bucket_size;
+            bucket_array->_max_bucket_size = max(bucket_array->_max_bucket_size, cast(u32) total_block_size);
+            bucket_array->_total_capacity += new_block_size;
 
-            return cast(u32) size(to->_buckets) - 1;
+            return Allocator_State::OK;
+        }
+        
+        struct Bucket_Array_Growth
+        {
+            isize base_size = 256;
+            isize add_increment = 0;
+            isize mult_increment_num = 3;
+            isize mult_increment_den = 2;
+        };
+        
+        static 
+        u32 add_free_buckets(Untyped_Bucket_Array* bucket_array, Bucket_Array_Growth const& growth, isize slot_size, isize slots_align) 
+        {
+            isize size_before = size(bucket_array->_buckets);
+            isize last_size = bucket_array->_max_bucket_size;
+
+            //Calculate growth
+            assert(growth.base_size >= 0
+                && growth.add_increment >= 0
+                && growth.mult_increment_num >= 0
+                && growth.mult_increment_den > 0 && "invalid growth!");
+
+            last_size = max(last_size, growth.base_size);
+            isize new_size = last_size + growth.add_increment
+                + last_size * growth.mult_increment_num / growth.mult_increment_den;
+
+            assert(new_size > 0 && "resulting size must be nonzero!");
+            Allocator_State_Type alloc_state = add_bucket_block(bucket_array, new_size, slot_size, slots_align);
+            force(alloc_state == Allocator_State::OK && "bucket array allocation failed!");
+            
+            //insert all allocated buckets to the free list
+            Slice<Bucket> buckets = slice(&bucket_array->_buckets);
+            for(isize to_bucket_i = size_before; to_bucket_i < buckets.size; to_bucket_i++)
+                insert_node(&bucket_array->_open_buckets, bucket_array->_open_buckets.last, cast(u32) to_bucket_i, buckets);
+
+            return cast(u32) size_before;
         }
         
         //@TODO: fix crashes of map on stress test when shrinking rehash (add rehash test to other tests 
@@ -446,69 +312,70 @@ namespace jot
         //@TODO: speed up compilation and type erasure of everything
         //@TODO: more elaborated benchmark of iteration
         //@TODO: make separate stack header that contains the bare minimum
-        //@TODO: make header for intrinsics - just some of them and just the ones we actually use
-        //        this header should be absolutely free standing but still compatible with the lib similar to
-        //        time, meta, cpu_id and others
         static 
-        Bucket_Index prepare_for_insert(Untyped_Bucket_Array* buckets, isize new_bucket_size, isize slot_size, isize slots_align)
+        Bucket_Index prepare_for_insert(Untyped_Bucket_Array* bucket_array, Bucket_Array_Growth const& growth, isize slot_size, isize slots_align)
         {
             using namespace bucket_array_internal;
+            isize bucket_size = cast(isize) 1 << bucket_array->_log2_bucket_size;
 
-            u32 to_bucket_i = buckets->_open_buckets.first;
-            if(to_bucket_i == EMPTY_LINK)
+            u32 to_bucket_i = bucket_array->_open_buckets.first;
+            if(to_bucket_i == NULL_LIST_INDEX)
             {
-                is_invariant(*buckets, true);
-                to_bucket_i = add_bucket(buckets, new_bucket_size, slot_size, slots_align);
-                insert_node(&buckets->_open_buckets, buckets->_open_buckets.last, to_bucket_i, data(&buckets->_buckets));
+                is_invariant(*bucket_array, true);
+                to_bucket_i = add_free_buckets(bucket_array, growth, slot_size, slots_align);
             }
             else
-                is_invariant(*buckets);
+                is_invariant(*bucket_array);
         
-            Bucket* to_bucket = &buckets->_buckets[to_bucket_i];
-            assert(to_bucket->used_count < to_bucket->size && "should have a free slot");
-            assert(to_bucket->prev == EMPTY_LINK && "should be first node");
+            Bucket* to_bucket = &bucket_array->_buckets[to_bucket_i];
+            assert(to_bucket->used_count < bucket_size && "should have a free slot");
+            assert(to_bucket->prev == NULL_LIST_INDEX && "should be first node");
         
-            //Iterate over all bits of used_slots and when an empty space is found
+            //Iterate over all bits of mask and when an empty space is found
             // insert val in place.
             isize found_index = -1;
-            isize slot_block_size = div_round_up(to_bucket->size, 64);
+            isize slot_block_size = div_round_up(bucket_size, MASK_BITS);
             
             for(isize i = 0; i < slot_block_size; i++)
             {
-                u64* block = &to_bucket->used_slots[i];
+                Mask* mask = &to_bucket->mask[i];
                 size_t bit_pos = 0;
-                bool was_found = intrin__find_first_set_64(&bit_pos, ~*block);
+                bool was_found = false;
+                if constexpr(sizeof(Mask) == 8)
+                    was_found = intrin__find_first_set_64(&bit_pos, ~*mask);
+                else
+                    was_found = intrin__find_first_set_32(&bit_pos, cast(u32) ~*mask);
 
                 if(was_found)
                 {
-                    u64 bit = cast(u64) 1 << bit_pos;
-                    *block |= bit;
-                    found_index = 64 * i + bit_pos;
+                    Mask bit = cast(Mask) 1 << bit_pos;
+                    *mask |= bit;
+                    found_index = MASK_BITS * i + bit_pos;
                         
                     i = slot_block_size;
                     break;
                 }
             }
             assert(found_index != -1 && "should have been found");
-            assert(found_index < to_bucket->size && "has corrupted used_slots bits");
+            assert(found_index < bucket_size && "has corrupted mask bits");
 
             //increment counters
             to_bucket->used_count += 1;
-            buckets->_total_used += 1;
-            assert(to_bucket->used_count <= to_bucket->size && "should not be overfull!");
+            bucket_array->_total_used += 1;
+            assert(to_bucket->used_count <= bucket_size && "should not be overfull!");
         
-            //if is completely full extract it from open buckets
-            if(to_bucket->used_count == to_bucket->size)
+            //if is completely full extract it from open bucket_array
+            if(to_bucket->used_count == bucket_size)
             {
-                extract_node(&buckets->_open_buckets, to_bucket->prev, to_bucket_i, data(&buckets->_buckets));
-                is_invariant(*buckets, true);
+                extract_node(&bucket_array->_open_buckets, to_bucket->prev, to_bucket_i, slice(&bucket_array->_buckets));
+                is_invariant(*bucket_array, true);
             }
 
             //Assert local consistency
-            assert(to_bucket->prev == EMPTY_LINK && "should be first node");
-            if(to_bucket->next != EMPTY_LINK)
+            assert(to_bucket->prev == NULL_LIST_INDEX && "should be first node");
+            if(to_bucket->next != NULL_LIST_INDEX)
             {
-                Bucket* next_bucket = &buckets->_buckets[to_bucket->next];
+                Bucket* next_bucket = &bucket_array->_buckets[to_bucket->next];
                 assert(cmp_uc(next_bucket->used_count, <=, to_bucket->used_count) && "used_count's should be consistent");
             }
 
@@ -516,7 +383,7 @@ namespace jot
             out.bucket_i = to_bucket_i;
             out.slot_i = found_index;
 
-            is_invariant(*buckets);
+            is_invariant(*bucket_array);
 
             return out;
         }
@@ -525,19 +392,20 @@ namespace jot
         {
             using namespace bucket_array_internal;
             is_invariant(*bucket_array);
-
+            
+            isize bucket_size = cast(isize) 1 << bucket_array->_log2_bucket_size;
             Slice<Bucket> buckets = slice(&bucket_array->_buckets);
             Bucket* bucket = &buckets[index.bucket_i];
-            assert(0 <= index.slot_i && index.slot_i < bucket->size && "out of bounds!");
+            assert(0 <= index.slot_i && index.slot_i < bucket_size && "out of bounds!");
 
             //mark slot as free        
-            isize slot_block_i = index.slot_i / 64;
-            isize slot_bit_i = index.slot_i % 64;
+            isize slot_mask_i = index.slot_i / MASK_BITS;
+            isize slot_bit_i = index.slot_i % MASK_BITS;
 
-            u64 bit = cast(u64) 1 << slot_bit_i;
-            u64* block = &bucket->used_slots[slot_block_i];
-            assert((*block & bit) > 0 && "provided index is invalid! was not previously allocated to!");
-            *block &= ~bit; //sets the bit to 0;
+            Mask bit = cast(Mask) 1 << slot_bit_i;
+            Mask* mask = &bucket->mask[slot_mask_i];
+            assert((*mask & bit) > 0 && "provided index is invalid! was not previously allocated to!");
+            *mask &= ~bit; //sets the bit to 0;
 
             //decrease used_count and swap blocks if necessary
             bucket->used_count -= 1;
@@ -545,26 +413,26 @@ namespace jot
             isize used_count = bucket->used_count;
 
             //if was full insert it to the start of the list
-            if(bucket->used_count == bucket->size - 1)
+            if(bucket->used_count == bucket_size - 1)
             {
-                insert_node(&bucket_array->_open_buckets, EMPTY_LINK, cast(u32) index.bucket_i, buckets.data);
+                insert_node(&bucket_array->_open_buckets, NULL_LIST_INDEX, cast(u32) index.bucket_i, buckets);
                 is_invariant(*bucket_array, true);
             }
-            else if(bucket->next != EMPTY_LINK && cmp_uc(buckets[bucket->next].used_count, >, used_count))
+            else if(bucket->next != NULL_LIST_INDEX && cmp_uc(buckets[bucket->next].used_count, >, used_count))
             {
                 u32 insert_after = bucket->next;
                 while(true)
                 {
                     Bucket* curr_bucket = &buckets[insert_after];
-                    if(curr_bucket->next == EMPTY_LINK || cmp_uc(buckets[curr_bucket->next].used_count, <=, used_count))   
+                    if(curr_bucket->next == NULL_LIST_INDEX || cmp_uc(buckets[curr_bucket->next].used_count, <=, used_count))   
                         break;
 
                     insert_after = curr_bucket->next;
                 }
 
-                assert(insert_after != EMPTY_LINK && insert_after != index.bucket_i);
-                extract_node(&bucket_array->_open_buckets, bucket->prev, cast(u32) index.bucket_i, buckets.data);
-                insert_node(&bucket_array->_open_buckets, insert_after, cast(u32) index.bucket_i, buckets.data);
+                assert(insert_after != NULL_LIST_INDEX && insert_after != index.bucket_i);
+                extract_node(&bucket_array->_open_buckets, bucket->prev, cast(u32) index.bucket_i, buckets);
+                insert_node(&bucket_array->_open_buckets, insert_after, cast(u32) index.bucket_i, buckets);
                 is_invariant(*bucket_array, true);
             }
             else
@@ -574,72 +442,172 @@ namespace jot
         }
     }
 
-    template <typename T>
-    struct Bucket_Array
-    {
-        bucket_array_internal::Untyped_Bucket_Array _contents = {};
+    using bucket_array_internal::Bucket_Array_Growth;
 
-        explicit Bucket_Array(isize max_bucket_size = 256, memory_globals::Default_Alloc alloc = {}) noexcept 
-            : _contents(max_bucket_size, alloc)
+    template <typename T>
+    struct Bucket_Array : public bucket_array_internal::Untyped_Bucket_Array
+    {
+        explicit Bucket_Array(isize log2_bucket_size = 8, memory_globals::Default_Alloc alloc = {}) noexcept 
+            : bucket_array_internal::Untyped_Bucket_Array(log2_bucket_size, alloc) 
         {}
 
-        //@TODO: figure out how to type erase without too much run time overhead
-        ~Bucket_Array()
+        ~Bucket_Array() noexcept;
+    };
+    
+    template <typename T>
+    Bucket_Array<T>::~Bucket_Array() noexcept
+    {
+        using namespace bucket_array_internal;
+
+        is_invariant(*this, true);
+        Slice<Bucket> buckets = slice(&_buckets);
+        isize bucket_size = cast(isize) 1 << _log2_bucket_size;
+        isize mask_size = div_round_up(bucket_size, MASK_BITS);
+        Allocator* alloc = _buckets._allocator;
+        
+        //since multiple buckets can be joined into a single allocation block
+        // we only deallocate the block once it changes to a new one
+        u8* accumulated_data_ptr = nullptr;
+        u8* accumulated_mask_ptr = nullptr;
+
+        isize accumulated_data_byte_size = 0;
+        isize accumulated_mask_byte_size = 0;
+        isize buckets_without_allocation = 0;
+        
+        //For each bucket scan through all of its active elements and call
+        // a destructor on them
+        for(isize i = 0; i < buckets.size; i++)
         {
-            is_invariant(_contents, true);
-            using namespace bucket_array_internal;
-            Slice<Bucket> buckets = slice(&_contents._buckets);
-            //For each bucket scan through all of its active elements and call
-            // a destructor on them
-            for(isize i = 0; i < buckets.size; i++)
+            Bucket* bucket = &buckets[i];
+            assert(bucket->mask != nullptr && "should be init");
+            assert(bucket->data != nullptr && "should be init");
+
+            Slice<T> items = {cast(T*) bucket->data, bucket_size};
+
+            //for each slot check if it is used and if so call destructor on it
+            for(isize j = 0; j < mask_size; j++)
             {
-                Bucket* bucket = &buckets[i];
-                assert(bucket->used_slots != nullptr && "shoudl be init");
-                assert(bucket->data != nullptr && "shoudl be init");
+                //if is block empty skip
+                if(bucket->mask[j] == 0)
+                    continue;
 
-                Slice<T> items = {cast(T*) bucket->data, bucket->size};
-                isize used_slots_size = div_round_up(bucket->size, 64);
-                isize data_size = bucket->size * sizeof(T);
-
-                //for each slot check if it is used and if so call destructor on it
-                for(isize j = 0; j < used_slots_size; j++)
+                for(isize k = 0; k < MASK_BITS; k++)
                 {
-                    //if is block empty skip
-                    if(bucket->used_slots[j] == 0)
-                        continue;
-
-                    for(isize k = 0; k < 64; k++)
+                    Mask bit = cast(Mask) 1 << k;
+                    if(bucket->mask[j] & bit)
                     {
-                        u64 bit = cast(u64) 1 << k;
-                        if(bucket->used_slots[j] & bit)
-                        {
-                            T& item = items[j * 64 + k];
-                            item.~T();
-                        }
+                        //if the slot_i is in the padding area...
+                        isize slot_i = j * MASK_BITS + k;
+                        if(slot_i >= bucket_size)
+                            break;
+
+                        T& item = items[slot_i];
+                        item.~T();
                     }
                 }
-                
-                Slice<u8> data = {cast(u8*) bucket->data, bucket->size * cast(isize) sizeof(T)};
-                Slice<u8> used_slots = {cast(u8*) bucket->used_slots, used_slots_size * cast(isize) sizeof(u64)};
-                    
-                Allocator* alloc = _contents._buckets._allocator;
-                alloc->deallocate(data, alignof(T));
-                alloc->deallocate(used_slots, USED_SLOTS_ALIGN);
             }
 
-            _contents._total_used = 0;
-        }
-    };
+            if(accumulated_data_ptr == nullptr)
+            {
+                accumulated_data_ptr = cast(u8*) bucket->data;
+                accumulated_mask_ptr = cast(u8*) bucket->mask;
+            }
+            
+            accumulated_data_byte_size += bucket_size * cast(isize) sizeof(T);
+            accumulated_mask_byte_size += mask_size * cast(isize) sizeof(Mask);
 
-    //@TODO: add define flag to trigger pedantic asserts that check:
-    //  slot has used bit set
-    template <typename T>
-    T* get(Bucket_Array<T>* from, Bucket_Index index) noexcept
+            if(i == buckets.size - 1 || buckets[i+1].has_allocation)
+            {
+                Slice<u8> data = {accumulated_data_ptr, accumulated_data_byte_size};
+                Slice<u8> mask = {accumulated_mask_ptr, accumulated_mask_byte_size};
+                    
+                alloc->deallocate(data, alignof(T));
+                alloc->deallocate(mask, USED_SLOTS_ALIGN);
+
+                accumulated_data_byte_size = 0;
+                accumulated_mask_byte_size = 0;
+
+                accumulated_data_ptr = nullptr;
+                accumulated_mask_ptr = nullptr;
+            }
+            else
+            {
+                buckets_without_allocation ++;
+            }
+        }
+
+        _total_used = 0;
+    }
+    
+    template <typename T> nodisc
+    bool is_used(Bucket_Array<T> const& bucket_array, Bucket_Index index)
     {
-        bucket_array_internal::Bucket* bucket = &from->_contents._buckets[index.bucket_i];
+        using namespace bucket_array_internal;
+        const Bucket& bucket = bucket_array._buckets[index.bucket_i];
+        
+        isize bucket_size = cast(isize) 1 << bucket_array._log2_bucket_size;
+        assert(0 <= index.slot_i && index.slot_i < bucket_size && "out of bounds!");
+
+        isize mask_index = index.slot_i / MASK_BITS;
+        isize bit_index = index.slot_i % MASK_BITS;
+
+        Mask mask = bucket.mask[mask_index];
+        Mask bit = cast(Mask) 1 << bit_index;
+
+        bool res = (mask & bit) != 0;
+        return res;
+    }
+    
+    template <typename T> nodisc
+    bool is_used(Bucket_Array<T> const& bucket_array, isize index)
+    {
+        Bucket_Index bucket_index = to_bucket_index(index, bucket_array._log2_bucket_size);
+        return is_used(bucket_array, bucket_index);
+    }
+
+    //Item_Fn: void item_callback(T* item, Bucket_Array<T>* arr, Bcuket_Index index)
+    template <typename T, typename Item_Fn>
+    void map_mutate(Bucket_Array<T>* bucket_array, Item_Fn item_callback)
+    {
+        using namespace bucket_array_internal;
+        
+        Slice<Bucket> buckets = slice(&bucket_array->_buckets);
+        isize bucket_size = cast(isize) 1 << bucket_array->_log2_bucket_size;
+        isize used_slots_size = div_round_up(bucket_size, MASK_BITS);
+
+        for(isize i = 0; i < buckets.size; i++)
+        {
+            Bucket* bucket = &buckets[i];
+            Slice<T> items = {cast(T*) bucket->data, bucket_size};
+
+            for(isize j = 0; j < used_slots_size; j++)
+            {
+                if(bucket->mask[j] == 0)
+                    continue;
+
+                for(isize k = 0; k < MASK_BITS; k++)
+                {
+                    Mask bit = cast(Mask) 1 << k;
+                    if(bucket->mask[j] & bit)
+                    {
+                        isize slot_index = j * MASK_BITS + k;
+                        isize bucket_index = i;
+                        T* item = &items[slot_index];
+                        item_callback(item, bucket_array, bucket_index, slot_index);
+                    }
+                }
+            }
+        }
+    }
+
+    template <typename T> nodisc
+    T* get(Bucket_Array<T>* bucket_array, Bucket_Index index) noexcept
+    {
+        assert(is_used(*bucket_array, index) == true && "must be used!");
+
+        bucket_array_internal::Bucket* bucket = &bucket_array->_buckets[index.bucket_i];
         T* bucket_data = cast(T*) bucket->data;
         
-        assert(0 <= index.slot_i && index.slot_i < bucket->size && "out of bounds!");
         return &bucket_data[index.slot_i];
     }
     
@@ -651,22 +619,53 @@ namespace jot
         return *get(cheated, index);
     }
 
+    template <typename T> nodisc
+    T* get(Bucket_Array<T>* from, isize index) noexcept
+    {
+        return get(from, to_bucket_index(index, from->_log2_bucket_size));
+    }
+    
+    template <typename T>
+    T const& get(Bucket_Array<T> const& from, isize index) noexcept
+    {
+        return get(from, to_bucket_index(index, from._log2_bucket_size));
+    }
+
     template <typename T>
     isize size(Bucket_Array<T> const& bucket_array) noexcept
     {
-        return bucket_array._contents._total_used;
+        return bucket_array._total_used;
     }
 
     template <typename T>
     isize capacity(Bucket_Array<T> const& bucket_array) noexcept
     {
-        return bucket_array._contents._total_capacity;
+        return bucket_array._total_capacity;
+    }
+    
+    template <typename T> nodisc
+    Allocator_State_Type reserve_failing(Bucket_Array<T>* bucket_array, isize to_size) noexcept
+    {
+        if(to_size <= bucket_array->_total_capacity)
+            return Allocator_State::OK;
+
+        return bucket_array_internal::add_bucket_block(bucket_array, to_size, sizeof(T), alignof(T));
+    }
+    
+    template <typename T> nodisc
+    void reserve(Bucket_Array<T>* bucket_array, isize to_size) noexcept
+    {
+        if(to_size <= bucket_array->_total_capacity)
+            return;
+
+        Allocator_State_Type s = bucket_array_internal::add_bucket_block(bucket_array, to_size, sizeof(T), alignof(T));
+        force(s == Allocator_State::OK && "Bucket_Array allocation failed!");
     }
 
     template <typename T> nodisc
-    Bucket_Index insert(Bucket_Array<T>* bucket_array, T val, isize new_bucket_size)
+    Bucket_Index insert_bucket_index(Bucket_Array<T>* bucket_array, T val, Bucket_Array_Growth growth = {})
     {
-        Bucket_Index loc = bucket_array_internal::prepare_for_insert(&bucket_array->_contents, new_bucket_size, sizeof(T), alignof(T));
+        Bucket_Index loc = bucket_array_internal::prepare_for_insert(bucket_array, growth, sizeof(T), alignof(T));
         T* address = get(bucket_array, loc);
 
         new (address) T(move(&val));
@@ -677,13 +676,27 @@ namespace jot
     template <typename T>
     T remove(Bucket_Array<T>* bucket_array, Bucket_Index index) noexcept
     {
-        bucket_array_internal::prepare_for_remove(&bucket_array->_contents, index);
         T* address = get(bucket_array, index);
+        bucket_array_internal::prepare_for_remove(bucket_array, index);
 
         T val = move(address);
         address->~T();
 
         return val;
+    }
+    
+    template <typename T> nodisc
+    isize insert(Bucket_Array<T>* bucket_array, T val, Bucket_Array_Growth growth = {})
+    {
+        Bucket_Index index = insert_bucket_index(bucket_array, move(&val), growth);
+        return from_bucket_index(index, bucket_array->_log2_bucket_size);
+    }
+    
+    template <typename T>
+    T remove(Bucket_Array<T>* bucket_array, isize index) noexcept
+    {
+        Bucket_Index bucket_index = to_bucket_index(index, bucket_array->_log2_bucket_size);
+        return remove(bucket_array, bucket_index);
     }
 }
 

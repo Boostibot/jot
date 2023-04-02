@@ -1,25 +1,28 @@
 #pragma once
 
 #include <stdint.h>
+#include <stddef.h>
 
+#ifdef __cplusplus
 namespace jot
 {
-    #ifndef JOT_SIZE_T
-        typedef ptrdiff_t isize;
-    #endif
+#endif
 
+    typedef ptrdiff_t isize;
     typedef uint64_t hash_t;
 
+    static
     uint64_t uint64_hash(uint64_t value) 
     {
         //source: https://stackoverflow.com/a/12996028
         uint64_t hash = value;
-        hash = (hash ^ (hash >> 30)) * uint64_t(0xbf58476d1ce4e5b9);
-        hash = (hash ^ (hash >> 27)) * uint64_t(0x94d049bb133111eb);
+        hash = (hash ^ (hash >> 30)) * (uint64_t) 0xbf58476d1ce4e5b9;
+        hash = (hash ^ (hash >> 27)) * (uint64_t) 0x94d049bb133111eb;
         hash = hash ^ (hash >> 31);
         return hash;
     }
 
+    static
     uint32_t uint32_hash(uint32_t value) 
     {
         //source: https://stackoverflow.com/a/12996028
@@ -30,6 +33,7 @@ namespace jot
         return hash;
     }
 
+    static
     uint32_t murmur_hash32(const void* key, isize size, uint32_t seed)
     {
         //source https://github.com/abrandoned/murmur2/blob/master/MurmurHash2.c
@@ -78,6 +82,7 @@ namespace jot
         return h;
     } 
 
+    static
     uint64_t murmur_hash64(const void* key, isize size, uint64_t seed)
     {
         //source https://github.com/abrandoned/murmur2/blob/master/MurmurHash2.c
@@ -132,6 +137,7 @@ namespace jot
         return h;
     } 
 
+    static
     uint32_t fnv_one_at_a_time_hash32(const void* key, isize size, uint32_t seed)
     {
         // Source: https://github.com/aappleby/smhasher/blob/master/src/Hashes.cpp
@@ -146,6 +152,7 @@ namespace jot
         return hash;
     }
 
+    static
     uint32_t murmur_one_at_a_time_hash32(const void* key, isize size, uint32_t seed)
     {
         // One-byte-at-a-time hash based on Murmur's mix
@@ -161,6 +168,7 @@ namespace jot
         return hash;
     }
 
+    static
     uint32_t jenkins_one_at_a_time_hash32(const void* key, isize size, uint32_t seed)
     {
         uint32_t hash = seed;
@@ -177,12 +185,14 @@ namespace jot
         return hash;
     }
 
+    static
     uint32_t rotl32(uint32_t value, int32_t by_bits)
     {
         // C idiom: will be optimized to a single operation
         return value<<by_bits | value>>(32-by_bits);      
     }
 
+    static
     uint32_t coffin_one_at_a_time_hash_32(const void* key, isize size, uint32_t seed) 
     { 
         // Source: https://stackoverflow.com/a/7666668/5407270
@@ -195,4 +205,7 @@ namespace jot
         }
         return hash;
     }
+
+#ifdef __cplusplus
 }
+#endif

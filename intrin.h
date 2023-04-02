@@ -80,7 +80,7 @@ static bool _fallback_intrin__find_first_set_64(size_t* out, uint64_t search_in)
 {
     if(search_in == 0)
     {
-        *out = -1;
+        *out = cast(size_t) -1;
         return false;
     }
 

@@ -33,15 +33,14 @@ namespace jot::tests::bucket_array
         isize mem_before = default_allocator()->bytes_allocated();
         isize alive_before = trackers_alive();
         {
-            const isize BUCKET_SIZE = 3;
-            Bucket_Array<T> arr(BUCKET_SIZE);
+            Bucket_Array<T> arr(2);
 
             test(size(arr) == 0);
             test(capacity(arr) == 0);
 
-            Bucket_Index i0 = insert(&arr, dup(values[0]), BUCKET_SIZE);
-            Bucket_Index i1 = insert(&arr, dup(values[1]), BUCKET_SIZE);
-            Bucket_Index i2 = insert(&arr, dup(values[2]), BUCKET_SIZE);
+            isize i0 = insert(&arr, dup(values[0]));
+            isize i1 = insert(&arr, dup(values[1]));
+            isize i2 = insert(&arr, dup(values[2]));
             
             test(size(arr) == 3);
             test(capacity(arr) >= size(arr));
@@ -54,8 +53,8 @@ namespace jot::tests::bucket_array
             test(v1 == values[1]);
             test(size(arr) == 2);
 
-            Bucket_Index i3 = insert(&arr, dup(values[3]), BUCKET_SIZE);
-            Bucket_Index i4 = insert(&arr, dup(values[4]), BUCKET_SIZE);
+            isize i3 = insert(&arr, dup(values[3]));
+            isize i4 = insert(&arr, dup(values[4]));
 
             test(get(arr, i0) == values[0]);
             test(get(arr, i2) == values[2]);
@@ -67,7 +66,7 @@ namespace jot::tests::bucket_array
             test(v2 == values[2]);
             test(size(arr) == 3);
 
-            Bucket_Index i5 = insert(&arr, dup(values[5]), BUCKET_SIZE);
+            isize i5 = insert(&arr, dup(values[5]));
             isize cap = capacity(arr);
             test(get(arr, i0) == values[0]);
             test(get(arr, i3) == values[3]);
@@ -76,16 +75,16 @@ namespace jot::tests::bucket_array
             test(size(arr) == 4);
             test(cap >= size(arr));
             
-            Bucket_Index i6 = insert(&arr, dup(values[6]), BUCKET_SIZE);
-            Bucket_Index i7 = insert(&arr, dup(values[7]), BUCKET_SIZE);
-            Bucket_Index i8 = insert(&arr, dup(values[8]), BUCKET_SIZE);
-            Bucket_Index i9 = insert(&arr, dup(values[9]), BUCKET_SIZE);
-            Bucket_Index i10 = insert(&arr, dup(values[9]), BUCKET_SIZE);
-            Bucket_Index i11 = insert(&arr, dup(values[9]), BUCKET_SIZE);
-            Bucket_Index i12 = insert(&arr, dup(values[9]), BUCKET_SIZE);
-            Bucket_Index i13 = insert(&arr, dup(values[9]), BUCKET_SIZE);
-            Bucket_Index i14 = insert(&arr, dup(values[9]), BUCKET_SIZE);
-            Bucket_Index i15 = insert(&arr, dup(values[9]), BUCKET_SIZE);
+            isize i6 = insert(&arr, dup(values[6]));
+            isize i7 = insert(&arr, dup(values[7]));
+            isize i8 = insert(&arr, dup(values[8]));
+            isize i9 = insert(&arr, dup(values[9]));
+            isize i10 = insert(&arr, dup(values[9]));
+            isize i11 = insert(&arr, dup(values[9]));
+            isize i12 = insert(&arr, dup(values[9]));
+            isize i13 = insert(&arr, dup(values[9]));
+            isize i14 = insert(&arr, dup(values[9]));
+            isize i15 = insert(&arr, dup(values[9]));
             test(size(arr) == 14);
             
             test(get(arr, i7) == values[7]);
@@ -115,7 +114,8 @@ namespace jot::tests::bucket_array
         test(alive_after == alive_before);
         test(mem_after == mem_before);
     }
-
+    
+    static
     void stress_test(bool print = true)
     {
         using Seed = std::random_device::result_type;
@@ -124,8 +124,6 @@ namespace jot::tests::bucket_array
 
         std::random_device rd;
         
-        constexpr isize BUCKET_SIZE = 256;
-
         constexpr isize OP_INSERT = 0;
         constexpr isize OP_REMOVE = 1;
 
@@ -153,7 +151,7 @@ namespace jot::tests::bucket_array
                     switch(op)
                     {
                         case OP_INSERT: {
-                            Bucket_Index index = insert(&bucket_array, i, BUCKET_SIZE);
+                            Bucket_Index index = insert_bucket_index(&bucket_array, i);
                             set(&truth, i, index);
                             break;
                         }
@@ -189,7 +187,7 @@ namespace jot::tests::bucket_array
                     Slice<const isize> truth_vals = keys(truth);
                     Slice<Bucket_Index> truth_indices = values(&truth);
                     isize used_size = size(bucket_array);
-                    test(used_size = truth_vals.size);
+                    test(used_size == truth_vals.size);
 
                     for(isize k = 0; k < truth_indices.size; k++)
                     {
@@ -222,6 +220,7 @@ namespace jot::tests::bucket_array
         }
     }
     
+    static
     void test_bucket_array(u32 flags)
     {
         bool print = !(flags & Test_Flags::SILENT);
@@ -247,12 +246,13 @@ namespace jot::tests::bucket_array
 
 namespace jot::benchmarks
 {
+    static
     void benchmark_bucket_array_vs_hash_table()
     {
         const auto run = [&](u64 batch_size)
         {
             constexpr isize GIVEN_TIME = 500;
-            constexpr isize BUCKET_SIZE = 256;
+            constexpr Bucket_Array_Growth growth = {256, 0, 3, 2};
             println("\nADD ", batch_size);
         
             bool test_std = false;
@@ -265,7 +265,7 @@ namespace jot::benchmarks
                     do_no_optimize(stack);
                     read_write_barrier();
                 }
-            }, batch_size);
+            });
             
             Bench_Result res_add_hash_table = benchmark(GIVEN_TIME, [&]{
                 Map<u32, u64> hash_table;
@@ -275,18 +275,17 @@ namespace jot::benchmarks
                     do_no_optimize(hash_table);
                     read_write_barrier();
                 }
-            }, batch_size);
-            
+            });
             
             Bench_Result res_add_bucket_array = benchmark(GIVEN_TIME, [&]{
-                Bucket_Array<u64> bucket_array;
+                Bucket_Array<u64> bucket_array(8);
                 for(u64 i = 0; i < batch_size; i++)
                 {
-                    cast(void) insert(&bucket_array, i, BUCKET_SIZE);
+                    cast(void) insert_bucket_index(&bucket_array, i, growth);
                     do_no_optimize(bucket_array);
                     read_write_barrier();
                 }
-            }, batch_size);
+            });
 
             Bench_Result res_add_vector;
             Bench_Result res_add_unordered_map;
@@ -301,7 +300,7 @@ namespace jot::benchmarks
                         do_no_optimize(vec);
                         read_write_barrier();
                     }
-                }, batch_size);
+                });
             
                 res_add_unordered_map = benchmark(GIVEN_TIME, [&]{
                     std::unordered_map<u32, u64> map;
@@ -311,7 +310,7 @@ namespace jot::benchmarks
                         do_no_optimize(map);
                         read_write_barrier();
                     }
-                }, batch_size);
+                });
             }
 
             if(test_std)

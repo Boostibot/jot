@@ -20,6 +20,7 @@ namespace jot::tests::allocator
 
     using IRange = Range<isize>;
 
+    static
     void test_align()
     {
         u8 dummy = 0;
@@ -32,8 +33,9 @@ namespace jot::tests::allocator
         test(align_forward(aligned + 3, 16) == align_backward(aligned + 27, 16));
         test(align_forward(aligned + 13, 16) == align_backward(aligned + 17, 16));
     }
-
-    const auto test_stats_plausibility(Allocator* tested_)
+    
+    static
+    void test_stats_plausibility(Allocator* tested_)
     {
         isize alloced = tested_->bytes_allocated();
         isize max_alloced = tested_->max_bytes_allocated();
@@ -44,7 +46,8 @@ namespace jot::tests::allocator
         test(max_alloced >= alloced);
         test(used >= alloced || used == Allocator::SIZE_NOT_TRACKED);
     }
-
+    
+    static
     void test_stack_ring()
     {
         //We test if the wrap around works correctly.
@@ -66,7 +69,7 @@ namespace jot::tests::allocator
             first = result.items;
 
             result = stack_ring.resize(first, 8, 40 + 256);
-            test(result.state == ERROR);
+            test(result.state != Allocator_State::OK);
 
             *stack_ring.deallocate(first, 8);
             *stack_ring.deallocate(third, 8);
@@ -86,7 +89,7 @@ namespace jot::tests::allocator
             Slice<u8> a4 = stack_ring.allocate(64, 8).items;
             Slice<u8> a5 = stack_ring.allocate(64, 8).items;
 
-            test(stack_ring.allocate(64, 8).state == ERROR);
+            test(stack_ring.allocate(64, 8).state != Allocator_State::OK);
             
             *stack_ring.deallocate(a3, 8);
             *stack_ring.deallocate(a4, 8);
@@ -94,7 +97,8 @@ namespace jot::tests::allocator
             test_stats_plausibility(&stack_ring);
         }
     }
-
+    
+    static
     void stress_test()
     {
         using Generator = std::mt19937;
@@ -265,7 +269,7 @@ namespace jot::tests::allocator
                 isize align = align_table[i];
 
                 Allocation_Result result = tested->resize(old_data, align, new_size);
-                if(result.state == ERROR)
+                if(result.state != Allocator_State::OK)
                 {
                     result = tested->allocate(new_size, align);
                     *result.state;
@@ -307,7 +311,7 @@ namespace jot::tests::allocator
                 fill_slice(result.items);
 
                 Allocation_Result resize_result = tested->resize(result.items, align, new_size);
-                if(resize_result.state == ERROR)
+                if(resize_result.state != Allocator_State::OK)
                 {
                     resize_result = tested->allocate(new_size, align);
                     *resize_result.state;
@@ -387,6 +391,7 @@ namespace jot::tests::allocator
         }
     }
     
+    static
     void test_allocator()
     {
         test_align();

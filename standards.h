@@ -1,24 +1,37 @@
 #pragma once
-#include "traits.h"
+
+#include <type_traits>
 #include "open_enum.h"
 #include "utils.h"
 
 #define nodisc [[nodiscard]]
 
-open_enum Open_Enum
-{
-    static constexpr Type OK = Type{nullptr};
-}
 
 namespace jot
 {
-    using State = ::Open_Enum::Type;
-    constexpr State OK_STATE = ::Open_Enum::OK;
+    enum Enabled { ENABLED = 0 };
+
+    template<bool cond, class T>
+    struct _Enable_If {};
+    
+    template<class T>
+    struct _Enable_If<true, T> { typedef T type; };
+
+    template<bool cond, class T = Enabled>
+    using Enable_If = typename _Enable_If<cond, T>::type;
+
+    open_enum State
+    {
+        OPEN_ENUM_DECLARE("jot::State");
+        static constexpr Type OK = nullptr;
+    }
+
+    using State_Type = ::jot::State::Type;
 
     //Declares open enum with aditional OK value set as the null value
     #define OPEN_STATE_DECLARE(name_str)                      \
         OPEN_ENUM_DECLARE_DERIVED(name_str, ::jot::State);    \
-        static constexpr Type OK = Type{nullptr};             \
+        static constexpr Type OK = nullptr;                   \
         
     template <typename T> nodisc constexpr 
     T && move(T* val) 
@@ -40,28 +53,10 @@ namespace jot
         };
     };
 
-    template <typename T, typename Enable = Enabled>
-    struct Failable : No_Default
-    {
-        nodisc static constexpr
-        bool failed(T const& flag) noexcept {
-            return false;
-        }
-    };
-
-    template<typename T>
-    static constexpr bool failable = !std::is_base_of_v<No_Default, Failable<T>>;
-
     template <typename T> constexpr 
     void swap(T* left, T* right) noexcept 
     {
         return Swappable<T>::swap(left, right);
-    }
-
-    template <typename T> nodisc constexpr 
-    bool failed(T const& flag) noexcept 
-    {
-        return Failable<T>::failed(flag);
     }
     
     template <typename T, typename ... Args>

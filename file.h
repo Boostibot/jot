@@ -327,9 +327,6 @@ namespace jot
         }
 
         result.continue_io_loop = result.ok && !result.eof;
-        bool ok = result.ok;
-        bool eof = result.eof;
-        bool continue_io = result.continue_io_loop;
         return result;
     }
     

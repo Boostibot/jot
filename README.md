@@ -30,7 +30,7 @@ The following files can be used without the rest of the library. They internaly 
 - `meta.h`
 - `no_destruct.h`
 - `open_enum.h`
-- `slice.h` with `slice_operator_text.h`
+- `slice.h` with `slice_members_text.h`
 - `time.h`
 - `traits.h`
 - `type_id.h`

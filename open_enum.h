@@ -6,8 +6,6 @@
 #define PP_CONCAT2(a, b) a ## b
 #define PP_CONCAT(a, b) PP_CONCAT2(a, b)
 
-#define open_enum namespace
-
 //A numeric value that behaves like an enum but is:
 // 1) Freely extendible
 // 2) Guaranteed to be unique
@@ -40,8 +38,8 @@ open_enum Allocator_Action
 //Instantiation using the ::Type field 
 Allocator_Action::Type my_enum = Allocator_Action::ADDED_VALUE;
 
-std::cout << my_enum.data->value_name; //"ADDED_VALUE"
-std::cout << my_enum.data->type_name; //"jot::Allocator_Action"
+std::cout << my_enum->value_name; //"ADDED_VALUE"
+std::cout << my_enum->type_name; //"jot::Allocator_Action"
 
 #endif
 
@@ -49,14 +47,9 @@ std::cout << my_enum.data->type_name; //"jot::Allocator_Action"
 // OPEN_ENUM_DECLARE_DERIVED(Name, Parent) macro. This makes it so that
 // values from this open_enum can be freely casted to parent but not vice 
 // versa. ie. parent is a superset of values from this open_enum.
-// We use this to declare a State type to which all other state types cast.
+// We use this to declare a State_Type type to which all other state types cast.
 // All open_enum types freely cast to Open_Enum::Type.
-
-struct Open_Enum_Holder
-{
-    const char* value_name;
-    const char* type_name;
-};
+#define open_enum namespace
 
 open_enum Open_Enum
 {
@@ -64,63 +57,37 @@ open_enum Open_Enum
         constexpr const char* TYPE_NAME = "Open_Enum"; 
     }       
 
-    struct Type
+    struct Holder
     {
-        const Open_Enum_Holder* data;
-        constexpr bool operator==(Type const& other) const {return data == other.data;}
-        constexpr bool operator!=(Type const& other) const {return data != other.data;}
+        const char* value_name;
+        const char* type_name;
+
+        constexpr Holder(const char* value_name, const char* type_name) 
+            : value_name(value_name), type_name(type_name) 
+        {}
     };
+
+    using Type = const Holder*;
 }
 
-#define OPEN_ENUM_DECLARE_DERIVED(name_str, Parent)                                           \
-    namespace open_enum_info {                                                                \
-        constexpr const char* TYPE_NAME = name_str;                                           \
-    }                                                                                         \
-                                                                                              \
-    struct Type : Parent {                                                                    \
-        constexpr bool operator==(Type const& other) const {return this->data == other.data;} \
-        constexpr bool operator!=(Type const& other) const {return this->data != other.data;} \
-    };                                                                                        \
+#define OPEN_ENUM_DECLARE_DERIVED(Name, Parent) \
+    namespace open_enum_info {                  \
+        constexpr const char* TYPE_NAME = Name; \
+    }                                           \
+                                                \
+    struct Holder : Parent::Holder              \
+    {                                           \
+        constexpr Holder(const char* value_name, const char* type_name) \
+            : Parent::Holder(value_name, type_name) {} \
+    };                                          \
+    using Type = const Holder*;                 \
 
-#define OPEN_ENUM_ENTRY(Name)                                               \
-    namespace open_enum_info                                                \
-    {                                                                       \
-        static constexpr ::Open_Enum_Holder Name                            \
-            = {PP_STRINGIFY(Name), TYPE_NAME};                              \
-    }                                                                       \
-    static constexpr Type Name = {Open_Enum::Type{&open_enum_info::Name}};  \
 
-#define OPEN_ENUM_DECLARE(name_str) OPEN_ENUM_DECLARE_DERIVED(name_str, ::Open_Enum::Type)
+#define OPEN_ENUM_ENTRY(Name)                                       \
+    namespace open_enum_info                                        \
+    {                                                               \
+        static constexpr Holder Name(PP_STRINGIFY(Name), TYPE_NAME);\
+    }                                                               \
+    static constexpr const Holder* Name = &open_enum_info::Name;    \
 
-//For pure C
-#ifdef OPEN_ENUM_C
-
-#define PP_STRINGIFY2(name) #name
-#define PP_STRINGIFY(name) PP_STRINGIFY2(name)
-
-#define PP_CONCAT2(a, b) a ## b
-#define PP_CONCAT(a, b) PP_CONCAT2(a, b)
-
-#define C_OPEN_ENUM_TYPE(Name)     \
-        struct PP_CONCAT(_holder_, Name) {    \
-            const char* value_name;           \
-            const char* type_name;            \
-        };                                    \
-        typedef const struct PP_CONCAT(_holder_, Name)* Name; 
-
-#define C_OPEN_ENUM_ENTRY(Type, NAME)                                          \
-        static const struct PP_CONCAT(_holder_, Type) PP_CONCAT(_value_, NAME) =   \
-            {PP_STRINGIFY(NAME), PP_STRINGIFY(Type)};                              \
-        const Type NAME = &PP_CONCAT(_value_, NAME)                                \
-
-//use like so:
-#if 0
-C_OPEN_ENUM_TYPE(My_Enum);
-C_OPEN_ENUM_ENTRY(My_Enum, FIRST);
-
-My_Enum val = FIRST;
-const char* name = val->name; //"FIRST"
-const char* type = val->name; //"My_Enum"
-#endif
-
-#endif
+#define OPEN_ENUM_DECLARE(Name) OPEN_ENUM_DECLARE_DERIVED(Name, ::Open_Enum)

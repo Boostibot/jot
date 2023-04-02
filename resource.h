@@ -68,6 +68,7 @@ namespace jot
             return (GLuint) -1;
         };
 
+        //This program is now a resource and will get cleaned up automatically
         Resource<GLuint, program_delete, program_def> program;
         String_Builder vertex_path = {};
         String_Builder fragment_path = {};

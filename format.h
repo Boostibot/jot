@@ -5,8 +5,7 @@
 #include <clocale>
 
 #include "array.h"
-#include "traits.h"
-#include "string.h"
+#include "string_ops.h"
 #include "defines.h"
 
 namespace jot
@@ -17,7 +16,7 @@ namespace jot
         static
         void format(String_Appender* into, T const& value)
         {
-            push_multiple(into, "{NOFORMAT}");
+            push_multiple(into, String("{NOFORMAT}"));
         }
     };
     
@@ -108,8 +107,8 @@ namespace jot
     template<typename T> nodisc 
     void format_float_into(String_Appender* appender, T const& value, std::chars_format format = std::chars_format::fixed, int precision = 8)
     {
-        constexpr isize chars_grow = 64; //64bit num const& binary - nothing should be bigger than this 
-        constexpr isize max_tries = 2; //but just in case
+        constexpr isize chars_grow = 64; //64bit num const & binary - nothing should be bigger than this 
+        constexpr isize max_tries = 2; //but just in case...
         
         isize size_before = slice(appender).size;
 
@@ -133,6 +132,7 @@ namespace jot
         return resize(appender, new_size);
     }
     
+
     template <typename T> 
     struct Formattable_Range
     {
@@ -327,6 +327,24 @@ namespace jot
             }
         }
         
+        //searches the string for a utf8 char. Note that the utf8 is important here as this function doesnt report
+        // found for multichar sequences that just happen to end on the seacrhed char
+        isize find_first_utf8_char(String find_in, char what, isize from = 0)
+        {
+            isize i = from;
+            while(true)
+            {
+                //Linear search the char 
+                for(; i < find_in.size; i++)
+                {
+                    if(find_in[i] == what)
+                        break;
+                }
+
+                //check the char before if is part of mult
+            }
+        }
+
         static void format_adapted_into(String_Appender* appender, String format_str, Slice<Adaptor> adapted)
         {
             constexpr String sub_for = "{}";
@@ -335,7 +353,7 @@ namespace jot
             isize new_found = 0;
             isize found_count = 0;
 
-            for(found_count;; last = new_found + sub_for.size, found_count++)
+            for(found_count = 0;; last = new_found + sub_for.size, found_count++)
             {
                 new_found = first_index_of(format_str, sub_for, last);
                 if(new_found == -1)
@@ -427,7 +445,7 @@ namespace jot
         return format_into(&appender, ADAPTOR_10_ARGS);
     }
 
-    inline nodisc
+    nodisc inline
     String_Builder format(ADAPTOR_10_ARGS_DECL)
     {
         using namespace fmt_intern;
@@ -521,6 +539,11 @@ namespace jot
         const static bool _locale_setter = set_utf8_locale(true);
     }
     #endif // !SET_UTF8_LOCALE
+    
+    inline String_Builder_Panic make_panic(Line_Info line_info, ADAPTOR_10_ARGS_DECL) noexcept
+    {
+        return String_Builder_Panic(line_info, format(ADAPTOR_10_ARGS));
+    }
 }
 
 #include "undefs.h"

@@ -11,7 +11,10 @@ namespace jot
 {
     template<typename T>
     static constexpr bool variant_compatible = 
-        regular_type<T> &&
+        std::is_nothrow_default_constructible_v<T> && 
+        std::is_nothrow_destructible_v<T> &&
+        std::is_nothrow_move_constructible_v<T> && 
+        std::is_nothrow_move_assignable_v<T> &&
         std::is_trivially_copyable_v<T> && 
         std::is_trivially_destructible_v<T>;
     

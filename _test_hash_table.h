@@ -376,6 +376,7 @@ namespace jot::tests::hash_table
     template<typename Stored_Key, typename Value, typename Hash = Hashable<Stored_Key>, typename Key = Stored_Key> 
     using Custom_Map = Hash_Table<Custom_Hash_Table_Info<Stored_Key, Value, Hash, Key>>;
     
+    static
     void test_many_add()
     {
         
@@ -440,13 +441,13 @@ namespace jot::tests::hash_table
         static_assert(std::is_same_v<typename Table::Key, Key>, "!");
         std::random_device rd;
         
-        constexpr isize OP_SET = 0;
-        constexpr isize OP_REMOVE = 1;
-        constexpr isize OP_MARK_REMOVED = 2;
-        constexpr isize OP_RESERVE_ENTRIES = 3;
-        constexpr isize OP_RESERVE_JUMP_TABLE = 4;
-        constexpr isize OP_REHASH = 5;
-        constexpr isize OP_MULTIADD = 6;
+        static constexpr isize OP_SET = 0;
+        static constexpr isize OP_REMOVE = 1;
+        static constexpr isize OP_MARK_REMOVED = 2;
+        static constexpr isize OP_RESERVE_ENTRIES = 3;
+        static constexpr isize OP_RESERVE_JUMP_TABLE = 4;
+        static constexpr isize OP_REHASH = 5;
+        static constexpr isize OP_MULTIADD = 6;
 
         std::discrete_distribution<unsigned> op_distribution({50, 15, 15, 5, 5, 15, 40});
         std::uniform_int_distribution<unsigned> index_distribution(0);
@@ -656,6 +657,7 @@ namespace jot::tests::hash_table
         }
     }
     
+    static
     void test_hash_table(u32 flags)
     {
         bool print = !(flags & Test_Flags::SILENT);

@@ -1,38 +1,44 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
+#include <stddef.h>
+#include <stdint.h>
 
+#ifdef __cplusplus
 namespace jot 
 {
-    using u8 = uint8_t;
-    using u16 = uint16_t;
-    using u32 = uint32_t;
-    using u64 = uint64_t;
+#else
+#include <stdbool.h>
+#endif
 
-    using i8 = int8_t;
-    using i16 = int16_t;
-    using i32 = int32_t;
-    using i64 = int64_t;
+    typedef uint8_t u8;
+    typedef uint16_t u16;
+    typedef uint32_t u32;
+    typedef uint64_t u64;
 
-    using b8 = bool;
-    using b16 = uint16_t;
-    using b32 = uint32_t;
-    using b64 = uint64_t;
+    typedef int8_t i8;
+    typedef int16_t i16;
+    typedef int32_t i32;
+    typedef int64_t i64;
 
-    using f32 = float;
-    using f64 = double;
+    typedef bool b8;
+    typedef uint16_t b16;
+    typedef uint32_t b32;
+    typedef uint64_t b64;
 
-    using byte = u8;
-    using cstring = const char*;
+    typedef float f32;
+    typedef double f64;
 
-    using isize = ptrdiff_t;
-    using usize = size_t;
+    typedef u8 byte;
+    typedef const char* cstring;
+
+    typedef ptrdiff_t isize;
+    typedef size_t usize;
     
     #ifndef __cpp_char8_t
-    using char8_t = char;
+    typedef char char8_t;
     #endif
+
+    
+#ifdef __cplusplus
 }
-
-
-#define JOT_SIZE_T ::jot::isize
+#endif
