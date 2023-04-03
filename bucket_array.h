@@ -451,6 +451,10 @@ namespace jot
             : bucket_array_internal::Untyped_Bucket_Array(log2_bucket_size, alloc) 
         {}
 
+        explicit Bucket_Array(Allocator* alloc) noexcept 
+            : bucket_array_internal::Untyped_Bucket_Array(8, alloc) 
+        {}
+
         ~Bucket_Array() noexcept;
     };
     

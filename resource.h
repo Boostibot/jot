@@ -11,13 +11,16 @@ namespace jot
     }
 
     //Struct similar to std::unique_ptr which calls deleter on the
-    // stored value in destructor. Is move only
+    // stored value in destructor. Takes Is def_value function instead of value
+    // because not all types will be constxepr constructible. Is move only
     template <typename T, void (*deleter)(T), T (*def_value)() = make_def_value<T>>
     struct Resource
     {
         T val = def_value();
         
-        Resource() noexcept = default;
+        Resource() noexcept
+            : val(def_value()) {}
+        {};
 
         Resource(T val) noexcept
             : val(move(&val)) {}
