@@ -26,9 +26,9 @@ namespace jot
     struct Key_Castable<tests::Tracker<A>, tests::Tracker<B>>
     {
         nodisc static
-        tests::Tracker<B> key_cast(tests::Tracker<A> const& tracker)
+        tests::Tracker<A> key_cast(tests::Tracker<B> const& tracker)
         {
-            return tests::Tracker<B>{
+            return tests::Tracker<A>{
                 Key_Castable<A, B>::key_cast(tracker.val)
             };
         }
@@ -40,6 +40,7 @@ namespace jot::tests::hash_table
     template <typename Table> 
     bool value_matches_at(Table const& table, typename Table::Stored_Key const& key, typename Table::Value const& value)
     {
+        using Val = typename Table::Value;
         isize found = find_entry(table, move(&key));
         if(found == -1)
             return false;
@@ -47,8 +48,8 @@ namespace jot::tests::hash_table
         auto const& manual = values(table)[found];
         auto const& obtained = get(table, key, value);
         
-        bool do_manual_match = Key_Comparable<typename Table::Value>::are_equal(manual, obtained);
-        bool do_expected_match = Key_Comparable<typename Table::Value>::are_equal(manual, value);
+        bool do_manual_match = Key_Comparable<Val>::key_equal(manual, obtained);
+        bool do_expected_match = Key_Comparable<Val>::key_equal(manual, value);
         test(do_manual_match);
         return do_expected_match;
     }
@@ -351,30 +352,15 @@ namespace jot::tests::hash_table
         test(alive_before == alive_after);
     }
 
-    template <typename Key>
-    struct Test_Int_Hash_Functions
+    template <typename Key>     
+    static uint64_t test_int_hash(Key const& key) 
     {
-        static uint64_t hash(Key const& key) {return cast(hash_t) key;}
-    };
-        
-    struct Test_Tracker_Hash_Functions
+        return cast(hash_t) key;
+    }
+    static uint64_t test_tracker_hash(Tracker<i32> const& key) 
     {
-        static uint64_t hash(Tracker<i32> const& key) {return cast(hash_t) key.val;}
-    };
-    
-    template<typename Stored_Key_, typename Value_, typename Hash_, typename Key_> 
-    struct Custom_Hash_Table_Info
-    {
-        using Key = Key_;
-        using Value = Value_;
-        using Stored_Key = Stored_Key_;
-        using Cast = Key_Castable<Stored_Key, Key>;
-        using Compare = Key_Comparable<Key>;
-        using Hash = Hash_;
-    };
-
-    template<typename Stored_Key, typename Value, typename Hash = Hashable<Stored_Key>, typename Key = Stored_Key> 
-    using Custom_Map = Hash_Table<Custom_Hash_Table_Info<Stored_Key, Value, Hash, Key>>;
+        return cast(hash_t) key.val;
+    }   
     
     static
     void test_many_add()
@@ -384,7 +370,7 @@ namespace jot::tests::hash_table
         using Cast_Track = Tracker<i64>;
         using Key = Track;
         using Val = Track;
-        using Table = Custom_Map<Key, Val, Test_Tracker_Hash_Functions>;
+        using Table = Hash_Table<Key, Val, test_tracker_hash>;
 
         i64 before = trackers_alive();
         {
@@ -433,8 +419,8 @@ namespace jot::tests::hash_table
         using Val = Stored_Key;
         using Key = Tracker<i32>;
 
-        using Table = Custom_Map<Stored_Key, Val, Test_Tracker_Hash_Functions, Key>;
-        using Count_Table = Custom_Map<Stored_Key, i32, Test_Tracker_Hash_Functions, Key>;
+        using Table = Hash_Table_Detailed<Stored_Key, Val, Key, test_tracker_hash>;
+        using Count_Table = Hash_Table_Detailed<Stored_Key, i32, Key, test_tracker_hash>;
         using Seed = std::random_device::result_type;
 
         static_assert(std::is_same_v<typename Table::Stored_Key, Stored_Key>, "!");
@@ -463,7 +449,7 @@ namespace jot::tests::hash_table
         };
         
         const auto cast_key = [](Stored_Key const& key) -> Key {
-            return Key_Castable<Stored_Key, Key>::key_cast(key); 
+            return Key_Castable<Key, Stored_Key>::key_cast(key); 
         };
 
         const auto incr_count_table = [&](Count_Table* count_table, Stored_Key const& key){
@@ -664,20 +650,20 @@ namespace jot::tests::hash_table
         isize memory_before = memory_globals::default_allocator()->bytes_allocated();
 
         {
-            if(print) println("\test_hash_table()");
+            if(print) println("\ntest_hash_table()");
 
             using Trc = Tracker<i32>;
-            test_table_add_find<Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
-            test_table_add_find<Map<u32, u32>>();
-            test_table_add_find<Map<u32, Trc>>();
-            test_table_add_find<Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>>();
-            test_table_add_find<Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>>();
+            test_table_add_find<Hash_Table<hash_t, i32, test_int_hash<hash_t>>>();
+            test_table_add_find<Hash_Table<u32, u32>>();
+            test_table_add_find<Hash_Table<u32, Trc>>();
+            test_table_add_find<Hash_Table<Trc, u32, test_tracker_hash>>();
+            test_table_add_find<Hash_Table<Trc, Trc, test_tracker_hash>>();
             
-            if(print) println("  test_table_add_find() type: Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>");
-            if(print) println("  test_table_add_find() type: Map<u32, u32>");
-            if(print) println("  test_table_add_find() type: Map<u32, Trc>");
-            if(print) println("  test_table_add_find() type: Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>");
-            if(print) println("  test_table_add_find() type: Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>");
+            if(print) println("  test_table_add_find() type: Hash_Table<hash_t, i32, test_int_hash<hash_t>>");
+            if(print) println("  test_table_add_find() type: Hash_Table<u32, u32>");
+            if(print) println("  test_table_add_find() type: Hash_Table<u32, Trc>");
+            if(print) println("  test_table_add_find() type: Hash_Table<Trc, u32, test_tracker_hash>");
+            if(print) println("  test_table_add_find() type: Hash_Table<Trc, Trc, test_tracker_hash>");
             
             if(print) println("  test_many_add()");
             test_many_add();
@@ -691,37 +677,37 @@ namespace jot::tests::hash_table
             Array<String_Builder, 10> builders = {{own("1"), own("2"), own("3"), own("4"), own("5"), own("6"), own("7"), own("8"), own("9"), own("10")}};
             Array<String, 10> strings = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
 
-            test_table_add_find_any<Map<String, String_Builder>>(strings, builders); 
-            test_table_add_find_any<Map<String_Builder, String>>(builders, strings); 
-            test_table_add_find_any<Map<String_Builder, String_Builder>>(builders, builders); 
+            test_table_add_find_any<Hash_Table<String, String_Builder>>(strings, builders); 
+            test_table_add_find_any<Hash_Table<String_Builder, String>>(builders, strings); 
+            test_table_add_find_any<Hash_Table<String_Builder, String_Builder>>(builders, builders); 
             
-            if(print) println("  test_table_add_find_any() type: Map<String, String_Builder>");
-            if(print) println("  test_table_add_find_any() type: Map<String_Builder, String>");
-            if(print) println("  test_table_add_find_any() type: Map<String_Builder, String_Builder>");
+            if(print) println("  test_table_add_find_any() type: Hash_Table<String, String_Builder>");
+            if(print) println("  test_table_add_find_any() type: Hash_Table<String_Builder, String>");
+            if(print) println("  test_table_add_find_any() type: Hash_Table<String_Builder, String_Builder>");
 
-            test_table_mark_remove<Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
-            test_table_mark_remove<Map<u32, u32>>();
-            test_table_mark_remove<Map<u32, Trc>>();
-            test_table_mark_remove<Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>>();
-            test_table_mark_remove<Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>>();
+            test_table_mark_remove<Hash_Table<hash_t, i32, test_int_hash<hash_t>>>();
+            test_table_mark_remove<Hash_Table<u32, u32>>();
+            test_table_mark_remove<Hash_Table<u32, Trc>>();
+            test_table_mark_remove<Hash_Table<Trc, u32, test_tracker_hash>>();
+            test_table_mark_remove<Hash_Table<Trc, Trc, test_tracker_hash>>();
             
-            if(print) println("  test_table_mark_remove() type: Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>");
-            if(print) println("  test_table_mark_remove() type: Map<u32, u32>");
-            if(print) println("  test_table_mark_remove() type: Map<u32, Trc>");
-            if(print) println("  test_table_mark_remove() type: Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>");
-            if(print) println("  test_table_mark_remove() type: Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>");
+            if(print) println("  test_table_mark_remove() type: Hash_Table<hash_t, i32, test_int_hash<hash_t>>");
+            if(print) println("  test_table_mark_remove() type: Hash_Table<u32, u32>");
+            if(print) println("  test_table_mark_remove() type: Hash_Table<u32, Trc>");
+            if(print) println("  test_table_mark_remove() type: Hash_Table<Trc, u32, test_tracker_hash>");
+            if(print) println("  test_table_mark_remove() type: Hash_Table<Trc, Trc, test_tracker_hash>");
 
-            test_table_remove<Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>>();
-            test_table_remove<Map<u32, u32>>();
-            test_table_remove<Map<u32, Trc>>();
-            test_table_remove<Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>>();
-            test_table_remove<Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>>();
+            test_table_remove<Hash_Table<hash_t, i32, test_int_hash<hash_t>>>();
+            test_table_remove<Hash_Table<u32, u32>>();
+            test_table_remove<Hash_Table<u32, Trc>>();
+            test_table_remove<Hash_Table<Trc, u32, test_tracker_hash>>();
+            test_table_remove<Hash_Table<Trc, Trc, test_tracker_hash>>();
             
-            if(print) println("  test_table_remove() type: Custom_Map<hash_t, i32, Test_Int_Hash_Functions<hash_t>>");
-            if(print) println("  test_table_remove() type: Map<u32, u32>");
-            if(print) println("  test_table_remove() type: Map<u32, Trc>");
-            if(print) println("  test_table_remove() type: Custom_Map<Trc, u32, Test_Tracker_Hash_Functions>");
-            if(print) println("  test_table_remove() type: Custom_Map<Trc, Trc, Test_Tracker_Hash_Functions>");
+            if(print) println("  test_table_remove() type: Hash_Table<hash_t, i32, test_int_hash<hash_t>>");
+            if(print) println("  test_table_remove() type: Hash_Table<u32, u32>");
+            if(print) println("  test_table_remove() type: Hash_Table<u32, Trc>");
+            if(print) println("  test_table_remove() type: Hash_Table<Trc, u32, test_tracker_hash>");
+            if(print) println("  test_table_remove() type: Hash_Table<Trc, Trc, test_tracker_hash>");
             
             if(flags & Test_Flags::STRESS)
             {

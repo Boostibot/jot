@@ -1,13 +1,17 @@
 #pragma once
 
+//@TODO: strip all unnecessary headers
+//@TODO: change all open enums to regukar enums
+//@TODO: split into header containing *JUST* the allocator definition and necessary standards
+//we could strip this one as well and instead use a custom define
 #include <new>
 
-#include "open_enum.h"
-#include "utils.h"
-#include "slice.h"
-#include "standards.h"
-#include "types.h"
-#include "defines.h"
+#include "open_enum.h" //dont need
+#include "utils.h" //can define own
+#include "slice.h" //dont really need though it would ne ugly - keep this
+#include "standards.h" //dont need
+#include "types.h" //dont need at all
+#include "defines.h" //can define nodics and cast inline at the loss of 
 
 #define DO_ALLOCATOR_STATS
 #define DO_DEALLOC_VALIDTY_CHECKS
@@ -242,8 +246,7 @@ namespace jot
 
         virtual
         ~New_Delete_Allocator() noexcept override
-        {
-        }
+        {}
     };
 
     namespace memory_globals
@@ -320,6 +323,7 @@ namespace jot
     using memory_globals::default_allocator;
     using memory_globals::scratch_allocator;
 
+    //@TODO: remove template
     template<typename T> nodisc constexpr
     bool is_in_slice(T* ptr, Slice<T> slice)
     {
@@ -359,7 +363,8 @@ namespace jot
 
         return cast(u8*) ptr_num;
     }
-
+    
+    //@TODO: move to a custom header from now on!
     nodisc inline
     Slice<u8> align_forward(Slice<u8> space, isize align_to)
     {

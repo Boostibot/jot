@@ -130,15 +130,13 @@ namespace jot::tests::bucket_array
         std::discrete_distribution<unsigned> op_distribution({75, 25});
         std::uniform_int_distribution<unsigned> index_distribution(0);
 
-        isize max_size = 10000;
-
         std::mt19937 gen;
-        const auto test_batch = [&](isize block_size, isize i){
+        const auto test_batch = [&](isize block_size, isize j){
             i64 before = trackers_alive();
             isize mem_before = default_allocator()->bytes_allocated();
 
             {
-                Map<isize, Bucket_Index> truth;
+                Hash_Table<isize, Bucket_Index> truth;
                 Bucket_Array<isize> bucket_array;
 
                 reserve(&truth, block_size);
@@ -197,7 +195,7 @@ namespace jot::tests::bucket_array
                     }
                 }
             
-                if(print) println("  i: {}\t batch: {}\t final_size: {}", i, block_size, size(bucket_array));
+                if(print) println("  i: {}\t batch: {}\t final_size: {}", j, block_size, size(bucket_array));
             }
 
             i64 after = trackers_alive();
@@ -268,7 +266,7 @@ namespace jot::benchmarks
             });
             
             Bench_Result res_add_hash_table = benchmark(GIVEN_TIME, [&]{
-                Map<u32, u64> hash_table;
+                Hash_Table<u32, u64> hash_table;
                 for(u64 i = 0; i < batch_size; i++)
                 {
                     set(&hash_table, cast(u32) i, i);

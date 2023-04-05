@@ -99,8 +99,8 @@ namespace jot
             u32 used_count = 0;
             u32 has_allocation = 0;
             
-            u32 next = -1;
-            u32 prev = -1;
+            u32 next = NULL_LIST_INDEX;
+            u32 prev = NULL_LIST_INDEX;
         };
 
         struct Untyped_Bucket_Array
@@ -175,8 +175,6 @@ namespace jot
 
                     if(prev != NULL_LIST_INDEX)
                     {
-                        const Bucket* curr_bucket = &arr[curr];
-                        const Bucket* prev_bucket = &arr[prev]; 
                         if(cmp_uc(arr[prev].used_count, <, arr[curr].used_count))
                         {
                             is_sorted = false;

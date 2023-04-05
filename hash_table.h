@@ -7,83 +7,52 @@
 
 namespace jot
 {
-    template <typename T, typename Enable = Enabled>
-    struct Hashable : No_Default
-    {
-        static 
-        hash_t hash(T const& val) noexcept
-        {
-            //just for illustartion:
-            return uint64_hash(val);
-        }
-    };
-    
-    template <typename T, typename Enable = Enabled>
-    struct Key_Comparable
-    {
-        static
-        bool are_equal(T const& a, T const& b) noexcept
-        {
-            return a == b;
-        }
-    };
+    //@TODO: use only stack_base.h or decide whether to support the Stacks natively
+    //@TODO: remove a lot of the automaticness from this and instead make it very manual 
+    //        like slice is - instead of having multiple constructors to evrything one would like
+    //        there is a general way of doing the whole thing
+    //@TODO: include only the memro decl file or even better yet figure out how to enable zero include hook into the memroy allocation
+    //        strategy. (Something like struct Allocator; in every file and then using free functions also just declared in eah file working with
+    //        Allocator* - this way they will not require anything but the very basic. This is useful if we include allocator after however what if
+    //        we dont want to include it at all? 
+    //
+    //        if include order is 1) allocator 2) this then we can use a macro starting in allocator
+    //        if include order is 1) this 2) allocator then we can use free functions
+    //        if include just this then we would somehow need to differentiate it between the case above and include proper definitions...
+    //           those definitions would need to be weaker in some way then the actual ones fron the allocator
+    //           so maybe like a template struct with static method that by default mallocs.
+    //           this gets overriden with a proper template proc in the memory header if it was included this way around else it gets defined there
+    //           and a define is used to signal that it was defined. This then covers all the neccessary directions.
+    //
+    //        The problem with this is that the original reason for doing all of this was simplicity... and this is not simple. As such employing it 
+    //           wouldnt solve the original problem. At the end of the day including 2 files instead of one is not such a big deal.
 
-    template <typename From, typename To>
-    struct Key_Castable
-    {
-        static 
-        To key_cast(From const& from)
-        {
-            return cast(To const&) from;
-        }
-    };
-
-    
-    struct Ratio
-    {
-        isize num = 0;
-        isize den = 0;
-    };
-    
-    struct Hash_Table_Growth
-    {
-        //at what occupation of the jump table is rehash triggered
-        Ratio rehash_at_fullness = {1, 4};
-
-        //at what occupation of the jump table with gravestones
-        // is rehash to same size triggered 
-        // (if normal rehash happens first all gravestones are cleared)
-        Ratio rehash_at_gravestone_fullness = {1, 4};
-
-        //the ratio entries size grows when full according to formula:
-        // new_size = old_size * entries_growth + entries_growth_linear
-        Ratio entries_growth = {3, 2};
-        isize entries_growth_linear = 8;
-
-        //The size of the first allocation of jump table
-        //Needs to be exact power of two
-        isize jump_table_base_size = 32;
-    };
-
-    template<
-        typename Stored_Key_, 
-        typename Value_> 
-    struct Hash_Table_Info
-    {
-        using Key = Stored_Key_;
-        using Value = Value_;
-        using Stored_Key = Stored_Key_;
-        using Cast = Key_Castable<Stored_Key, Key>;
-        using Compare = Key_Comparable<Key>;
-        using Hash = Hashable<Key>;
-    };
-    
     template<typename Stored_Key, typename Value>
     struct Hash_Table_Entry
     {
         Stored_Key key;
         Value value;
     };
+    
+    // Stored Key -> Key -> Value
+    // 
+    // We differentiate between the acess key and store key. That is because often the key will have few dynamic allocations inside it and construcing it could be 
+    // pricy. As is the case for strings. We would like to have exactly one definition of each function that wuld function for both stored key and key.
+    // Problem is that we still take Key by reference as it is most often gonna be the stored key and thus expensive to make.
+    // 
+    // What if we instead by default used Key = Stored_Key const& ??? Then we would be able to: 
+    //   Have only one definition
+    //   Pass things by reference always
+    // 
+    
+    template<typename Key>
+    using Key_Equal_Func = bool   (*)(Key const&, Key const&);
+
+    template<typename Key, typename Stored_Key>
+    using Key_Cast_Func  = Key    (*)(Stored_Key const&);
+    
+    template<typename Key>
+    using Key_Hash_Func  = hash_t (*)(Key const&);
 
     //Cache efficient packed hash table. Stores the jump table, keys and values all in seperate arrays for maximum cache utilization.
     // This also allows us to expose the values array directly to the user which removes the need for custom iterators. 
@@ -92,7 +61,7 @@ namespace jot
     // them as deleted. After sufficient ammount of deleted entries rehashing is triggered (exactly the same ways as while adding) which 
     // only then properly removes the deleted jump table entries.
     template<class Info_>
-    struct Hash_Table
+    struct Hash_Table_
     {
         using Info = Info_;
 
@@ -100,18 +69,16 @@ namespace jot
         #define Info_Key           typename Info::Key
         #define Info_Value         typename Info::Value
         #define Info_Stored_Key    typename Info::Stored_Key
-        #define Info_Cast          typename Info::Cast
-        #define Info_Compare       typename Info::Compare
-        #define Info_Hash          typename Info::Hash
-        #define Info_Link          typename Hash_Table<Info>::Link
+        #define Info_Link          typename Hash_Table_<Info>::Link
 
         using Key = Info_Key;
         using Value = Info_Value;
         using Stored_Key = Info_Stored_Key;
-        using Cast = Info_Cast;
-        using Compare = Info_Compare;
-        using Hash = Info_Hash;
-        
+
+        static constexpr Key_Hash_Func<Key>             key_hash = Info::key_hash;
+        static constexpr Key_Equal_Func<Key>            key_equal = Info::key_equal;
+        static constexpr Key_Cast_Func<Key, Stored_Key> key_cast = Info::key_cast;
+
         using Entry = Hash_Table_Entry<Stored_Key, Value>;
 
         //we assume that if the entry size is equal or greater than 8 (which is usually the case) 
@@ -139,14 +106,40 @@ namespace jot
         //   called _group containg for each entry a next and prev entry index (as u32). That way we 
         //   could upon deletion go to back or prev and change the _linker index to point to either of them
 
-        Hash_Table() noexcept = default;
-        Hash_Table(Allocator* alloc) noexcept : _allocator(alloc) {}
-        Hash_Table(Hash_Table&& other) noexcept;
-        Hash_Table(Hash_Table const& other) = delete;
-        ~Hash_Table() noexcept;
+        Hash_Table_() noexcept = default;
+        Hash_Table_(Allocator* alloc) noexcept : _allocator(alloc) {}
+        Hash_Table_(Hash_Table_&& other) noexcept;
+        Hash_Table_(Hash_Table_ const& other) = delete;
+        ~Hash_Table_() noexcept;
 
-        Hash_Table& operator=(Hash_Table&& other) noexcept;
-        Hash_Table& operator=(Hash_Table const& other) = delete;
+        Hash_Table_& operator=(Hash_Table_&& other) noexcept;
+        Hash_Table_& operator=(Hash_Table_ const& other) = delete;
+    };
+    
+    struct Ratio
+    {
+        isize num = 0;
+        isize den = 0;
+    };
+    
+    struct Hash_Table_Growth
+    {
+        //at what occupation of the jump table is rehash triggered
+        Ratio rehash_at_fullness = {1, 4};
+
+        //at what occupation of the jump table with gravestones
+        // is rehash to same size triggered 
+        // (if normal rehash happens first all gravestones are cleared)
+        Ratio rehash_at_gravestone_fullness = {1, 4};
+
+        //the ratio entries size grows when full according to formula:
+        // new_size = old_size * entries_growth + entries_growth_linear
+        Ratio entries_growth = {3, 2};
+        isize entries_growth_linear = 8;
+
+        //The size of the first allocation of jump table
+        //Needs to be exact power of two
+        isize jump_table_base_size = 32;
     };
 
     template<class Info>
@@ -157,7 +150,7 @@ namespace jot
     constexpr static isize HASH_TABLE_LINKER_BASE_SIZE = 16;
 
     template <class Info> nodisc
-    bool is_invariant(Hash_Table<Info> const& hash)
+    bool is_invariant(Hash_Table_<Info> const& hash)
     {
         bool is_size_power = hash._linker.size == 0;
         if(is_size_power == false)
@@ -178,40 +171,40 @@ namespace jot
     }
 
     template <class Info> nodisc
-    Slice<const Info_Stored_Key> keys(Hash_Table<Info> const& hash)
+    Slice<const Info_Stored_Key> keys(Hash_Table_<Info> const& hash)
     {
         Slice<const Info_Stored_Key> out = {hash._keys, hash._entries_size};
         return out;
     }
     
     template <class Info> nodisc
-    Slice<const Info_Stored_Key> keys(Hash_Table<Info>* hash)
+    Slice<const Info_Stored_Key> keys(Hash_Table_<Info>* hash)
     {
         return keys(*hash);
     }
 
     template <class Info> nodisc
-    Slice<Info_Value> values(Hash_Table<Info>* hash)
+    Slice<Info_Value> values(Hash_Table_<Info>* hash)
     {
         Slice<Info_Value> out = {hash->_values, hash->_entries_size};
         return out;
     }
     
     template <class Info> nodisc
-    Slice<const Info_Value> values(Hash_Table<Info> const& hash)
+    Slice<const Info_Value> values(Hash_Table_<Info> const& hash)
     {
         Slice<const Info_Value> out = {hash._values, hash._entries_size};
         return out;
     }
 
     template <class Info> nodisc
-    isize jump_table_size(Hash_Table<Info> const& hash)
+    isize jump_table_size(Hash_Table_<Info> const& hash)
     {
         return hash._linker.size;
     }
 
     template <class Info>
-    void swap(Hash_Table<Info>* left, Hash_Table<Info>* right) noexcept
+    void swap(Hash_Table_<Info>* left, Hash_Table_<Info>* right) noexcept
     {
         swap(&left->_allocator, &right->_allocator);
         swap(&left->_keys, &right->_keys);
@@ -223,7 +216,7 @@ namespace jot
     }
 
     template <class Info>
-    Hash_Table<Info>::Hash_Table(Hash_Table && other) noexcept 
+    Hash_Table_<Info>::Hash_Table_(Hash_Table_ && other) noexcept 
     {
         assert(is_invariant(*this));
         assert(is_invariant(other));
@@ -247,16 +240,16 @@ namespace jot
         hash_t do_hash(Info_Stored_Key const& stored_key)
         {
             if constexpr(std::is_same_v<Info_Key, Info_Stored_Key>)
-                return Info::Hash::hash(stored_key);
+                return Info::key_hash(stored_key);
             else
             {
-                Info_Key key = Info::Cast::key_cast(stored_key);
-                return Info::Hash::hash(key);
+                Info_Key key = Info::key_cast(stored_key);
+                return Info::key_hash(key);
             }
         }
 
         template <class Info> nodisc
-        Allocator_State_Type set_entries_capacity(Hash_Table<Info>* hash, isize new_capacity) noexcept
+        Allocator_State_Type set_entries_capacity(Hash_Table_<Info>* hash, isize new_capacity) noexcept
         {
             Allocator* alloc = hash->_allocator;
             isize align = HASH_TABLE_ENTRIES_ALIGN;
@@ -292,7 +285,7 @@ namespace jot
         }
 
         template <class Info> nodisc
-        Allocator_State_Type reserve_entries(Hash_Table<Info>* hash, isize to_fit, Hash_Table_Growth const& growth) noexcept
+        Allocator_State_Type reserve_entries(Hash_Table_<Info>* hash, isize to_fit, Hash_Table_Growth const& growth) noexcept
         {
             if(to_fit > hash->_entries_capacity)
             {
@@ -306,7 +299,7 @@ namespace jot
         }
 
         template <class Info> nodisc
-        Allocator_State_Type push_entry(Hash_Table<Info>* hash, Info_Stored_Key key, Info_Value value, Hash_Table_Growth const& growth) noexcept
+        Allocator_State_Type push_entry(Hash_Table_<Info>* hash, Info_Stored_Key key, Info_Value value, Hash_Table_Growth const& growth) noexcept
         {
             assert(is_invariant(*hash));
             isize size = hash->_entries_size;
@@ -324,7 +317,7 @@ namespace jot
         }
     
         template <class Info> nodisc
-        Allocator_State_Type unsafe_rehash(Hash_Table<Info>* table, isize to_size) noexcept
+        Allocator_State_Type unsafe_rehash(Hash_Table_<Info>* table, isize to_size) noexcept
         {
             assert(is_invariant(*table));
             using Link = Info_Link;;
@@ -472,13 +465,13 @@ namespace jot
         }
 
         template <class Info> nodisc
-        bool is_overful(Hash_Table<Info> const& table, Hash_Table_Growth const& growth) noexcept
+        bool is_overful(Hash_Table_<Info> const& table, Hash_Table_Growth const& growth) noexcept
         {
             return (table._linker.size - table._gravestone_count) * growth.rehash_at_fullness.num <= table._entries_size * growth.rehash_at_fullness.den;
         }
         
         template <class Info> nodisc
-        Allocator_State_Type grow(Hash_Table<Info>* table, Hash_Table_Growth const& growth) noexcept
+        Allocator_State_Type grow(Hash_Table_<Info>* table, Hash_Table_Growth const& growth) noexcept
         {
             isize rehash_to = table->_linker.size * 2;
 
@@ -496,7 +489,7 @@ namespace jot
     }
     
     template <class Info> nodisc
-    Allocator_State_Type rehash_failing(Hash_Table<Info>* table, isize to_size, Hash_Table_Growth const& growth = {}) noexcept
+    Allocator_State_Type rehash_failing(Hash_Table_<Info>* table, isize to_size, Hash_Table_Growth const& growth = {}) noexcept
     {
         isize rehash_to = growth.jump_table_base_size;
 
@@ -509,7 +502,7 @@ namespace jot
     }
 
     template <class Info> nodisc
-    Allocator_State_Type reserve_jump_table_failing(Hash_Table<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
+    Allocator_State_Type reserve_jump_table_failing(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
     {
         if(to_fit < table->_linker.size)
             return Allocator_State::OK;
@@ -518,7 +511,7 @@ namespace jot
     }
 
     template <class Info> nodisc
-    Allocator_State_Type reserve_entries_failing(Hash_Table<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
+    Allocator_State_Type reserve_entries_failing(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
     {
         return hash_table_internal::reserve_entries(table, to_fit, growth);
     }
@@ -530,7 +523,7 @@ namespace jot
     }
 
     template <class Info> nodisc
-    Allocator_State_Type reserve_failing(Hash_Table<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
+    Allocator_State_Type reserve_failing(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
     {
         //we reserve such that inserting to_fit element swill not result in a reallocation of entries nor rehashing
         isize jump_table_size = calculate_jump_table_size(to_fit, growth);
@@ -544,42 +537,42 @@ namespace jot
     }
 
     template <class Info>
-    void reserve_entries(Hash_Table<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
+    void reserve_entries(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
     {
         Allocator_State_Type state = reserve_failing(table, to_fit, growth);
         force(state == Allocator_State::OK && "reserve failed!");
     }
     
     template <class Info>
-    void reserve_jump_table(Hash_Table<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
+    void reserve_jump_table(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
     {
         Allocator_State_Type state = reserve_failing(table, to_fit, growth);
         force(state == Allocator_State::OK && "reserve failed!");
     }
     
     template <class Info>
-    void rehash(Hash_Table<Info>* table, isize to_size, Hash_Table_Growth const& growth = {})
+    void rehash(Hash_Table_<Info>* table, isize to_size, Hash_Table_Growth const& growth = {})
     {
         Allocator_State_Type state = rehash_failing(table, to_size, growth);
         force(state == Allocator_State::OK && "rehashing failed!");
     }
 
     template <class Info> 
-    void rehash(Hash_Table<Info>* table, Hash_Table_Growth const& growth = {})
+    void rehash(Hash_Table_<Info>* table, Hash_Table_Growth const& growth = {})
     {
         isize rehash_to = jump_table_size(*table);
         rehash(table, rehash_to, growth);
     }
     
     template <class Info>
-    void reserve(Hash_Table<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
+    void reserve(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
     {
         Allocator_State_Type state = reserve_failing(table, to_fit, growth);
         force(state == Allocator_State::OK && "reserve failed!");
     }
 
     template <class Info, bool break_on_gravestone = false> nodisc
-    Hash_Found find(Hash_Table<Info> const& table, Info_Key const& key, hash_t hash) noexcept
+    Hash_Found find(Hash_Table_<Info> const& table, Info_Key const& key, hash_t hash) noexcept
     {
         using Link = Info_Link;
         using Stored_Key = Info_Stored_Key;
@@ -618,12 +611,12 @@ namespace jot
             bool are_equal = false;
             if constexpr(std::is_same_v<Info_Key, Info_Stored_Key>)
             {
-                are_equal = Info::Compare::are_equal(curr, key);
+                are_equal = Info::key_equal(curr, key);
             }
             else
             {
-                Info_Key curr_key = Info::Cast::key_cast(curr);
-                are_equal = Info::Compare::are_equal(curr_key, key);
+                Info_Key curr_key = Info::key_cast(curr);
+                are_equal = Info::key_equal(curr_key, key);
             }
 
             if(are_equal)
@@ -639,14 +632,14 @@ namespace jot
     }
    
     template <class Info, bool break_on_gravestone = false, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-    Hash_Found find(Hash_Table<Info> const& table, Info_Stored_Key const& key, hash_t hash) noexcept
+    Hash_Found find(Hash_Table_<Info> const& table, Info_Stored_Key const& key, hash_t hash) noexcept
     {
-        Info_Key casted = Info::Cast::key_cast(key);
+        Info_Key casted = Info::key_cast(key);
         return find(table, casted, hash);
     }
 
     template <class Info, bool break_on_gravestone = false> nodisc
-    Hash_Found find_found_entry(Hash_Table<Info> const& table, isize entry_i, hash_t hash) noexcept
+    Hash_Found find_found_entry(Hash_Table_<Info> const& table, isize entry_i, hash_t hash) noexcept
     {
         using Link = Info_Link;
         assert(is_invariant(table));
@@ -687,47 +680,48 @@ namespace jot
     }
     
     template <class Info> nodisc
-    Hash_Found find(Hash_Table<Info> const& table, Info_Key const& key) noexcept
+    Hash_Found find(Hash_Table_<Info> const& table, Info_Key const& key) noexcept
     {
-        hash_t hash = Info::Hash::hash(key);
+        hash_t hash = Info::key_hash(key);
         return find(table, key, hash);
     }
     
     template <class Info, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-    Hash_Found find(Hash_Table<Info> const& table, Info_Stored_Key const& key) noexcept
+    Hash_Found find(Hash_Table_<Info> const& table, Info_Stored_Key const& key) noexcept
     {
-        Info_Key casted = Info::Cast::key_cast(key);
+        Info_Key casted = Info::key_cast(key);
         return find(table, casted);
     }
 
     template <class Info> nodisc
-    isize find_entry(Hash_Table<Info> const& table, Info_Key const& key) noexcept
+    isize find_entry(Hash_Table_<Info> const& table, Info_Key const& key) noexcept
     {
         return find(table, key).entry_index;
     }
     
     template <class Info, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-    isize find_entry(Hash_Table<Info> const& table, Info_Stored_Key const& key) noexcept
+    isize find_entry(Hash_Table_<Info> const& table, Info_Stored_Key const& key) noexcept
     {
-        Info_Key casted = Info::Cast::key_cast(key);
+        Info_Key casted = Info::key_cast(key);
         return find_entry(table, casted);
     
     }
+    
     template <class Info> nodisc
-    bool has(Hash_Table<Info> const& table, Info_Key const& key) noexcept
+    bool has(Hash_Table_<Info> const& table, Info_Key const& key) noexcept
     {
         return find(table, key).entry_index != -1;
     }
     
     template <class Info, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-    bool has(Hash_Table<Info> const& table, Info_Stored_Key const& key) noexcept
+    bool has(Hash_Table_<Info> const& table, Info_Stored_Key const& key) noexcept
     {
-        Info_Key casted = Info::Cast::key_cast(key);
+        Info_Key casted = Info::key_cast(key);
         return has(table, casted);
     }
 
     template <class Info> nodisc
-    void mark_removed(Hash_Table<Info>* table, Hash_Found removed)
+    void mark_removed(Hash_Table_<Info>* table, Hash_Found removed)
     {
         assert(0 <= removed.hash_index && removed.hash_index < table->_linker.size && "out of range!");
 
@@ -738,7 +732,7 @@ namespace jot
 
     //Removes an entry from the keys and values array and marks the jump table slot as deleted
     template <class Info> nodisc
-    typename Hash_Table<Info>::Entry remove(Hash_Table<Info>* table, Hash_Found removed)
+    typename Hash_Table_<Info>::Entry remove(Hash_Table_<Info>* table, Hash_Found removed)
     {
         assert(0 <= removed.hash_index && removed.hash_index < table->_linker.size && "out of range!");
         assert(0 <= removed.entry_index && removed.entry_index < table->_entries_size && "out of range!");
@@ -758,7 +752,7 @@ namespace jot
         linker[removed.hash_index] = cast(Link) hash_table_internal::GRAVESTONE_LINK;
         table->_gravestone_count += 1;
         
-        typename Hash_Table<Info>::Entry removed_entry_data = {
+        typename Hash_Table_<Info>::Entry removed_entry_data = {
             move(&keys[removed_i]),
             move(&values[removed_i]),
         };
@@ -804,7 +798,7 @@ namespace jot
     // entry individually
     //Returns index of marked entry
     template <class Info>
-    isize mark_removed(Hash_Table<Info>* table, Info_Key const& key)
+    isize mark_removed(Hash_Table_<Info>* table, Info_Key const& key)
     {
         Hash_Found found = find(*table, key);
         if(found.entry_index == -1)
@@ -816,14 +810,14 @@ namespace jot
 
     
     template <class Info, Enable_If_Keys_Differ<Info> = ENABLED>
-    isize mark_removed(Hash_Table<Info>* table, Info_Stored_Key const& key)
+    isize mark_removed(Hash_Table_<Info>* table, Info_Stored_Key const& key)
     {
-        Info_Key casted = Info::Cast::key_cast(key);
+        Info_Key casted = Info::key_cast(key);
         return mark_removed(table, casted);
     }
 
     template <class Info> 
-    bool remove(Hash_Table<Info>* table, Info_Key const& key)
+    bool remove(Hash_Table_<Info>* table, Info_Key const& key)
     {
         Hash_Found found = find(*table, key);
         if(found.entry_index == -1)
@@ -834,14 +828,14 @@ namespace jot
     }
     
     template <class Info, Enable_If_Keys_Differ<Info> = ENABLED> 
-    bool remove(Hash_Table<Info>* table, Info_Stored_Key const& key)
+    bool remove(Hash_Table_<Info>* table, Info_Stored_Key const& key)
     {
-        Info_Key casted = Info::Cast::key_cast(key);
+        Info_Key casted = Info::key_cast(key);
         return remove(table, casted);
     }
 
     template <class Info>
-    Hash_Table<Info>::~Hash_Table() noexcept 
+    Hash_Table_<Info>::~Hash_Table_() noexcept 
     {
         assert(is_invariant(*this));
         cast(void) hash_table_internal::set_entries_capacity(this, cast(isize) 0);
@@ -854,7 +848,7 @@ namespace jot
     }
 
     template <class Info> nodisc
-    Info_Value const& get(Hash_Table<Info> const&  table, Info_Key const& key, Info_Value const& if_not_found) noexcept
+    Info_Value const& get(Hash_Table_<Info> const&  table, Info_Key const& key, Info_Value const& if_not_found) noexcept
     {
         isize index = find(table, key).entry_index;
         if(index == -1)
@@ -864,14 +858,14 @@ namespace jot
     }
     
     template <class Info, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-    Info_Value const& get(Hash_Table<Info> const&  table, Info_Stored_Key const& key, Info_Value const& if_not_found) noexcept
+    Info_Value const& get(Hash_Table_<Info> const&  table, Info_Stored_Key const& key, Info_Value const& if_not_found) noexcept
     {
-        Info_Key casted = Info::Cast::key_cast(key);
+        Info_Key casted = Info::key_cast(key);
         return get(table, casted, if_not_found);
     }
     
     template <class Info>
-    void grow_if_overfull(Hash_Table<Info>* table, Hash_Table_Growth const& growth = {}) 
+    void grow_if_overfull(Hash_Table_<Info>* table, Hash_Table_Growth const& growth = {}) 
     {
         assert(is_invariant(*table));
         if(hash_table_internal::is_overful(*table, growth))
@@ -882,7 +876,7 @@ namespace jot
     }
 
     template <class Info>
-    void set(Hash_Table<Info>* table, Info_Stored_Key key, Info_Value value, Hash_Found at, Hash_Table_Growth const& growth = {})
+    void set(Hash_Table_<Info>* table, Info_Stored_Key key, Info_Value value, Hash_Found at, Hash_Table_Growth const& growth = {})
     {
         assert(at.entry_index == -1 && "the entry must not be found!");
         assert(at.finished_at < table->_linker.size && "should be empty or gravestone at this point");
@@ -900,7 +894,7 @@ namespace jot
     }
  
     template <class Info>
-    void set(Hash_Table<Info>* table, Info_Stored_Key key, Info_Value value, Hash_Table_Growth const& growth = {})
+    void set(Hash_Table_<Info>* table, Info_Stored_Key key, Info_Value value, Hash_Table_Growth const& growth = {})
     {
         grow_if_overfull(table, growth);
 
@@ -911,13 +905,13 @@ namespace jot
         Hash_Found found = {};
         if constexpr(std::is_same_v<Info_Key, Info_Stored_Key>)
         {
-            hash_t hash = Info::Hash::hash(key);
+            hash_t hash = Info::key_hash(key);
             found = find<Info, true>(*table, key, hash);
         }
         else
         {
-            Info_Key casted = Info::Cast::key_cast(key);
-            hash_t hash = Info::Hash::hash(casted);
+            Info_Key casted = Info::key_cast(key);
+            hash_t hash = Info::key_hash(casted);
             found = find<Info, true>(*table, casted, hash);
         }
         
@@ -933,7 +927,7 @@ namespace jot
     namespace multi
     {
         template <class Info, bool break_on_gravestone = false> nodisc
-        Hash_Found find_next(Hash_Table<Info> const& table, Info_Key const& prev_key, Hash_Found prev) noexcept
+        Hash_Found find_next(Hash_Table_<Info> const& table, Info_Key const& prev_key, Hash_Found prev) noexcept
         {
             assert(prev.hash_index != -1 && "must be found!");
             assert(prev.entry_index != -1 && "must be found!");
@@ -943,14 +937,14 @@ namespace jot
 
         
         template <class Info, bool break_on_gravestone = false, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-        Hash_Found find_next(Hash_Table<Info> const& table, Info_Stored_Key const& prev_key, Hash_Found prev) noexcept
+        Hash_Found find_next(Hash_Table_<Info> const& table, Info_Stored_Key const& prev_key, Hash_Found prev) noexcept
         {
-            Info_Key key = Info::Cast::key_cast(prev_key);
+            Info_Key key = Info::key_cast(prev_key);
             return find_next(table, key, prev);
         }
 
         template <class Info>
-        void add_another(Hash_Table<Info>* table, Info_Stored_Key stored_key, Info_Value value, Hash_Table_Growth const& growth = {})
+        void add_another(Hash_Table_<Info>* table, Info_Stored_Key stored_key, Info_Value value, Hash_Table_Growth const& growth = {})
         {
             grow_if_overfull(table, growth);
             
@@ -958,15 +952,15 @@ namespace jot
             Hash_Found found = {};
             if constexpr(std::is_same_v<Info_Key, Info_Stored_Key>)
             {
-                hash_t hash = Info::Hash::hash(stored_key);
+                hash_t hash = Info::key_hash(stored_key);
                 found = find<Info, true>(*table, stored_key, hash);
                 while(found.entry_index != -1)
                     found = find_next<Info, true>(*table, stored_key, found);
             }
             else
             {   
-                Info_Key key = Info::Cast::key_cast(stored_key);
-                hash_t hash = Info::Hash::hash(key);
+                Info_Key key = Info::key_cast(stored_key);
+                hash_t hash = Info::key_hash(key);
                 found = find<Info, true>(*table, key, hash);
                 while(found.entry_index != -1)
                     found = find_next<Info, true>(*table, key, found);
@@ -979,11 +973,48 @@ namespace jot
     #undef Info_Key           
     #undef Info_Value         
     #undef Info_Stored_Key    
-    #undef Info_Cast          
-    #undef Info_Compare       
-    #undef Info_Hash          
     #undef Info_Link         
 
+    template <typename T, typename Enable = Enabled>
+    struct Hashable : No_Default
+    {
+        static 
+        hash_t hash(T const& val) noexcept
+        {
+            //just for illustartion:
+            return uint64_hash(val);
+        }
+    };
+    
+    template <typename T, typename Enable = Enabled>
+    struct Key_Comparable
+    {
+        static
+        bool key_equal(T const& a, T const& b) noexcept
+        {
+            return a == b;
+        }
+    };
+
+    template <typename To, typename From>
+    struct Key_Castable
+    {
+        static 
+        To key_cast(From const& from)
+        {
+            return cast(To const&) from;
+        }
+    };
+    
+    template <typename Stored_Key>
+    struct Default_Key
+    {
+        using Key = Stored_Key;
+    };
+
+    template <typename Stored_Key>
+    using Def_Key = typename Default_Key<Stored_Key>::Key;
+    
     //Specializations of the Hashable and Key_Comparable for some of the common types:
     template <typename T>
     struct Hashable<T, Enable_If<std::is_integral_v<T>>>
@@ -1030,7 +1061,7 @@ namespace jot
     struct Key_Comparable<Slice<T>>
     {
         static
-        bool are_equal(Slice<T> const& a, Slice<T> const& b) noexcept
+        bool key_equal(Slice<T> const& a, Slice<T> const& b) noexcept
         {
             //if possible use by byte compare (memcmp)
             if constexpr(std::is_scalar_v<T>)
@@ -1042,7 +1073,7 @@ namespace jot
                 
                 for(isize i = 0; i < a.size; i++)
                 {
-                    if(Key_Comparable<T>::are_equal(a[i], b[i]) == false)
+                    if(Key_Comparable<T>::key_equal(a[i], b[i]) == false)
                         return false;
                 }
 
@@ -1055,14 +1086,14 @@ namespace jot
     struct Key_Comparable<Stack<T>>
     {
         static
-        bool are_equal(Stack<T> const& a, Stack<T> const& b) noexcept
+        bool key_equal(Stack<T> const& a, Stack<T> const& b) noexcept
         {
-            return Key_Comparable<Slice<const T>>::are_equal(slice(a), slice(b));
+            return Key_Comparable<Slice<const T>>::key_equal(slice(a), slice(b));
         }
     };
 
     template <typename T>
-    struct Key_Castable<Stack<T>, Slice<const T>>
+    struct Key_Castable<Slice<const T>, Stack<T>>
     {
         static
         Slice<const T> key_cast(Stack<T> const& from)
@@ -1070,23 +1101,55 @@ namespace jot
             return slice(from);
         }
     };
+
+    template<
+        typename Stored_Key_, 
+        typename Value_,
+        typename Key_,
+        Key_Hash_Func<Key_>              key_hash_,
+        Key_Equal_Func<Key_>             key_equal_,
+        Key_Cast_Func<Key_, Stored_Key_> key_cast_
+    > 
+    struct Hash_Table_Info
+    {
+        using Key = Key_;
+        using Value = Value_;
+        using Stored_Key = Stored_Key_;
+        
+        static constexpr Key_Hash_Func<Key_>              key_hash = key_hash_;
+        static constexpr Key_Equal_Func<Key_>             key_equal = key_equal_;
+        static constexpr Key_Cast_Func<Key_, Stored_Key_> key_cast = key_cast_;
+    };
     
-    //Shorthand name
-    template<typename Stored_Key, typename Value> 
-    using Map = Hash_Table<Hash_Table_Info<Stored_Key, Value>>;
-    
+    template<
+        typename Stored_Key, 
+        typename Value,
+        typename Key,
+        Key_Hash_Func<Key>              key_hash = Hashable<Key>::hash,
+        Key_Equal_Func<Key>             key_equal = Key_Comparable<Key>::key_equal,
+        Key_Cast_Func<Key, Stored_Key>  key_cast = Key_Castable<Key, Stored_Key>::key_cast
+    >
+    using Hash_Table_Access = Hash_Table_<
+        Hash_Table_Info<Stored_Key, Value, Key, key_hash, key_equal, key_cast>
+    >;
+
+    template<
+        typename Key, 
+        typename Value, 
+        Key_Hash_Func<Def_Key<Key>>              key_hash = Hashable<Def_Key<Key>>::hash,
+        Key_Equal_Func<Def_Key<Key>>             key_equal = Key_Comparable<Def_Key<Key>>::key_equal
+    >
+    using Hash_Table = Hash_Table_<
+        Hash_Table_Info<Key, Value, Def_Key<Key>, key_hash, key_equal, Key_Castable<Def_Key<Key>, Key>::key_cast>
+    >;
+
     //optimalization for all stacks (including strings)
     // making it possible to index by Slices
     //Note that custom Info's are still possible
-    template<typename T, typename Value_> 
-    struct Hash_Table_Info<Stack<T>, Value_>
+    template<typename T>
+    struct Default_Key<Stack<T>>
     {
         using Key = Slice<const T>;
-        using Value = Value_;
-        using Stored_Key = Stack<T>;
-        using Cast = Key_Castable<Stored_Key, Key>;
-        using Compare = Key_Comparable<Key>;
-        using Hash = Hashable<Key>;
     };
 }
 

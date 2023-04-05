@@ -49,7 +49,7 @@ namespace jot
     //  nodes is worth 8*4 million = 32GB of space from this data structure alone. Nobody is going to store that much
     //  data in a linked list and if they are they should write their won fuctions.
 
-    static constexpr uint32_t NULL_LIST_INDEX = -1;
+    static constexpr uint32_t NULL_LIST_INDEX = (uint32_t) -1;
 
     struct Index_Chain
     {
@@ -91,6 +91,9 @@ namespace jot
         #ifdef INTRUSIVE_INDEX_LIST_PEDANTIC
         return is_connected(first, last, arr);
         #else
+        (void) first;
+        (void) last;
+        (void) arr;
         return true;
         #endif
     }

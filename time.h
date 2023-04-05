@@ -69,7 +69,7 @@ namespace jot
         stats.max = times[runs - 1];
         stats.average = sum / runs;
 
-        if(runs % 2 == 0)
+        if constexpr (runs % 2 == 0)
             stats.median = (times[runs/2] + times[runs/2 + 1]) / 2;
         else
             stats.median = times[runs/2];

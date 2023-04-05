@@ -31,6 +31,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <assert.h>
 #ifndef __cplusplus
 #include <stdbool.h>
 #endif
@@ -207,17 +208,18 @@ static void intrin__unreachable(void)
     #if defined(INTRIN_COMPILER__MSVC) \
         && !defined(INTRIN_NO_UNREACHABLE) 
 
-        #define intrin__unreachable() __assume(0)
+        #define intrin__unreachable() assert(false && "code declared as unreachable reached!"), __assume(0)
     #elif (defined(INTRIN_COMPILER__GNUC) || defined(INTRIN_COMPILER__CLANG)) \
         && !defined(INTRIN_NO_UNREACHABLE) 
     
-        #define intrin__unreachable() __builtin_unreachable()
+        #define intrin__unreachable() assert(false && "code declared as unreachable reached!"), __builtin_unreachable()
     #else
         //undefined behaviour via integer overflow
         //This is as good of a try as any
         #define intrin__unreachable()               \
             do                                      \
             {                                       \
+                assert(false && "code declared as unreachable reached!");                      \
                 int32_t overflowing = 0x7FFFFFFF;   \
                 overflowing += 0xF;                 \
             }                                       \
