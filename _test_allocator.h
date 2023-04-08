@@ -69,7 +69,7 @@ namespace jot::tests::allocator
             first = result.items;
 
             result = stack_ring.resize(first, 8, 40 + 256);
-            test(result.state != Allocator_State::OK);
+            test(result.state != Allocation_State::OK);
 
             *stack_ring.deallocate(first, 8);
             *stack_ring.deallocate(third, 8);
@@ -89,7 +89,7 @@ namespace jot::tests::allocator
             Slice<u8> a4 = stack_ring.allocate(64, 8).items;
             Slice<u8> a5 = stack_ring.allocate(64, 8).items;
 
-            test(stack_ring.allocate(64, 8).state != Allocator_State::OK);
+            test(stack_ring.allocate(64, 8).state != Allocation_State::OK);
             
             *stack_ring.deallocate(a3, 8);
             *stack_ring.deallocate(a4, 8);
@@ -269,7 +269,7 @@ namespace jot::tests::allocator
                 isize align = align_table[i];
 
                 Allocation_Result result = tested->resize(old_data, align, new_size);
-                if(result.state != Allocator_State::OK)
+                if(result.state != Allocation_State::OK)
                 {
                     result = tested->allocate(new_size, align);
                     *result.state;
@@ -311,7 +311,7 @@ namespace jot::tests::allocator
                 fill_slice(result.items);
 
                 Allocation_Result resize_result = tested->resize(result.items, align, new_size);
-                if(resize_result.state != Allocator_State::OK)
+                if(resize_result.state != Allocation_State::OK)
                 {
                     resize_result = tested->allocate(new_size, align);
                     *resize_result.state;

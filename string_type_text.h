@@ -17,11 +17,36 @@ struct Slice<const CHAR_T>
         : data(str), size(strlen(str)) {}
         
     using T = const CHAR_T;
-    #include "slice_members_text.h"
+    using value_type      = T;
+    using size_type       = size_t;
+    using difference_type = ptrdiff_t;
+    using reference       = T&;
+    using const_reference = const T&;
+    using iterator       = T*;
+    using const_iterator = const T*;
+        
+    _nodisc constexpr iterator       begin() noexcept       { return data; }
+    _nodisc constexpr const_iterator begin() const noexcept { return data; }
+    _nodisc constexpr iterator       end() noexcept         { return data + size; }
+    _nodisc constexpr const_iterator end() const noexcept   { return data + size; }
+
+    _nodisc constexpr T const& operator[](isize index) const noexcept  
+    { 
+        assert(0 <= index && index < size && "index out of range"); 
+        return data[index]; 
+    }
+    _nodisc constexpr T& operator[](isize index) noexcept 
+    { 
+        assert(0 <= index && index < size && "index out of range"); 
+        return data[index]; 
+    }
+        
+    _nodisc constexpr operator Slice<const T>() const noexcept 
+    { 
+        return Slice<const T>{this->data, this->size}; 
+    }
 };
     
-Slice(const CHAR_T*) -> Slice<const CHAR_T>;
-
 _nodisc constexpr
 Slice<const CHAR_T> slice(const CHAR_T* str) noexcept
 {
@@ -38,13 +63,13 @@ Slice<const CHAR_T> slice(const CHAR_T (&a)[N]) noexcept
 _nodisc constexpr 
 bool operator ==(Slice<const CHAR_T> const& a, Slice<const CHAR_T> const& b) noexcept 
 {
-    return compare(a, b) == 0;
+    return are_equal(a, b);
 }
     
 _nodisc constexpr 
 bool operator !=(Slice<const CHAR_T> const& a, Slice<const CHAR_T> const& b) noexcept 
 {
-    return compare(a, b) != 0;
+    return are_equal(a, b) == false;
 }
 
 #undef CHAR_T

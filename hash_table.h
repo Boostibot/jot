@@ -6,45 +6,7 @@
 #include "defines.h"
 
 namespace jot
-{
-    //@TODO: use only stack_base.h or decide whether to support the Stacks natively
-    //@TODO: remove a lot of the automaticness from this and instead make it very manual 
-    //        like slice is - instead of having multiple constructors to evrything one would like
-    //        there is a general way of doing the whole thing
-    //@TODO: include only the memro decl file or even better yet figure out how to enable zero include hook into the memroy allocation
-    //        strategy. (Something like struct Allocator; in every file and then using free functions also just declared in eah file working with
-    //        Allocator* - this way they will not require anything but the very basic. This is useful if we include allocator after however what if
-    //        we dont want to include it at all? 
-    //
-    //        if include order is 1) allocator 2) this then we can use a macro starting in allocator
-    //        if include order is 1) this 2) allocator then we can use free functions
-    //        if include just this then we would somehow need to differentiate it between the case above and include proper definitions...
-    //           those definitions would need to be weaker in some way then the actual ones fron the allocator
-    //           so maybe like a template struct with static method that by default mallocs.
-    //           this gets overriden with a proper template proc in the memory header if it was included this way around else it gets defined there
-    //           and a define is used to signal that it was defined. This then covers all the neccessary directions.
-    //
-    //        The problem with this is that the original reason for doing all of this was simplicity... and this is not simple. As such employing it 
-    //           wouldnt solve the original problem. At the end of the day including 2 files instead of one is not such a big deal.
-
-    template<typename Stored_Key, typename Value>
-    struct Hash_Table_Entry
-    {
-        Stored_Key key;
-        Value value;
-    };
-    
-    // Stored Key -> Key -> Value
-    // 
-    // We differentiate between the acess key and store key. That is because often the key will have few dynamic allocations inside it and construcing it could be 
-    // pricy. As is the case for strings. We would like to have exactly one definition of each function that wuld function for both stored key and key.
-    // Problem is that we still take Key by reference as it is most often gonna be the stored key and thus expensive to make.
-    // 
-    // What if we instead by default used Key = Stored_Key const& ??? Then we would be able to: 
-    //   Have only one definition
-    //   Pass things by reference always
-    // 
-    
+{   
     template<typename Key>
     using Key_Equal_Func = bool   (*)(Key const&, Key const&);
 
@@ -76,17 +38,14 @@ namespace jot
         using Stored_Key = Info_Stored_Key;
 
         static constexpr Key_Hash_Func<Key>             key_hash = Info::key_hash;
-        static constexpr Key_Equal_Func<Key>            key_equal = Info::key_equal;
+        static constexpr Key_Equal_Func<Key>            key_equals = Info::key_equals;
         static constexpr Key_Cast_Func<Key, Stored_Key> key_cast = Info::key_cast;
-
-        using Entry = Hash_Table_Entry<Stored_Key, Value>;
 
         //we assume that if the entry size is equal or greater than 8 (which is usually the case) 
         // we wont ever hold more than 4 million entries (would be more than 32GB of data)
         // this reduces the necessary size for linker by 50%
-        using Link = std::conditional_t<(sizeof(Entry) >= 8), u32, u64>;
+        using Link = std::conditional_t<(sizeof(Stored_Key) + sizeof(Value) > 4), u32, u64>;
         
-
         Allocator* _allocator = memory_globals::default_allocator();
         Stored_Key* _keys = nullptr;
         Value* _values = nullptr;
@@ -142,9 +101,6 @@ namespace jot
         isize jump_table_base_size = 32;
     };
 
-    template<class Info>
-    using Enable_If_Keys_Differ = Enable_If<!std::is_same_v<Info_Key, Info_Stored_Key>>;
-
     constexpr static isize HASH_TABLE_ENTRIES_ALIGN = 32;
     constexpr static isize HASH_TABLE_LINKER_ALIGN = 32;
     constexpr static isize HASH_TABLE_LINKER_BASE_SIZE = 16;
@@ -173,28 +129,25 @@ namespace jot
     template <class Info> nodisc
     Slice<const Info_Stored_Key> keys(Hash_Table_<Info> const& hash)
     {
-        Slice<const Info_Stored_Key> out = {hash._keys, hash._entries_size};
-        return out;
+        return {hash._keys, hash._entries_size};
     }
     
     template <class Info> nodisc
     Slice<const Info_Stored_Key> keys(Hash_Table_<Info>* hash)
     {
-        return keys(*hash);
+        return {hash._keys, hash._entries_size};
     }
 
     template <class Info> nodisc
     Slice<Info_Value> values(Hash_Table_<Info>* hash)
     {
-        Slice<Info_Value> out = {hash->_values, hash->_entries_size};
-        return out;
+        return {hash->_values, hash->_entries_size};
     }
     
     template <class Info> nodisc
     Slice<const Info_Value> values(Hash_Table_<Info> const& hash)
     {
-        Slice<const Info_Value> out = {hash._values, hash._entries_size};
-        return out;
+        return {hash._values, hash._entries_size};
     }
 
     template <class Info> nodisc
@@ -249,8 +202,14 @@ namespace jot
         }
 
         template <class Info> nodisc
-        Allocator_State_Type set_entries_capacity(Hash_Table_<Info>* hash, isize new_capacity) noexcept
+        Allocation_State set_entries_capacity(Hash_Table_<Info>* hash, isize new_capacity) noexcept
         {
+            Set_Capacity_Info info;
+            info.allocator = hash->_allocator;
+            info.align = HASH_TABLE_ENTRIES_ALIGN;
+            info.new_capacity = new_capacity;
+            info.try_resize = true;
+
             Allocator* alloc = hash->_allocator;
             isize align = HASH_TABLE_ENTRIES_ALIGN;
             isize size = hash->_entries_size;
@@ -262,11 +221,11 @@ namespace jot
             Slice<Value> old_values = Slice<Value>{hash->_values, hash->_entries_capacity};
 
             Set_Capacity_Result<Stored_Key> key_res = set_capacity_allocation_stage(alloc, &old_keys, align, new_capacity, true);
-            if(key_res.state != Allocator_State::OK)
+            if(key_res.state != Allocation_State::OK)
                 return key_res.state;
                 
             Set_Capacity_Result<Value> value_res = set_capacity_allocation_stage(alloc, &old_values, align, new_capacity, true);
-            if(value_res.state != Allocator_State::OK)
+            if(value_res.state != Allocation_State::OK)
             {
                 Slice<u8> raw_keys = cast_slice<u8>(key_res.items);
                 alloc->deallocate(raw_keys, align);
@@ -281,11 +240,11 @@ namespace jot
             hash->_values = value_res.items.data;
             hash->_entries_capacity = new_capacity;
 
-            return Allocator_State::OK;
+            return Allocation_State::OK;
         }
 
         template <class Info> nodisc
-        Allocator_State_Type reserve_entries(Hash_Table_<Info>* hash, isize to_fit, Hash_Table_Growth const& growth) noexcept
+        Allocation_State reserve_entries(Hash_Table_<Info>* hash, isize to_fit, Hash_Table_Growth const& growth) noexcept
         {
             if(to_fit > hash->_entries_capacity)
             {
@@ -295,16 +254,16 @@ namespace jot
                 return set_entries_capacity(hash, new_capacity);
             }
 
-            return Allocator_State::OK;
+            return Allocation_State::OK;
         }
 
         template <class Info> nodisc
-        Allocator_State_Type push_entry(Hash_Table_<Info>* hash, Info_Stored_Key key, Info_Value value, Hash_Table_Growth const& growth) noexcept
+        Allocation_State push_entry(Hash_Table_<Info>* hash, Info_Stored_Key key, Info_Value value, Hash_Table_Growth const& growth) noexcept
         {
             assert(is_invariant(*hash));
             isize size = hash->_entries_size;
-            Allocator_State_Type state = hash_table_internal::reserve_entries(hash, size + 1, growth);
-            if(state != Allocator_State::OK)
+            Allocation_State state = hash_table_internal::reserve_entries(hash, size + 1, growth);
+            if(state != Allocation_State::OK)
                 return state;
 
             new (&hash->_keys[size]) Info_Stored_Key(move(&key));
@@ -313,11 +272,11 @@ namespace jot
             hash->_entries_size = size + 1;
             
             assert(is_invariant(*hash));
-            return Allocator_State::OK;
+            return Allocation_State::OK;
         }
     
         template <class Info> nodisc
-        Allocator_State_Type unsafe_rehash(Hash_Table_<Info>* table, isize to_size) noexcept
+        Allocation_State unsafe_rehash(Hash_Table_<Info>* table, isize to_size) noexcept
         {
             assert(is_invariant(*table));
             using Link = Info_Link;;
@@ -339,7 +298,7 @@ namespace jot
             if(to_size != 0)
             {
                 result = table->_allocator->allocate(to_size * cast(isize) sizeof(Link), HASH_TABLE_LINKER_ALIGN);
-                if(result.state != Allocator_State::OK)
+                if(result.state != Allocation_State::OK)
                    return result.state; 
             }
 
@@ -461,7 +420,7 @@ namespace jot
             
             assert(is_invariant(*table));
 
-            return Allocator_State::OK;
+            return Allocation_State::OK;
         }
 
         template <class Info> nodisc
@@ -471,7 +430,7 @@ namespace jot
         }
         
         template <class Info> nodisc
-        Allocator_State_Type grow(Hash_Table_<Info>* table, Hash_Table_Growth const& growth) noexcept
+        Allocation_State grow(Hash_Table_<Info>* table, Hash_Table_Growth const& growth) noexcept
         {
             isize rehash_to = table->_linker.size * 2;
 
@@ -489,7 +448,7 @@ namespace jot
     }
     
     template <class Info> nodisc
-    Allocator_State_Type rehash_failing(Hash_Table_<Info>* table, isize to_size, Hash_Table_Growth const& growth = {}) noexcept
+    Allocation_State rehash_failing(Hash_Table_<Info>* table, isize to_size, Hash_Table_Growth const& growth = {}) noexcept
     {
         isize rehash_to = growth.jump_table_base_size;
 
@@ -502,16 +461,16 @@ namespace jot
     }
 
     template <class Info> nodisc
-    Allocator_State_Type reserve_jump_table_failing(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
+    Allocation_State reserve_jump_table_failing(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
     {
         if(to_fit < table->_linker.size)
-            return Allocator_State::OK;
+            return Allocation_State::OK;
 
         return rehash_failing(table, to_fit, growth);
     }
 
     template <class Info> nodisc
-    Allocator_State_Type reserve_entries_failing(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
+    Allocation_State reserve_entries_failing(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
     {
         return hash_table_internal::reserve_entries(table, to_fit, growth);
     }
@@ -523,14 +482,14 @@ namespace jot
     }
 
     template <class Info> nodisc
-    Allocator_State_Type reserve_failing(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
+    Allocation_State reserve_failing(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {}) noexcept
     {
         //we reserve such that inserting to_fit element swill not result in a reallocation of entries nor rehashing
         isize jump_table_size = calculate_jump_table_size(to_fit, growth);
-        Allocator_State_Type state1 = reserve_jump_table_failing(table, jump_table_size, growth);
-        Allocator_State_Type state2 = reserve_entries_failing(table, to_fit, growth);
+        Allocation_State state1 = reserve_jump_table_failing(table, jump_table_size, growth);
+        Allocation_State state2 = reserve_entries_failing(table, to_fit, growth);
 
-        if(state1 != Allocator_State::OK)
+        if(state1 != Allocation_State::OK)
             return state1;
 
         return state2;
@@ -539,22 +498,22 @@ namespace jot
     template <class Info>
     void reserve_entries(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
     {
-        Allocator_State_Type state = reserve_failing(table, to_fit, growth);
-        force(state == Allocator_State::OK && "reserve failed!");
+        Allocation_State state = reserve_failing(table, to_fit, growth);
+        force(state == Allocation_State::OK && "reserve failed!");
     }
     
     template <class Info>
     void reserve_jump_table(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
     {
-        Allocator_State_Type state = reserve_failing(table, to_fit, growth);
-        force(state == Allocator_State::OK && "reserve failed!");
+        Allocation_State state = reserve_failing(table, to_fit, growth);
+        force(state == Allocation_State::OK && "reserve failed!");
     }
     
     template <class Info>
     void rehash(Hash_Table_<Info>* table, isize to_size, Hash_Table_Growth const& growth = {})
     {
-        Allocator_State_Type state = rehash_failing(table, to_size, growth);
-        force(state == Allocator_State::OK && "rehashing failed!");
+        Allocation_State state = rehash_failing(table, to_size, growth);
+        force(state == Allocation_State::OK && "rehashing failed!");
     }
 
     template <class Info> 
@@ -567,8 +526,8 @@ namespace jot
     template <class Info>
     void reserve(Hash_Table_<Info>* table, isize to_fit, Hash_Table_Growth const& growth = {})
     {
-        Allocator_State_Type state = reserve_failing(table, to_fit, growth);
-        force(state == Allocator_State::OK && "reserve failed!");
+        Allocation_State state = reserve_failing(table, to_fit, growth);
+        force(state == Allocation_State::OK && "reserve failed!");
     }
 
     template <class Info, bool break_on_gravestone = false> nodisc
@@ -611,12 +570,12 @@ namespace jot
             bool are_equal = false;
             if constexpr(std::is_same_v<Info_Key, Info_Stored_Key>)
             {
-                are_equal = Info::key_equal(curr, key);
+                are_equal = Info::key_equals(curr, key);
             }
             else
             {
                 Info_Key curr_key = Info::key_cast(curr);
-                are_equal = Info::key_equal(curr_key, key);
+                are_equal = Info::key_equals(curr_key, key);
             }
 
             if(are_equal)
@@ -631,13 +590,6 @@ namespace jot
         return found;
     }
    
-    template <class Info, bool break_on_gravestone = false, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-    Hash_Found find(Hash_Table_<Info> const& table, Info_Stored_Key const& key, hash_t hash) noexcept
-    {
-        Info_Key casted = Info::key_cast(key);
-        return find(table, casted, hash);
-    }
-
     template <class Info, bool break_on_gravestone = false> nodisc
     Hash_Found find_found_entry(Hash_Table_<Info> const& table, isize entry_i, hash_t hash) noexcept
     {
@@ -686,25 +638,10 @@ namespace jot
         return find(table, key, hash);
     }
     
-    template <class Info, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-    Hash_Found find(Hash_Table_<Info> const& table, Info_Stored_Key const& key) noexcept
-    {
-        Info_Key casted = Info::key_cast(key);
-        return find(table, casted);
-    }
-
     template <class Info> nodisc
     isize find_entry(Hash_Table_<Info> const& table, Info_Key const& key) noexcept
     {
         return find(table, key).entry_index;
-    }
-    
-    template <class Info, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-    isize find_entry(Hash_Table_<Info> const& table, Info_Stored_Key const& key) noexcept
-    {
-        Info_Key casted = Info::key_cast(key);
-        return find_entry(table, casted);
-    
     }
     
     template <class Info> nodisc
@@ -713,13 +650,6 @@ namespace jot
         return find(table, key).entry_index != -1;
     }
     
-    template <class Info, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-    bool has(Hash_Table_<Info> const& table, Info_Stored_Key const& key) noexcept
-    {
-        Info_Key casted = Info::key_cast(key);
-        return has(table, casted);
-    }
-
     template <class Info> nodisc
     void mark_removed(Hash_Table_<Info>* table, Hash_Found removed)
     {
@@ -808,14 +738,6 @@ namespace jot
         return found.entry_index;
     }
 
-    
-    template <class Info, Enable_If_Keys_Differ<Info> = ENABLED>
-    isize mark_removed(Hash_Table_<Info>* table, Info_Stored_Key const& key)
-    {
-        Info_Key casted = Info::key_cast(key);
-        return mark_removed(table, casted);
-    }
-
     template <class Info> 
     bool remove(Hash_Table_<Info>* table, Info_Key const& key)
     {
@@ -827,13 +749,6 @@ namespace jot
         return true;
     }
     
-    template <class Info, Enable_If_Keys_Differ<Info> = ENABLED> 
-    bool remove(Hash_Table_<Info>* table, Info_Stored_Key const& key)
-    {
-        Info_Key casted = Info::key_cast(key);
-        return remove(table, casted);
-    }
-
     template <class Info>
     Hash_Table_<Info>::~Hash_Table_() noexcept 
     {
@@ -857,21 +772,14 @@ namespace jot
         return values(table)[index];
     }
     
-    template <class Info, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-    Info_Value const& get(Hash_Table_<Info> const&  table, Info_Stored_Key const& key, Info_Value const& if_not_found) noexcept
-    {
-        Info_Key casted = Info::key_cast(key);
-        return get(table, casted, if_not_found);
-    }
-    
     template <class Info>
     void grow_if_overfull(Hash_Table_<Info>* table, Hash_Table_Growth const& growth = {}) 
     {
         assert(is_invariant(*table));
         if(hash_table_internal::is_overful(*table, growth))
         {
-            Allocator_State_Type state = hash_table_internal::grow(table, growth);
-            force(state == Allocator_State::OK && "allocation failed!");
+            Allocation_State state = hash_table_internal::grow(table, growth);
+            force(state == Allocation_State::OK && "allocation failed!");
         }
     }
 
@@ -888,8 +796,8 @@ namespace jot
             table->_gravestone_count -= 1;
         }
 
-        Allocator_State_Type state = hash_table_internal::push_entry(table, move(&key), move(&value), growth);
-        force(state == Allocator_State::OK && "allocation failed!");
+        Allocation_State state = hash_table_internal::push_entry(table, move(&key), move(&value), growth);
+        force(state == Allocation_State::OK && "allocation failed!");
         table->_linker[at.finished_at] = cast(Info_Link) table->_entries_size - 1;
     }
  
@@ -935,14 +843,6 @@ namespace jot
             return find(table, prev_key, cast(hash_t) prev.hash_index + 1);
         }
 
-        
-        template <class Info, bool break_on_gravestone = false, Enable_If_Keys_Differ<Info> = ENABLED> nodisc
-        Hash_Found find_next(Hash_Table_<Info> const& table, Info_Stored_Key const& prev_key, Hash_Found prev) noexcept
-        {
-            Info_Key key = Info::key_cast(prev_key);
-            return find_next(table, key, prev);
-        }
-
         template <class Info>
         void add_another(Hash_Table_<Info>* table, Info_Stored_Key stored_key, Info_Value value, Hash_Table_Growth const& growth = {})
         {
@@ -974,133 +874,74 @@ namespace jot
     #undef Info_Value         
     #undef Info_Stored_Key    
     #undef Info_Link         
-
-    template <typename T, typename Enable = Enabled>
-    struct Hashable : No_Default
-    {
-        static 
-        hash_t hash(T const& val) noexcept
-        {
-            //just for illustartion:
-            return uint64_hash(val);
-        }
-    };
     
-    template <typename T, typename Enable = Enabled>
-    struct Key_Comparable
+    template <typename T> 
+    hash_t default_key_hash(T const& val) noexcept
     {
-        static
-        bool key_equal(T const& a, T const& b) noexcept
+        return uint64_hash(cast(u64) val);
+    }
+
+    template <typename T>  
+    hash_t default_key_hash(Slice<T> const& val) noexcept
+    {
+        //if is scalar (array of bultin types ie char, int...) just use the optimal hash
+        if constexpr(std::is_scalar_v<T>)
+            return cast(hash_t) murmur_hash64(val.data, val.size * cast(isize) sizeof(T), cast(u64) val.size);
+        //else mixin the hashes for each element
+        else
         {
-            return a == b;
+            u64 running_hash = cast(u64) val.size;
+            for(isize i = 0; i < val.size; i++)
+                running_hash ^= Hashable<T>::hash(val);
+            
+            return cast(hash_t) running_hash;
         }
-    };
+    }
+
+    template <typename T>  
+    hash_t default_key_hash(Stack<T> const& val) noexcept
+    {
+        return default_key_hash<T>(slice(val));
+    }
+
+    template <typename T>
+    bool default_key_equals(T const& a, T const& b)
+    {
+        return a == b;
+    }
+    
+    template <typename T>
+    bool default_key_equals(Slice<T> const& a, Slice<T> const& b) noexcept
+    {
+        //if possible use by byte compare (memcmp)
+        if constexpr(std::is_scalar_v<T>)
+            return compare(cast_slice<const u8>(a),  cast_slice<const u8>(b)) == 0;       
+        else
+        {
+            if(a.size != b.size)
+                return false;
+                
+            for(isize i = 0; i < a.size; i++)
+            {
+                if(Key_Comparable<T>::key_equals(a[i], b[i]) == false)
+                    return false;
+            }
+
+            return true;
+        }
+    }
+
+    template <typename T>
+    bool default_key_equals(Stack<T> const& a, Stack<T> const& b) noexcept
+    {
+        return default_key_equals<T>(slice(a), slice(b));
+    }
 
     template <typename To, typename From>
-    struct Key_Castable
+    To default_key_cast(From const& a) noexcept
     {
-        static 
-        To key_cast(From const& from)
-        {
-            return cast(To const&) from;
-        }
-    };
-    
-    template <typename Stored_Key>
-    struct Default_Key
-    {
-        using Key = Stored_Key;
-    };
-
-    template <typename Stored_Key>
-    using Def_Key = typename Default_Key<Stored_Key>::Key;
-    
-    //Specializations of the Hashable and Key_Comparable for some of the common types:
-    template <typename T>
-    struct Hashable<T, Enable_If<std::is_integral_v<T>>>
-    {
-        static constexpr
-        hash_t hash(T const& val) noexcept
-        {
-            return uint64_hash(cast(u64) val);
-        }
-    };
-
-    template <typename T>
-    struct Hashable<Slice<T>>
-    {
-        static 
-        hash_t hash(Slice<T> const& val) noexcept
-        {
-            //if is scalar (array of bultin types ie char, int...) just use the optimal hash
-            if constexpr(std::is_scalar_v<T>)
-                return cast(hash_t) murmur_hash64(val.data, val.size * cast(isize) sizeof(T), cast(u64) val.size);
-            //else mixin the hashes for each element
-            else
-            {
-                u64 running_hash = cast(u64) val.size;
-                for(isize i = 0; i < val.size; i++)
-                    running_hash ^= Hashable<T>::hash(val);
-            
-                return cast(hash_t) running_hash;
-            }
-        }
-    };
-    
-    template <typename T>
-    struct Hashable<Stack<T>>
-    {
-        static 
-        hash_t hash(Stack<T> const& val) noexcept
-        {
-            return Hashable<Slice<const T>>::hash(slice(val));
-        }
-    };
-
-    template <typename T>
-    struct Key_Comparable<Slice<T>>
-    {
-        static
-        bool key_equal(Slice<T> const& a, Slice<T> const& b) noexcept
-        {
-            //if possible use by byte compare (memcmp)
-            if constexpr(std::is_scalar_v<T>)
-                return compare(cast_slice<const u8>(a),  cast_slice<const u8>(b)) == 0;       
-            else
-            {
-                if(a.size != b.size)
-                    return false;
-                
-                for(isize i = 0; i < a.size; i++)
-                {
-                    if(Key_Comparable<T>::key_equal(a[i], b[i]) == false)
-                        return false;
-                }
-
-                return true;
-            }
-        }
-    };
-
-    template <typename T>
-    struct Key_Comparable<Stack<T>>
-    {
-        static
-        bool key_equal(Stack<T> const& a, Stack<T> const& b) noexcept
-        {
-            return Key_Comparable<Slice<const T>>::key_equal(slice(a), slice(b));
-        }
-    };
-
-    template <typename T>
-    struct Key_Castable<Slice<const T>, Stack<T>>
-    {
-        static
-        Slice<const T> key_cast(Stack<T> const& from)
-        {
-            return slice(from);
-        }
-    };
+        return cast(To) a;
+    }
 
     template<
         typename Stored_Key_, 
@@ -1117,7 +958,7 @@ namespace jot
         using Stored_Key = Stored_Key_;
         
         static constexpr Key_Hash_Func<Key_>              key_hash = key_hash_;
-        static constexpr Key_Equal_Func<Key_>             key_equal = key_equal_;
+        static constexpr Key_Equal_Func<Key_>             key_equals = key_equal_;
         static constexpr Key_Cast_Func<Key_, Stored_Key_> key_cast = key_cast_;
     };
     
@@ -1125,32 +966,21 @@ namespace jot
         typename Stored_Key, 
         typename Value,
         typename Key,
-        Key_Hash_Func<Key>              key_hash = Hashable<Key>::hash,
-        Key_Equal_Func<Key>             key_equal = Key_Comparable<Key>::key_equal,
-        Key_Cast_Func<Key, Stored_Key>  key_cast = Key_Castable<Key, Stored_Key>::key_cast
+        Key_Hash_Func<Key>              key_hash = default_key_hash<Key>,
+        Key_Equal_Func<Key>             key_equals = default_key_equals<Key>,
+        Key_Cast_Func<Key, Stored_Key>  key_cast = default_key_cast<Key>
     >
     using Hash_Table_Access = Hash_Table_<
-        Hash_Table_Info<Stored_Key, Value, Key, key_hash, key_equal, key_cast>
+        Hash_Table_Info<Stored_Key, Value, Key, key_hash, key_equals, key_cast>
     >;
 
     template<
         typename Key, 
-        typename Value, 
-        Key_Hash_Func<Def_Key<Key>>              key_hash = Hashable<Def_Key<Key>>::hash,
-        Key_Equal_Func<Def_Key<Key>>             key_equal = Key_Comparable<Def_Key<Key>>::key_equal
+        typename Value,
+        Key_Hash_Func<Key>              key_hash = default_key_hash<Key>,
+        Key_Equal_Func<Key>             key_equals = default_key_equals<Key>
     >
-    using Hash_Table = Hash_Table_<
-        Hash_Table_Info<Key, Value, Def_Key<Key>, key_hash, key_equal, Key_Castable<Def_Key<Key>, Key>::key_cast>
-    >;
-
-    //optimalization for all stacks (including strings)
-    // making it possible to index by Slices
-    //Note that custom Info's are still possible
-    template<typename T>
-    struct Default_Key<Stack<T>>
-    {
-        using Key = Slice<const T>;
-    };
+    using Hash_Table = Hash_Table_Access<Key, Value, Key, key_hash, key_equals>;
 }
 
 #include "undefs.h"

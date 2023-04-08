@@ -668,7 +668,7 @@ namespace jot::tests::hash_table
             if(print) println("  test_many_add()");
             test_many_add();
 
-            const auto own = [](cstring cstr){
+            const auto own = [](const char* cstr){
                 String_Builder builder;
                 copy(&builder, String(cstr));
                 return builder;

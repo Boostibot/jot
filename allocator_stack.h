@@ -1,6 +1,8 @@
 #pragma once
 #include "memory.h"
-#include "defines.h"
+
+#define nodisc [[nodiscard]]
+#define cast(a) (a)
 
 namespace jot
 {
@@ -18,12 +20,12 @@ namespace jot
 
         struct Slot
         {
-            u64 prev_offset;
+            uint64_t prev_offset;
         };
         
-        static constexpr u32 USED_BIT = cast(u32) 1 << 31;
+        static constexpr uint32_t USED_BIT = cast(uint32_t) 1 << 31;
 
-        Stack_Allocator(Slice<u8> buffer, Allocator* parent) 
+        Stack_Allocator(Slice<u8> buffer, Allocator* parent = default_allocator()) 
             : parent(parent) 
         {
             Slice<u8> aligned = align_forward(buffer, alignof(Slot));
@@ -36,9 +38,9 @@ namespace jot
         }
 
         nodisc virtual 
-        Allocation_Result allocate(isize size, isize align) noexcept override 
+        Allocation_State allocate(Slice<u8>* output, isize size, isize align) noexcept override 
         {
-            assert(size >= 0 && align > 0);
+            assert(size >= 0 && is_power_of_two(align));
 
             if(align <= alignof(Slot))
                 align = alignof(Slot);
@@ -54,15 +56,15 @@ namespace jot
             u8 is_allowed  = aligned_size >= USED_BIT;
             u8 is_past_end = aligned_to > buffer_to;
             if(is_allowed | is_past_end) 
-                return parent->allocate(size, align);
+                return parent->allocate(output, size, align);
 
             Slot* slot = (cast(Slot*) aligned_from) - 1;
-            slot->prev_offset = cast(u64) ptrdiff(slot, last_block_from) | USED_BIT; 
+            slot->prev_offset = cast(uint64_t) ptrdiff(slot, last_block_from) | USED_BIT; 
 
             current_alloced += size;
             max_alloced = max(max_alloced, current_alloced);
 
-            Slice<u8> output = {aligned_from, size};
+            *output = Slice<u8>{aligned_from, size};
             last_block_to = aligned_to;
             last_block_from = aligned_from;
 
@@ -70,11 +72,11 @@ namespace jot
             assert(buffer_from <= last_block_to && last_block_to <= buffer_to);
             assert(buffer_from <= last_block_from && last_block_from <= buffer_to);
 
-            return Allocation_Result{Allocator_State::OK, output};
+            return Allocation_State::OK;
         }
 
         virtual 
-        Allocator_State_Type deallocate(Slice<u8> allocated, isize align) noexcept override 
+        Allocation_State deallocate(Slice<u8> allocated, isize align) noexcept override 
         {
             u8* ptr = allocated.data;
 
@@ -94,7 +96,7 @@ namespace jot
             {
                 Slot* last_slot = (cast(Slot*) last_block_from) - 1;
                 if(last_slot->prev_offset & USED_BIT)
-                    return Allocator_State::OK;
+                    return Allocation_State::OK;
 
                 last_block_from = (cast(u8*) last_slot) - last_slot->prev_offset;
                 last_block_to = cast(u8*) last_slot;
@@ -103,38 +105,40 @@ namespace jot
                 {
                     last_block_from = buffer_from;
                     last_block_to = buffer_from;
-                    return Allocator_State::OK;
+                    return Allocation_State::OK;
                 }
             }
 
-            return Allocator_State::OK;
+            return Allocation_State::OK;
         } 
 
         nodisc virtual 
-        Allocation_Result resize(Slice<u8> allocated, isize align, isize new_size) noexcept override 
+        Allocation_State resize(Slice<u8>* output, Slice<u8> allocated, isize new_size, isize align) noexcept override 
         {
+            assert(size >= 0 && is_power_of_two(align));
             u8* ptr = allocated.data;
             if(ptr < buffer_from || buffer_to <= ptr) 
-                return parent->resize(allocated, align, new_size);
+                return parent->resize(output, allocated, align, new_size);
 
             //if is last block resize else fail
             if(last_block_from != allocated.data)
-                return Allocation_Result{Allocator_State::NOT_RESIZABLE};
+            {
+                *output = Slice<u8>{};
+                return Allocation_State::NOT_RESIZABLE;
+            }
 
             //if too big fail
             u8* new_end = align_forward(allocated.data + new_size, alignof(Slot));
             if(new_end > buffer_to)
-                return Allocation_Result{Allocator_State::NOT_RESIZABLE};
+            {
+                *output = Slice<u8>{};
+                return Allocation_State::OUT_OF_MEMORY;
+            }
 
             last_block_to = new_end;
             current_alloced += new_size - allocated.size;
-            return Allocation_Result{Allocator_State::OK, Slice<u8>{allocated.data, new_size}};
-        }
-
-        nodisc virtual 
-        Nullable<Allocator*> parent_allocator() const noexcept override 
-        {
-            return {nullptr};
+            *output = Slice<u8>{allocated.data, new_size};
+            return Allocation_State::OK;
         }
 
         nodisc virtual 
@@ -166,4 +170,5 @@ namespace jot
     };
 }
 
-#include "undefs.h"
+#undef nodisc
+#undef cast

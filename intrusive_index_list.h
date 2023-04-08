@@ -91,9 +91,7 @@ namespace jot
         #ifdef INTRUSIVE_INDEX_LIST_PEDANTIC
         return is_connected(first, last, arr);
         #else
-        (void) first;
-        (void) last;
-        (void) arr;
+        (void) first; (void) last; (void) arr;
         return true;
         #endif
     }

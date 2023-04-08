@@ -1,53 +1,61 @@
 #pragma once
 
-#include <cassert>
-#include <cstdint>
-
-#if __cplusplus >= 202002L
-#include <iterator>
-#endif
-
-#define JOT_ARRAY_INCLUDED
+#include "slice.h"
 
 namespace jot
 {
-    using isize = ptrdiff_t;
-
+    #define nodisc [[nodiscard]]
     template<typename T, isize size_>
     struct Array
     {
         static constexpr isize size = size_;
-        static constexpr isize capacity = size;
         T data[size > 0 ? size : 1];
         
-        #include "slice_members_text.h"
+        using value_type      = T;
+        using size_type       = size_t;
+        using difference_type = ptrdiff_t;
+        using reference       = T&;
+        using const_reference = const T&;
+        using iterator       = T*;
+        using const_iterator = const T*;
+
+        nodisc constexpr iterator       begin() noexcept       { return data; }
+        nodisc constexpr const_iterator begin() const noexcept { return data; }
+        nodisc constexpr iterator       end() noexcept         { return data + size; }
+        nodisc constexpr const_iterator end() const noexcept   { return data + size; }
+
+        nodisc constexpr T const& operator[](isize index) const noexcept  
+        { 
+            assert(0 <= index && index < size && "index out of range"); 
+            return data[index]; 
+        }
+        nodisc constexpr T& operator[](isize index) noexcept 
+        { 
+            assert(0 <= index && index < size && "index out of range"); 
+            return data[index]; 
+        }
     };
 
-    //deduction guide
-    template <class First, class... Rest>
-    Array(First, Rest...) -> Array<First, 1 + sizeof...(Rest)>;
-
-    #ifdef JOT_SLICE_INCLUDED
-    template<typename T, isize N> [[nodiscard]]
+    template<typename T, isize N> nodisc
     Slice<const T> slice(Array<T, N> const& arr) 
     {
         return Slice<const T>{arr.data, N};
     }
 
-    template<typename T, isize N> [[nodiscard]]
+    template<typename T, isize N> nodisc
     Slice<T> slice(Array<T, N>* arr) 
     {
         return Slice<T>{arr->data, N};
     }
-    #endif // JOT_SLICE_INCLUDED
 }
 
 namespace std
 {
-    template<typename T, size_t N> [[nodiscard]] constexpr 
+    template<typename T, size_t N> nodisc constexpr 
     size_t size(jot::Array<T, N> const& arr)   noexcept {return (size_t) arr.size;}
 
-    template<typename T, size_t N> [[nodiscard]] constexpr 
+    template<typename T, size_t N> nodisc constexpr 
     auto data(jot::Array<T, N> const& arr)     noexcept {return arr.data;}
 }
 
+#undef nodisc

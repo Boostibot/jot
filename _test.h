@@ -2,7 +2,6 @@
 
 #include "types.h"
 #include "array.h"
-#include "standards.h"
 #include "string.h"
 #include "format.h"
 
@@ -40,14 +39,14 @@ namespace jot::tests
         String_Builder content;
 
         Test_String() = default;
-        Test_String(cstring str)
+        Test_String(const char* str)
         {
             content = own(str);
         }
 
         bool operator==(Test_String const& other) const
         {
-            return compare(slice(content), slice(other.content)) == 0;
+            return are_equal(slice(content), slice(other.content));
         }
     };
 

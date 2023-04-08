@@ -2,9 +2,11 @@
 
 #include "memory.h"
 #include "intrusive_index_list.h"
+#include "utils.h"
 #include "stack.h"
 #include "intrin.h"
 #include "defines.h"
+#include "types.h"
 
 namespace jot
 {
@@ -112,8 +114,8 @@ namespace jot
             u8 _log2_bucket_size = 0; //1/8
             u32 _max_bucket_size = 0;
 
-            Untyped_Bucket_Array(isize log2_bucket_size, memory_globals::Default_Alloc alloc = {}) noexcept 
-                : _buckets(alloc.val), _log2_bucket_size(cast(u8) log2_bucket_size)
+            Untyped_Bucket_Array(isize log2_bucket_size, Allocator* alloc) noexcept 
+                : _buckets(alloc), _log2_bucket_size(cast(u8) log2_bucket_size)
             {
                 assert(0 < log2_bucket_size && log2_bucket_size < 32 && "size must be positive and must be smaller than 32 bit number!");
             }
@@ -214,7 +216,7 @@ namespace jot
 
         //Allocates contiguously space for total_block_size elements and adds total_block_size / bucket_size blocks to the block stack.
         nodisc static
-        Allocator_State_Type add_bucket_block(Untyped_Bucket_Array* bucket_array, isize total_block_size, isize slot_size, isize slots_align) noexcept
+        Allocation_State add_bucket_block(Untyped_Bucket_Array* bucket_array, isize total_block_size, isize slot_size, isize slots_align) noexcept
         {
             assert(total_block_size > 0 && slot_size > 0 && slots_align > 0);
 
@@ -230,16 +232,16 @@ namespace jot
             isize data_size = new_block_size * slot_size;
             isize masks_size = single_mask_size * bucket_count * sizeof(Mask);
             
-            Allocator_State_Type bucket_reserve = reserve_failing(buckets, bucket_count + size(buckets));
-            if(bucket_reserve != Allocator_State::OK)
+            Allocation_State bucket_reserve = reserve_failing(buckets, bucket_count + size(buckets));
+            if(bucket_reserve != Allocation_State::OK)
                 return bucket_reserve;
 
             Allocation_Result data = alloc->allocate(data_size, slots_align);
-            if(data.state != Allocator_State::OK)
+            if(data.state != Allocation_State::OK)
                 return data.state;
 
             Allocation_Result mask = alloc->allocate(masks_size, USED_SLOTS_ALIGN);
-            if(mask.state != Allocator_State::OK)
+            if(mask.state != Allocation_State::OK)
             {
                 alloc->deallocate(data.items, slots_align);
                 return mask.state;
@@ -266,7 +268,7 @@ namespace jot
             bucket_array->_max_bucket_size = max(bucket_array->_max_bucket_size, cast(u32) total_block_size);
             bucket_array->_total_capacity += new_block_size;
 
-            return Allocator_State::OK;
+            return Allocation_State::OK;
         }
         
         struct Bucket_Array_Growth
@@ -294,8 +296,8 @@ namespace jot
                 + last_size * growth.mult_increment_num / growth.mult_increment_den;
 
             assert(new_size > 0 && "resulting size must be nonzero!");
-            Allocator_State_Type alloc_state = add_bucket_block(bucket_array, new_size, slot_size, slots_align);
-            force(alloc_state == Allocator_State::OK && "bucket array allocation failed!");
+            Allocation_State alloc_state = add_bucket_block(bucket_array, new_size, slot_size, slots_align);
+            force(alloc_state == Allocation_State::OK && "bucket array allocation failed!");
             
             //insert all allocated buckets to the free list
             Slice<Bucket> buckets = slice(&bucket_array->_buckets);
@@ -445,7 +447,7 @@ namespace jot
     template <typename T>
     struct Bucket_Array : public bucket_array_internal::Untyped_Bucket_Array
     {
-        explicit Bucket_Array(isize log2_bucket_size = 8, memory_globals::Default_Alloc alloc = {}) noexcept 
+        explicit Bucket_Array(isize log2_bucket_size = 8, Allocator* alloc = default_allocator()) noexcept 
             : bucket_array_internal::Untyped_Bucket_Array(log2_bucket_size, alloc) 
         {}
 
@@ -646,10 +648,10 @@ namespace jot
     }
     
     template <typename T> nodisc
-    Allocator_State_Type reserve_failing(Bucket_Array<T>* bucket_array, isize to_size) noexcept
+    Allocation_State reserve_failing(Bucket_Array<T>* bucket_array, isize to_size) noexcept
     {
         if(to_size <= bucket_array->_total_capacity)
-            return Allocator_State::OK;
+            return Allocation_State::OK;
 
         return bucket_array_internal::add_bucket_block(bucket_array, to_size, sizeof(T), alignof(T));
     }
@@ -660,8 +662,8 @@ namespace jot
         if(to_size <= bucket_array->_total_capacity)
             return;
 
-        Allocator_State_Type s = bucket_array_internal::add_bucket_block(bucket_array, to_size, sizeof(T), alignof(T));
-        force(s == Allocator_State::OK && "Bucket_Array allocation failed!");
+        Allocation_State s = bucket_array_internal::add_bucket_block(bucket_array, to_size, sizeof(T), alignof(T));
+        force(s == Allocation_State::OK && "Bucket_Array allocation failed!");
     }
 
     template <typename T> nodisc

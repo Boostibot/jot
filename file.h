@@ -29,7 +29,6 @@ namespace jot
     using File_Stats = Stat64;
     
     using isize = ptrdiff_t;
-    using cstring = const char*;
 
     //A thin wrapper around the posix file interface
     // handles closing the file automatically
@@ -140,12 +139,12 @@ namespace jot
     static const isize MAX_READ_WRITE_CHUNK = (1 << 30) - 1;
     // see: https://stackoverflow.com/a/29723318
         
-    inline File open(cstring filename, File_Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY, File_Mode pmode = DEFAULT_OPEN_MODE) noexcept
+    inline File open(const char* filename, File_Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY, File_Mode pmode = DEFAULT_OPEN_MODE) noexcept
     {
         return File(::open(filename, oflag | Windows_Flags::BINARY, pmode));
     }
 
-    inline File create(cstring filename, File_Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY | Flags::CREATE, File_Mode pmode = DEFAULT_OPEN_MODE) noexcept
+    inline File create(const char* filename, File_Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY | Flags::CREATE, File_Mode pmode = DEFAULT_OPEN_MODE) noexcept
     {
         return open(filename, oflag, pmode);
     }
@@ -160,7 +159,7 @@ namespace jot
         return state;
     }
 
-    inline bool has_access(cstring path, Access_Permission permission) noexcept
+    inline bool has_access(const char* path, Access_Permission permission) noexcept
     {
         return ::access(path, cast(int) permission) != -1;
     }
@@ -184,7 +183,7 @@ namespace jot
     //deletes a name and possibly the file it refers to
     // the file remains in existance untill all other processes
     // closed the file only then it is deleted.
-    inline bool unlink(cstring filename) noexcept
+    inline bool unlink(const char* filename) noexcept
     {
         return ::unlink(filename) == 0;
     }
@@ -194,20 +193,20 @@ namespace jot
         return File(::fileno(stream));
     }
 
-    inline FILE* to_c_file(File fd, cstring mode) noexcept
+    inline FILE* to_c_file(File fd, const char* mode) noexcept
     {
         return ::fdopen(fd.descriptor, mode);
     }
 
-    //Fills buffer with the current dir cstring. If it is too small mallocs it instead
+    //Fills buffer with the current dir const char*. If it is too small mallocs it instead
     // returns a pointer to the potentionally alloced destination. This needs to be freed
     // Might also fail and return NULL instead.
-    inline cstring fill_or_alloc_current_dir_cstring(char *buffer, int maxlen) noexcept
+    inline const char* fill_or_alloc_current_dir_cstring(char *buffer, int maxlen) noexcept
     {
         return ::getcwd(buffer, maxlen);
     }
 
-    inline bool change_dir(cstring dirname) noexcept
+    inline bool change_dir(const char* dirname) noexcept
     {
         return ::chdir(dirname) == 0;
     }
@@ -239,17 +238,17 @@ namespace jot
         return cast(isize) ::tell64(fd.descriptor);
     }
 
-    inline bool make_dir(cstring dirname) noexcept
+    inline bool make_dir(const char* dirname) noexcept
     {
         return ::mkdir(dirname) == 0;
     }
 
-    inline bool remove_dir(cstring dirname) noexcept
+    inline bool remove_dir(const char* dirname) noexcept
     {
         return ::rmdir(dirname) == 0;
     }
 
-    inline bool rename(cstring old, cstring new_name) noexcept
+    inline bool rename(const char* old, const char* new_name) noexcept
     {
         return ::rename(old, new_name) == 0;
     }
@@ -433,7 +432,7 @@ namespace jot
         return stat;
     }
 
-    inline File_Stats get_stats(cstring path) noexcept
+    inline File_Stats get_stats(const char* path) noexcept
     {
         File_Stats stat = {0};
         ::stat64(path, &stat);
