@@ -51,7 +51,6 @@ namespace jot
     {
         return (value + to_multiple_of - 1) / to_multiple_of;
     }
-
 }
 
 #undef nodisc

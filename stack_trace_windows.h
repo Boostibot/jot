@@ -49,7 +49,7 @@ namespace jot
             process = GetCurrentProcess();
             thread = GetCurrentThread();
 
-            cstring csearch_path = nullptr;
+            const char* csearch_path = nullptr;
             if(search_path.size != 0)
             {
                 this->search_path = own(search_path);
