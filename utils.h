@@ -9,48 +9,42 @@
 #undef min
 #endif
 
-#include <cstddef>
-#define nodisc [[nodiscard]]
+#include <stddef.h>
+#define JOT_API [[nodiscard]] constexpr
 
 namespace jot 
 {
-    using isize = ptrdiff_t;
+    typedef ptrdiff_t isize;
 
-    nodisc constexpr 
-    isize max(isize a, isize b)
+    JOT_API isize max(isize a, isize b)
     {
         return a > b ? a : b;
     }
 
-    nodisc constexpr 
-    isize min(isize a, isize b)
+    JOT_API isize min(isize a, isize b)
     {
         return a < b ? a : b;
     }
 
-    nodisc constexpr 
-    isize clamp(isize val, isize lo, isize hi)
+    JOT_API isize clamp(isize val, isize lo, isize hi)
     {
         return max(lo, min(val, hi));
     }
 
-    nodisc constexpr
-    float lerp(float lo, float hi, float t) 
+    JOT_API float lerp(float lo, float hi, float t) 
     {
         return lo * (1.0f - t) + hi * t;
     }
 
-    nodisc constexpr
-    double lerp(double lo, double hi, double t) 
+    JOT_API double lerp(double lo, double hi, double t) 
     {
         return lo * (1.0 - t) + hi * t;
     }
 
-    nodisc constexpr 
-    isize div_round_up(isize value, isize to_multiple_of)
+    JOT_API isize div_round_up(isize value, isize to_multiple_of)
     {
         return (value + to_multiple_of - 1) / to_multiple_of;
     }
 }
 
-#undef nodisc
+#undef JOT_API

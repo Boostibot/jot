@@ -139,6 +139,12 @@ namespace jot
             last_alloc = 0;
             alloced = 0;
         };
+        
+        nodisc virtual
+        const char* name() const noexcept override
+        {
+            return "Linear_Allocator";
+        }
 
         virtual
         ~Linear_Allocator() noexcept override {}

@@ -40,7 +40,7 @@ namespace jot
     constexpr Type_Optims operator | (Type_Optims a, Type_Optims b) { return cast(Type_Optims) (a | b); }
     constexpr Type_Optims operator & (Type_Optims a, Type_Optims b) { return cast(Type_Optims) (a & b); }
 
-    constexpr bool has_flag(Type_Optims optims, Type_Optims flag)
+    constexpr bool is_flag_set(Type_Optims optims, Type_Optims flag)
     {
         return (cast(uint32_t) optims & cast(uint32_t) flag) > 0;
     }
@@ -52,7 +52,7 @@ namespace jot
     constexpr static Type_Optims DEF_TYPE_OPTIMS<Slice<T>> = Type_Optims::POD;
 
     template<typename T> nodisc constexpr 
-    bool are_aliasing(Slice<T> left, Slice<T> right)
+    bool is_aliasing(Slice<T> left, Slice<T> right)
     { 
         uintptr_t left_pos = cast(uintptr_t) left.data;
         uintptr_t right_pos = cast(uintptr_t) right.data;
@@ -69,7 +69,7 @@ namespace jot
     }
 
     template<typename T> nodisc constexpr 
-    bool are_one_way_aliasing(Slice<T> before, Slice<T> after)
+    bool is_front_aliasing(Slice<T> before, Slice<T> after)
     { 
         return (before.data + before.size > after.data) && (after.data > before.data);
     }
@@ -84,7 +84,7 @@ namespace jot
     template<typename T> constexpr 
     void null_items(Slice<T> to, Type_Optims optims = DEF_TYPE_OPTIMS<T>) noexcept
     {
-        if(has_flag(optims, Type_Optims::BYTE_NULL))
+        if(is_flag_set(optims, Type_Optims::BYTE_NULL))
         {
             memset(to.data, 0, to.size * sizeof(T));
             return;
@@ -93,13 +93,14 @@ namespace jot
         fill(to, cast(T) 0);
     }
 
+    //@TODO: rename to format is + something
     template<typename T> nodisc constexpr 
     bool are_equal(Slice<T> a, Slice<T> b, Type_Optims optims = DEF_TYPE_OPTIMS<T>) noexcept
     {
         if(a.size != b.size)
             return false;
 
-        if(has_flag(optims, Type_Optims::BYTE_EQUALS))
+        if(is_flag_set(optims, Type_Optims::BYTE_EQUALS))
             return memcmp(a.data, b.data, a.size * sizeof(T)) == 0;
 
         for(isize i = 0; i < a.size; i++)
@@ -117,7 +118,7 @@ namespace jot
         //we by default use memmove since its safer and means less
         // worry later on
         assert(to.size >= from.size && "size must be big enough");
-        if(has_flag(optims, Type_Optims::BYTE_COPY))
+        if(is_flag_set(optims, Type_Optims::BYTE_COPY))
         {
             memmove(to.data, from.data, from.size * sizeof(T));
             return;
@@ -136,7 +137,7 @@ namespace jot
     }
     
     template<typename T> constexpr 
-    void copy_items(Slice<T> to, Slice<T> from, Type_Optims optims = DEF_TYPE_OPTIMS<T>) noexcept
+    void copy_items(Slice<T> to, Slice<T> from, Type_Optims optims = DEF_TYPE_OPTIMS<T>)
     {
         return copy_items<T>(to, cast(Slice<const T>) from, optims);
     }
@@ -145,7 +146,7 @@ namespace jot
     void move_items(Slice<T> to, Slice<T> from, Type_Optims optims = DEF_TYPE_OPTIMS<T>) noexcept
     {
         assert(to.size >= from.size && "size must be big enough");
-        if(has_flag(optims, Type_Optims::BYTE_MOVE))
+        if(is_flag_set(optims, Type_Optims::BYTE_MOVE))
         {
             memmove(to.data, from.data, from.size * sizeof(T));
             return;
@@ -166,8 +167,8 @@ namespace jot
     template<typename T> constexpr 
     void copy_construct_items(Slice<T> to, Slice<const T> from, Type_Optims optims = DEF_TYPE_OPTIMS<T>)
     {
-        if(has_flag(optims, Type_Optims::BYTE_COPY))
-            copy_items(to, from, Type_Optims::BYTE_COPY);
+        if(is_flag_set(optims, Type_Optims::BYTE_COPY))
+            memmove(to.data, from.data, from.size * sizeof(T));
         else
         {
             assert(to.size >= from.size && "size must be big enough");
@@ -177,10 +178,10 @@ namespace jot
     }
     
     template<typename T> constexpr 
-    void move_construct_items(Slice<T> to, Slice<T> from, Type_Optims optims = DEF_TYPE_OPTIMS<T>)
+    void move_construct_items(Slice<T> to, Slice<T> from, Type_Optims optims = DEF_TYPE_OPTIMS<T>) noexcept
     {
-        if(has_flag(optims, Type_Optims::BYTE_MOVE))
-            copy_items(to, from, Type_Optims::BYTE_COPY);
+        if(is_flag_set(optims, Type_Optims::BYTE_MOVE))
+            memmove(to.data, from.data, from.size * sizeof(T));
         else
         {
             assert(to.size >= from.size && "size must be big enough");
@@ -189,15 +190,15 @@ namespace jot
         }
     }
     template<typename T> constexpr 
-    void destruct_items(T* data, isize from, isize to, Type_Optims optims = DEF_TYPE_OPTIMS<T>)
+    void destruct_items(T* data, isize from, isize to, Type_Optims optims = DEF_TYPE_OPTIMS<T>) noexcept
     {
-        if(has_flag(optims, Type_Optims::BYTE_DESTRUCT) == false)
+        if(is_flag_set(optims, Type_Optims::BYTE_DESTRUCT) == false)
             for(isize i = from; i < to; i++)
                 data[i].~T();
     }
 
     template<typename T> constexpr 
-    void destruct_items(Slice<T> items, Type_Optims optims = DEF_TYPE_OPTIMS<T>)
+    void destruct_items(Slice<T> items, Type_Optims optims = DEF_TYPE_OPTIMS<T>) noexcept
     {
         destruct_items<T>(items.data, 0, items.size, optims);
     }
@@ -206,10 +207,10 @@ namespace jot
     // the source both of which happen during the same iteration 
     // (calling move_construct_items and destruct_items results in two iterations over the data)
     template<typename T> constexpr 
-    void transfer_items(Slice<T> to, Slice<T> from, Type_Optims optims = DEF_TYPE_OPTIMS<T>)
+    void transfer_items(Slice<T> to, Slice<T> from, Type_Optims optims = DEF_TYPE_OPTIMS<T>) noexcept
     {
-        if(has_flag(optims, Type_Optims::BYTE_TRANSFER))
-            copy_items(to, from, Type_Optims::BYTE_COPY);
+        if(is_flag_set(optims, Type_Optims::BYTE_TRANSFER))
+            memmove(to.data, from.data, from.size * sizeof(T));
         else
         {
             assert(to.size >= from.size && "size must be big enough");

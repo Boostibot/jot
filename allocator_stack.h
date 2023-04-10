@@ -115,7 +115,7 @@ namespace jot
         nodisc virtual 
         Allocation_State resize(Slice<u8>* output, Slice<u8> allocated, isize new_size, isize align) noexcept override 
         {
-            assert(size >= 0 && is_power_of_two(align));
+            assert(new_size >= 0 && is_power_of_two(align));
             u8* ptr = allocated.data;
             if(ptr < buffer_from || buffer_to <= ptr) 
                 return parent->resize(output, allocated, align, new_size);
@@ -163,6 +163,12 @@ namespace jot
         isize max_bytes_used() const noexcept override 
         {
             return bytes_used();
+        }
+        
+        nodisc virtual
+        const char* name() const noexcept override
+        {
+            return "Stack_Allocator";
         }
 
         virtual

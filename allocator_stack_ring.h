@@ -46,7 +46,6 @@ namespace jot
         static constexpr uint32_t STUB_BIT = cast(uint32_t) 1 << 31;
         static constexpr uint32_t USED_BIT = cast(uint32_t) 1 << 31;
         static constexpr isize SIZE_MULT = sizeof(isize) == 4 ? 1 : sizeof(Slot);
-        //static constexpr isize SIZE_MULT = 1;
         static constexpr isize MAX_NOT_MULT_SIZE = (cast(uint32_t) -1) & ~USED_BIT;
         static constexpr isize MAX_BYTE_SIZE = MAX_NOT_MULT_SIZE * SIZE_MULT;
 
@@ -65,19 +64,19 @@ namespace jot
         }
         
         nodisc virtual 
-        Allocation_Result allocate(isize size, isize align) noexcept override 
+        Allocation_State allocate(Slice<uint8_t>* output, isize size, isize align) noexcept override 
         {
-            return try_allocate(size, align);
+            return try_allocate(output, size, align);
         }
         
         nodisc
-        Allocation_Result handle_wrap_around_and_allocate(isize size, isize align, bool is_second_try) noexcept
+        Allocation_State handle_wrap_around_and_allocate(Slice<uint8_t>* output, isize size, isize align, bool is_second_try) noexcept
         {
             //if even on second try we failed we stop
             // to prevent recursive infinite loop
             //if its never possible to even store the desired size we simply stop
             if(is_second_try || size > bytes_used() || size > MAX_NOT_MULT_SIZE)
-                return parent->allocate(size, align);
+                return parent->allocate(output, size, align);
 
             //if remainder is not 0 free as much from the remainder 
             if(remainder_from != buffer_to)
@@ -93,7 +92,7 @@ namespace jot
                     
                 //if the new size is smaller then the old size stop
                 if(new_availible_size <= curr_availible_size)
-                    return parent->allocate(size, align);
+                    return parent->allocate(output, size, align);
                     
                 //Fill the rest with stub
                 Slot* fill_rest = cast(Slot*) stack_to;
@@ -108,11 +107,11 @@ namespace jot
             }
 
             //try to allocate again this time with the is_second_try flag on
-            return try_allocate(size, align, true);
+            return try_allocate(output, size, align, true);
         }
 
         nodisc
-        Allocation_Result try_allocate(isize size, isize align, bool is_second_try = false) noexcept 
+        Allocation_State try_allocate(Slice<uint8_t>* output, isize size, isize align, bool is_second_try = false) noexcept 
         {
             assert(is_invariant());
             assert(size >= 0 && align > 0);
@@ -134,7 +133,7 @@ namespace jot
             uint8_t* aligned_to = align_forward(aligned_from + size, sizeof(Slot));
             
             if(aligned_to > remainder_from || size > MAX_BYTE_SIZE)
-                return handle_wrap_around_and_allocate(size, align, is_second_try);
+                return handle_wrap_around_and_allocate(output, size, align, is_second_try);
 
             //Get the adresses at which to place the headers
             // The headers might be 2 or 1 depending on if they share the same 
@@ -171,15 +170,15 @@ namespace jot
             slot->prev_offset = reduced_slot_offset; 
 
             //Recalculate meta data
-            Slice<uint8_t> output = {aligned_from, size};
+            *output = Slice<uint8_t>{aligned_from, size};
             stack_to = aligned_to;
             last_block_from = aligned_from;
 
             current_alloced += reduced_slot_size;
             max_alloced = max(max_alloced, current_alloced);
 
-            assert(check_allocated(output, align));
-            return Allocation_Result{Allocation_State::OK, output};
+            assert(check_allocated(*output, align));
+            return Allocation_State::OK;
         }
         
         uint8_t* deallocate_from_front(uint8_t* from, uint8_t* to) noexcept
@@ -270,21 +269,15 @@ namespace jot
         } 
         
         //@TODO move out!
-        template<typename T> nodisc static
-        T* offset_ptr(T* ptr1, isize by_bytes)
-        {
-            uint8_t* address = cast(uint8_t*) cast(void*) ptr1;
-            return cast(T*) cast(void*) (address + by_bytes);
-        }
 
         nodisc virtual 
-        Allocation_Result resize(Slice<uint8_t> allocated, isize new_size, isize align) noexcept override 
+        Allocation_State resize(Slice<uint8_t>* output, Slice<uint8_t> allocated, isize new_size, isize align) noexcept override 
         {
             assert(is_invariant());
 
             uint8_t* ptr = allocated.data;
             if(ptr < buffer_from || buffer_to <= ptr)
-                return parent->resize(allocated, align, new_size);
+                return parent->resize(output, allocated, align, new_size);
 
             assert(check_allocated(allocated, align) 
                 && "the allocation must be valid!"
@@ -305,7 +298,7 @@ namespace jot
             {
                 //Get the current size and use it to calculate where the next slot is located
                 uint32_t current_size = current_slot->size & ~USED_BIT; 
-                Slot* next_slot = offset_ptr(current_slot, current_size * SIZE_MULT) + 1;
+                Slot* next_slot = cast(Slot*) (cast(uint8_t*) current_slot +current_size * SIZE_MULT) + 1;
 
                 bool is_used = next_slot->size & USED_BIT;
                 bool is_stub = next_slot->prev_offset & STUB_BIT;
@@ -315,7 +308,7 @@ namespace jot
                 {
                     uint8_t* new_end_ptr = allocated.data + new_size;
                     if(new_end_ptr > buffer_to)
-                        return Allocation_Result{Allocation_State::OUT_OF_MEMORY};
+                        return Allocation_State::OUT_OF_MEMORY;
 
                     uint8_t* aligned_end = align_forward(new_end_ptr, sizeof(Slot));
                     new_reduced_size = ptrdiff(aligned_end, allocated.data) / SIZE_MULT;
@@ -333,7 +326,7 @@ namespace jot
                 }
 
                 if(is_used)
-                    return Allocation_Result{Allocation_State::NOT_RESIZABLE};
+                    return Allocation_State::NOT_RESIZABLE;
 
 
                 current_slot = next_slot;
@@ -345,8 +338,8 @@ namespace jot
             slot->size = cast(uint32_t) new_reduced_size | USED_BIT;;
             current_alloced += cast(int32_t) new_reduced_size - old_redced_size;
 
-            Slice<uint8_t> output = {allocated.data, new_size};
-            return Allocation_Result{Allocation_State::OK, output};
+            *output = Slice<uint8_t>{allocated.data, new_size};
+            return Allocation_State::OK;
         }
 
         //Checks if stack is in correct state (used in debug only)
@@ -405,12 +398,7 @@ namespace jot
         }
 
         virtual
-        ~Stack_Ring_Allocator() noexcept override
-        {
-            //isize alloced = bytes_allocated();
-            //assert(alloced == 0 && "tracked size must be zero (alloced size == free size)");
-            //assert(last_block_from == stack_to && last_block_from == buffer_from && "all pointers must be set to start of the buffer");
-        }
+        ~Stack_Ring_Allocator() noexcept override {}
     };
 }
 

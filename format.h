@@ -22,7 +22,7 @@ namespace jot
         String_Builder formatted = format("hello world! escape{{}}"); 
         println(formatted); //hello world! escape{}
 
-        format_into(&formatted, " append to end {}! ", size, fmt_as_padded(i, 4));
+        format_into(&formatted, " append to end {}! ", size, to_padded_format(i, 4));
         println(formatted); //hello world! escape{} append to end 20! 0012
 
         int vals[] = {1, 2, 3, 4};
@@ -41,7 +41,7 @@ namespace jot
     ///      Each of the arguments is formatted individually and the results are concatenated
     ///      into the format string
     /// (b) If first type is String or const char* it is interpreted as format string:
-    ///      The format is: "hello world! size: {} i: {} escape {{}}" where a formated 
+    ///      The format is: "hello world! size: {} i: {} escaped {{}}" where a formated 
     ///      representation of the subsequent arguments is placed into each of the "{}" slot.
     ///      A single argument is placed into a single slot in order. If there are more arguments
     ///      than slots the remaining arguments get concatenated to the end. If there are more slots
@@ -59,7 +59,7 @@ namespace jot
     ///Has a templated constructor for all types that saves a pointer to the specific format function.
     struct Format_Adaptor
     {
-        using Format = void(*)(String_Appender*, Format_Adaptor);
+        using Format = void(*)(String_Builder*, Format_Adaptor);
         using Format_String = String(*)(Format_Adaptor);
             
         Format _format = nullptr;
@@ -71,7 +71,8 @@ namespace jot
         template<typename T>
         Format_Adaptor(T const& val) noexcept;
         
-        //special case for string literals so that we dont instantiate any templates
+        //special case for string literals so that we dont instantiate any templates.
+        //(Each size of a string literal is different type as for example "hello" char[6])
         Format_Adaptor(const char* val) noexcept;
     };
 
@@ -85,10 +86,22 @@ namespace jot
 
     ///Formats the provided arguments and returns String_Builder witht the result
     NO_INLINE nodisc static String_Builder format(FORMAT_ADAPTOR_10_ARGS_DECL);
-    ///Formats the provided arguments and appends the result to String_Appender
-    NO_INLINE static void format_into(String_Appender* into, FORMAT_ADAPTOR_10_ARGS_DECL);
     ///Formats the provided arguments and appends the result to String_Builder
     NO_INLINE static void format_into(String_Builder* into,  FORMAT_ADAPTOR_10_ARGS_DECL);
+    ///Formats the provided agument and appends the result to String_Builder. Has optimal
+    ///performance and can inline thus is fit to use internally for declaring custom formats
+    template<class T> void format_single_into(String_Builder* into, T const& arg);
+
+    ///Formats the provided arguments according to standard c format
+    ///and returns String_Builder witht the result
+    NO_INLINE nodisc static String_Builder cformat(const char* cformat, ...);
+    ///Uses cformat to format varargs and appends the result string into 'into'
+    NO_INLINE static void cformat_into(String_Builder* into, const char* cformat, ...);
+    ///Uses cformat to format varargs and appends the result string into 'into'
+    NO_INLINE static void vcformat_into(String_Builder* into, const char* format, va_list args);
+    ///Formats the provided agument and appends the result to String_Builder. Has optimal
+    ///performance and can inline thus is fit to use internally for declaring custom formats
+    template<class T> void cformat_single_into(String_Builder* into, const char* cformat, T const& arg);
 
     ///Formats the provided arguments and appends the result to stream
     NO_INLINE static void print_into(FILE* stream, FORMAT_ADAPTOR_10_ARGS_DECL);
@@ -102,18 +115,10 @@ namespace jot
     ///Prints a '\n' to stdout
     inline void println() noexcept;
     
-    ///Formats the adaptors in adapted slice and appends the result to String_Appender
-    static void format_adapted_into(String_Appender* appender, String format_str, Slice<Format_Adaptor> adapted);
-    ///Formats the adaptors in adapted slice and appends the result to String_Appender
-    static void format_adapted_into(String_Appender* appender, Slice<Format_Adaptor> adapted);
-    
-    ///Formats the provided arguments according to standard c format
-    ///and returns String_Builder witht the result
-    NO_INLINE nodisc static String_Builder cformat(const char* cformat, ...);
-    ///Uses cformat to format varargs and appends the result string into 'into'
-    NO_INLINE static void cformat_into(String_Appender* into, const char* cformat, ...);
-    ///Uses cformat to format varargs and appends the result string into 'into'
-    static void vcformat_into(String_Appender* appender, const char* format, va_list args);
+    ///Formats the adaptors in adapted slice and appends the result to String_Builder
+    static void format_adapted_into(String_Builder* into, String format_str, Slice<Format_Adaptor> adapted);
+    ///Formats the adaptors in adapted slice and appends the result to String_Builder
+    static void format_adapted_into(String_Builder* into, Slice<Format_Adaptor> adapted);
     
     ///If you wish to extend the functionality of format to include custom
     ///types we do so by specializing this template and providing implementation
@@ -121,7 +126,7 @@ namespace jot
     template <typename T, typename Enable = void>
     struct Formattable
     {
-        static void format(String_Appender* into, T const& value)
+        static void format(String_Builder* into, T const& value)
         {
             static_assert(sizeof(T) == 0, "This type does not have a format! (yet)");
             cast(void) into; cast(void) value;
@@ -140,11 +145,11 @@ namespace jot
     };
 
     ///Formats the number according to custom rules and appends it into 'into'
-    static void format_number_into(String_Appender* into, int64_t num, uint8_t base = 10, Format_Num_Info const& info = {});
+    static void format_number_into(String_Builder* into, int64_t num, uint8_t base = 10, Format_Num_Info const& info = {});
     
     ///Formats any valid c++ range into format [elem1, elem2, elem3] and append it into 'into'
-    template<typename T> static
-    void format_range_into(String_Appender* into, T const& range);
+    template<typename T>
+    void format_range_into(String_Builder* into, T const& range);
     
     ///Format modifier struct for integers 
     struct Padded_Int_Format
@@ -163,12 +168,18 @@ namespace jot
         char pad_with = '0';
     };
 
-    inline Padded_Int_Format fmt_as_padded(int64_t val, int pad_to, char pad_with = '0')
+    struct CFormat_Float
+    {
+        double val;
+        const char* fmt;
+    };
+
+    inline Padded_Int_Format to_padded_format(int64_t val, int pad_to, char pad_with = '0')
     {
         return Padded_Int_Format{val, pad_to, pad_with};
     }
     
-    inline Padded_Float_Format fmt_as_padded(double val, int pad_total_size_to, int pad_fraction_to, char pad_with = '0')
+    inline Padded_Float_Format to_padded_format(double val, int pad_total_size_to, int pad_fraction_to, char pad_with = '0')
     {
         return Padded_Float_Format{val, pad_total_size_to, pad_fraction_to, pad_with};
     }
@@ -176,7 +187,94 @@ namespace jot
 
 namespace jot
 {
-    static void format_number_into(String_Appender* appender, int64_t num, uint8_t base, Format_Num_Info const& info)
+    //va args cannot be inlined and if we use our own va args wrapper this results in
+    // at least 2 function calls and 3 va args unpackings. We need to reduce this down
+    // as mch as we can because we use it as default printing of doubles.
+    template<typename T>
+    void cformat_single_into(String_Builder* into, const char* format, T const& val)
+    {
+        isize base_size = size(into); 
+        isize format_size = strlen(format);
+        isize estimated_size = format_size + 10;
+        resize_for_overwrite(into, base_size + estimated_size);
+
+        isize count = snprintf(data(into) + base_size, size(into) - base_size, format, val);
+        resize(into, base_size + count);
+        if(count < estimated_size)
+            return;
+
+        count = snprintf(data(into) + base_size, size(into) - base_size, format, val);
+    }
+
+    static void vcformat_into(String_Builder* into, const char* format, va_list args)
+    {
+        //an attempt to estimate the needed size so we dont need to call vsnprintf twice
+        isize format_size = strlen(format);
+        isize estimated_size = format_size + 10 + format_size/4;
+        isize base_size = size(into); 
+        resize_for_overwrite(into, base_size + estimated_size);
+
+        va_list args_copy;
+        va_copy(args_copy, args);
+        isize count = vsnprintf(data(into) + base_size, size(into) - base_size, format, args);
+        
+        resize(into, base_size + count);
+        if(count < estimated_size)
+            return;
+        
+        count = vsnprintf(data(into) + base_size, size(into) - base_size, format, args_copy);
+    }
+
+    NO_INLINE 
+    static void cformat_into(String_Builder* into, const char* format, ...)
+    {
+        va_list args;
+        va_start(args, format);
+        vcformat_into(into, format, args);
+        va_end(args);
+    }
+    
+    NO_INLINE nodisc 
+    static String_Builder cformat(const char* format, ...)
+    {
+        String_Builder builder;
+
+        va_list args;
+        va_start(args, format);
+        vcformat_into(&builder, format, args);
+        va_end(args);
+
+        return builder;
+    }
+    
+    template<typename T>
+    void format_single_into(String_Builder* into, T const& val)
+    {
+        Formattable<T>::format(into, val);
+    }
+
+    template<typename T>
+    void format_range_into(String_Builder* into, T const& range)
+    {
+        push(into, '[');
+        auto it = range.begin();
+        const auto end = range.end();
+        if(it != end)
+        {
+            format_into_single_infer(into, *it);
+            ++it;
+        }
+
+        for(; it != end; ++it)
+        {
+            push_multiple(into, String(", "));
+            format_into_single_infer(into, *it);
+        }
+
+        push(into, ']');
+    }
+
+    static void format_number_into(String_Builder* into, int64_t num, uint8_t base, Format_Num_Info const& info)
     {
         assert(base <= 36 && base >= 2);
         char buffer[64] = {0};
@@ -213,105 +311,24 @@ namespace jot
         }
 
         int max_size = used_size > pad_to ? used_size : pad_to;
-        grow(appender, max_size + 1);
+        grow(into, size(into) + max_size + 1);
 
         if(marker != 0)
-            push(appender, marker);
+            push(into, marker);
 
         int prepend_count = pad_to - used_size;
         if(prepend_count > 0)
-            resize(appender, size(appender) + prepend_count, info.pad_with);
+            resize(into, size(into) + prepend_count, info.pad_with);
 
         String used = {buffer + 64 - used_size, used_size};
-        push_multiple(appender, used);
+        push_multiple(into, used);
     }
     
-    //va args cannot be inlined and if we use our own va args wrapper this results in
-    // at least 2 function calls and 3 va args unpackings. We need to reduce this down
-    // as mch as we can because we use it as default printing of doubles.
-    template<typename T>
-    static void cformat_into_single(String_Appender* appender, const char* format, T val)
-    {
-        isize count = snprintf(data(appender), size(appender), format, val);
-        resize(appender, count);
-        if(count < estimated_size)
-            return;
-
-        count = snprintf(data(appender), size(appender), format, val);
-    }
-
-    static void vcformat_into(String_Appender* appender, const char* format, va_list args)
-    {
-        //an attempt to estimate the needed size so we dont need to call vsnprintf twice
-        isize format_size = strlen(format);
-        isize estimated_size = format_size + 10 + format_size/4;
-        resize(appender, estimated_size);
-
-        va_list args_copy;
-        va_copy(args_copy, args);
-        isize count = vsnprintf(data(appender), size(appender), format, args);
-        
-        resize(appender, count);
-        if(count < estimated_size)
-            return;
-
-        count = vsnprintf(data(appender), size(appender), format, args_copy);
-    }
-
-    NO_INLINE 
-    static void cformat_into(String_Appender* appender, const char* format, ...)
-    {
-        va_list args;
-        va_start(args, format);
-        vcformat_into(appender, format, args);
-        va_end(args);
-    }
-    
-    NO_INLINE nodisc 
-    static String_Builder cformat(const char* format, ...)
-    {
-        String_Builder builder;
-        String_Appender appender(&builder);
-
-        va_list args;
-        va_start(args, format);
-        vcformat_into(&appender, format, args);
-        va_end(args);
-
-        return builder;
-    }
-
-    template<typename T> static
-    void format_into_single_infer(String_Appender* appender, T const& val)
-    {
-        Formattable<T>::format(appender, val);
-    }
-
-    template<typename T> static
-    void format_range_into(String_Appender* appender, T const& range)
-    {
-        push(appender, '[');
-        auto it = range.begin();
-        const auto end = range.end();
-        if(it != end)
-        {
-            format_into_single_infer(appender, *it);
-            ++it;
-        }
-
-        for(; it != end; ++it)
-        {
-            push_multiple(appender, String(", "));
-            format_into_single_infer(appender, *it);
-        }
-
-        push(appender, ']');
-    }
 
     #define FORMATTABLE_INT_TYPE(TYPE)                              \
         template <> struct Formattable<TYPE>                        \
         {                                                           \
-            static void format(String_Appender* into, TYPE val)     \
+            static void format(String_Builder* into, TYPE val)     \
             {                                                       \
                 return format_number_into(into, cast(int64_t) val); \
             }                                                       \
@@ -320,7 +337,7 @@ namespace jot
     #define FORMATTABLE_UINT_TYPE(TYPE)                             \
         template <> struct Formattable<TYPE>                        \
         {                                                           \
-            static void format(String_Appender* into, TYPE val)     \
+            static void format(String_Builder* into, TYPE val)     \
             {                                                       \
                 Format_Num_Info info;                               \
                 info.is_unsigned = true;                            \
@@ -342,31 +359,31 @@ namespace jot
 
     template <> struct Formattable<float>
     {
-        static void format(String_Appender* into, float val)
+        static void format(String_Builder* into, float val)
         {
-            cformat_into_single(into, "%f", val);
+            cformat_single_into(into, "%f", val);
         }
     };
     
     template <> struct Formattable<double>
     {
-        static void format(String_Appender* into, double val)
+        static void format(String_Builder* into, double val)
         {
-            cformat_into_single(into, "%lf", val);
+            cformat_single_into(into, "%lf", val);
         }
     };
     
     template <> struct Formattable<long double>
     {
-        static void format(String_Appender* into, long double val)
+        static void format(String_Builder* into, long double val)
         {
-            cformat_into_single(into, "%llf", val);
+            cformat_single_into(into, "%llf", val);
         }
     };
     
     template <> struct Formattable<Padded_Int_Format>
     {
-        static void format(String_Appender* into, Padded_Int_Format const& padded)
+        static void format(String_Builder* into, Padded_Int_Format const& padded)
         {
             Format_Num_Info info;
             info.pad_to = padded.pad_to;
@@ -377,16 +394,24 @@ namespace jot
     
     template <> struct Formattable<Padded_Float_Format>
     {
-        static void format(String_Appender* into, Padded_Float_Format const& padded)
+        static void format(String_Builder* into, Padded_Float_Format const& padded)
         {
             assert(false && "TODO"); 
             cast(void) into; cast(void) padded;
         }
     };
+    
+    template <> struct Formattable<CFormat_Float>
+    {
+        static void format(String_Builder* into, CFormat_Float const& padded)
+        {
+            cformat_single_into(into, padded.fmt, padded.val);
+        }
+    };
 
     template <typename T> struct Formattable<T*>
     {
-        static void format(String_Appender* into, T* val)
+        static void format(String_Builder* into, T* val)
         {
             Format_Num_Info info;
             info.pad_to = 8;
@@ -398,7 +423,7 @@ namespace jot
     
     template <> struct Formattable<nullptr_t>
     {
-        static void format(String_Appender* into, nullptr_t)
+        static void format(String_Builder* into, nullptr_t)
         {
             return Formattable<void*>::format(into, cast(void*) nullptr);
         }
@@ -406,7 +431,7 @@ namespace jot
     
     template <> struct Formattable<bool>
     {
-        static void format(String_Appender* into, bool val)
+        static void format(String_Builder* into, bool val)
         {
             push_multiple(into, val ? "true" : "false");
         }
@@ -418,26 +443,26 @@ namespace jot
 
     template <> struct Formattable<String> : Is_String_Format
     {
-        static void format(String_Appender* into, String str) { push_multiple(into, str);}
-        static String format_string(String str) noexcept      { return str;}
+        static void format(String_Builder* into, String str) { push_multiple(into, str);}
+        static String format_string(String str) noexcept     { return str;}
     };
     
     template <> struct Formattable<Mutable_String> : Is_String_Format
     {
-        static void format(String_Appender* into, Mutable_String str) { push_multiple(into, str);}
-        static String format_string(Mutable_String str) noexcept      { return str;}
+        static void format(String_Builder* into, Mutable_String str) { push_multiple(into, str);}
+        static String format_string(Mutable_String str) noexcept     { return str;}
     };
     
     template <> struct Formattable<const char*> : Is_String_Format
     {
-        static void format(String_Appender* into, const char* str) { push_multiple(into, str);}
-        static String format_string(const char* str) noexcept      { return str;}
+        static void format(String_Builder* into, const char* str) { push_multiple(into, str);}
+        static String format_string(const char* str) noexcept     { return str;}
     };
 
     template <isize N> struct Formattable<char [N]> : Is_String_Format
     {
         static
-        void format(String_Appender* into, const char (&arr)[N])
+        void format(String_Builder* into, const char (&arr)[N])
         {
             String str = {arr, N};
             Formattable<String>::format(into, str);
@@ -448,7 +473,7 @@ namespace jot
 
     template <> struct Formattable<char>
     {
-        static void format(String_Appender* into, char c)
+        static void format(String_Builder* into, char c)
         {
             push(into, c);
         }
@@ -456,7 +481,7 @@ namespace jot
     
     template <typename T> struct Formattable<Slice<T>>
     {
-        static void format(String_Appender* into, Slice<T> slice)
+        static void format(String_Builder* into, Slice<T> slice)
         {
             format_range_into(into, slice);
         }
@@ -464,7 +489,7 @@ namespace jot
 
     template <typename T> struct Formattable<Stack<T>>
     {
-        static void format(String_Appender* into, Stack<T> const& stack)
+        static void format(String_Builder* into, Stack<T> const& stack)
         {
             Slice<const T> s = slice(stack);
             Formattable<Slice<const T>>::format(into, s);
@@ -475,7 +500,7 @@ namespace jot
     struct Formattable<T[N]>
     {
         static
-        void format(String_Appender* into, const T (&arr)[N])
+        void format(String_Builder* into, const T (&arr)[N])
         {
             Slice<const T> slice = {arr, N};
             Formattable<Slice<const T>>::format(into, slice);
@@ -485,7 +510,7 @@ namespace jot
     namespace format_internal
     {
         template <typename T>
-        static void format_adaptor(String_Appender* into, Format_Adaptor adaptor)
+        static void format_adaptor(String_Builder* into, Format_Adaptor adaptor)
         {
             T* casted = cast(T*) adaptor._data;
             Formattable<T>::format(into, *casted);
@@ -499,7 +524,7 @@ namespace jot
             return format_str;
         }
 
-        static void cstring_format_adaptor(String_Appender* into, Format_Adaptor adaptor)
+        static void cstring_format_adaptor(String_Builder* into, Format_Adaptor adaptor)
         {
             String str = cast(const char*) adaptor._data;
             Formattable<String>::format(into, str);
@@ -529,26 +554,22 @@ namespace jot
         _format_string = format_internal::cstring_format_string_adaptor;
     }
 
-    static void concat_adapted_into(String_Appender* appender, Slice<Format_Adaptor> adapted)
+    static void concat_adapted_into(String_Builder* into, Slice<Format_Adaptor> adapted)
     {
-        String_Appender curr_appender = append_to(appender);
         for(Format_Adaptor const& curr_adapted : adapted)
         {
             if(curr_adapted._data == nullptr)
                 break;
             
-            curr_appender = append_to(&curr_appender);
-            curr_adapted._format(&curr_appender, curr_adapted);
+            curr_adapted._format(into, curr_adapted);
         }
     }
 
-    static void format_adapted_into(String_Appender* appender, String format_str, Slice<Format_Adaptor> adapted)
+    static void format_adapted_into(String_Builder* into, String format_str, Slice<Format_Adaptor> adapted)
     {
         //estimate the needed size so we dont need to reallocate so much
-        grow(appender, format_str.size + 5*adapted.size);
+        grow(into, size(into) + format_str.size + 5*adapted.size);
         constexpr String sub_for = "{}";
-
-        String_Appender curr_appender = append_to(appender);
 
         isize last = 0;
         isize new_found = 0;
@@ -565,8 +586,8 @@ namespace jot
                 if (format_str[new_found - 1] == '{' && format_str[new_found + 2] == '}')
                 {
                     String in_between = slice_range(format_str, last, new_found - 1);
-                    push_multiple(appender, in_between);
-                    push_multiple(appender, sub_for);
+                    push_multiple(into, in_between);
+                    push_multiple(into, sub_for);
                         
                     new_found += 1;
                     continue;
@@ -574,23 +595,22 @@ namespace jot
             }
 
             String in_between = slice_range(format_str, last, new_found);
-            push_multiple(appender, in_between);
+            push_multiple(into, in_between);
 
             if(found_count < adapted.size)
             {
                 Format_Adaptor const& curr_adapted = adapted[found_count];
-                curr_appender = append_to(&curr_appender);
                 if(curr_adapted._data != nullptr)
-                    curr_adapted._format(&curr_appender, curr_adapted);
+                    curr_adapted._format(into, curr_adapted);
             }
         }
             
         String till_end = tail(format_str, last);
-        push_multiple(appender, till_end);
-        concat_adapted_into(appender, tail(adapted, found_count));
+        push_multiple(into, till_end);
+        concat_adapted_into(into, tail(adapted, found_count));
     }
 
-    static void format_adapted_into(String_Appender* appender, Slice<Format_Adaptor> adapted)
+    static void format_adapted_into(String_Builder* into, Slice<Format_Adaptor> adapted)
     {
         if(adapted.size == 0)
             return;
@@ -599,11 +619,11 @@ namespace jot
         {
             Slice<Format_Adaptor> rest = tail(adapted);
             String format_str = adapted[0]._format_string(adapted[0]);
-            format_adapted_into(appender, format_str, rest);
+            format_adapted_into(into, format_str, rest);
         }
         else
         {
-            concat_adapted_into(appender, adapted);
+            concat_adapted_into(into, adapted);
         }
     }
     #define FORMAT_ADAPTOR_10_ARGS_DECL_NO_DEF \
@@ -614,33 +634,25 @@ namespace jot
 
     #define FORMAT_ADAPTOR_10_ARGS a1, a2, a3, a4, a5, a6, a7, a8, a9, a10
 
-    static void _format_into(String_Appender* appender, FORMAT_ADAPTOR_10_ARGS_DECL_NO_DEF)
+    static void _format_into(String_Builder* into, FORMAT_ADAPTOR_10_ARGS_DECL_NO_DEF)
     {
         Format_Adaptor adapted_storage[] = {FORMAT_ADAPTOR_10_ARGS};
         Slice<Format_Adaptor> adapted_slice = {adapted_storage, 10};
 
-        return format_adapted_into(appender, adapted_slice);
+        return format_adapted_into(into, adapted_slice);
     }
     
     static String_Builder _format(FORMAT_ADAPTOR_10_ARGS_DECL_NO_DEF)
     {
         String_Builder builder;
-        String_Appender appender = {&builder};
-        format_into(&appender, FORMAT_ADAPTOR_10_ARGS);
+        _format_into(&builder, FORMAT_ADAPTOR_10_ARGS);
         return builder;
-    }
-
-    NO_INLINE
-    static void format_into(String_Appender* appender, FORMAT_ADAPTOR_10_ARGS_DECL_NO_DEF)
-    {
-        _format_into(appender, FORMAT_ADAPTOR_10_ARGS);
     }
 
     NO_INLINE
     static void format_into(String_Builder* into, FORMAT_ADAPTOR_10_ARGS_DECL_NO_DEF)
     {
-        String_Appender appender(into);
-        return _format_into(&appender, FORMAT_ADAPTOR_10_ARGS);
+        _format_into(into, FORMAT_ADAPTOR_10_ARGS);
     }
 
     NO_INLINE nodisc 

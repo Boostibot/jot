@@ -55,6 +55,12 @@ namespace jot
         }
 
         virtual
+        const char* name() const noexcept override
+        {
+            return "Failing_Allocator";
+        }
+
+        virtual
         ~Failing_Allocator() noexcept override
         {}
     };

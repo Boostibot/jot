@@ -10,29 +10,17 @@
 
 namespace jot
 {
-    
-    template <typename T> 
-    struct Hashable<tests::Tracker<T>>
+    template <typename T> nodisc
+    hash_t tracker_hash(tests::Tracker<T> const& tracker) noexcept
     {
-        nodisc static
-        hash_t hash(tests::Tracker<T> const& tracker) noexcept
-        {
-            return Hashable<T>::hash(tracker.val);
-        }
-    };
-
+        return default_key_hash(tracker.val);
+    }
     
-    template <typename A, typename B> 
-    struct Key_Castable<tests::Tracker<A>, tests::Tracker<B>>
+    template <typename A, typename B> nodisc
+    tests::Tracker<A> tracker_key_cast(tests::Tracker<B> const& tracker)
     {
-        nodisc static
-        tests::Tracker<A> key_cast(tests::Tracker<B> const& tracker)
-        {
-            return tests::Tracker<A>{
-                Key_Castable<A, B>::key_cast(tracker.val)
-            };
-        }
-    };
+        return tests::Tracker<A>{cast(A) tracker.val};
+    }
 }
 
 namespace jot::tests::hash_table
@@ -48,8 +36,8 @@ namespace jot::tests::hash_table
         auto const& manual = values(table)[found];
         auto const& obtained = get(table, key, value);
         
-        bool do_manual_match = Key_Comparable<Val>::key_equal(manual, obtained);
-        bool do_expected_match = Key_Comparable<Val>::key_equal(manual, value);
+        bool do_manual_match = Table::key_equal(manual, obtained);
+        bool do_expected_match = Table::key_equal(manual, value);
         test(do_manual_match);
         return do_expected_match;
     }
@@ -419,8 +407,8 @@ namespace jot::tests::hash_table
         using Val = Stored_Key;
         using Key = Tracker<i32>;
 
-        using Table = Hash_Table_Detailed<Stored_Key, Val, Key, test_tracker_hash>;
-        using Count_Table = Hash_Table_Detailed<Stored_Key, i32, Key, test_tracker_hash>;
+        using Table = Hash_Table_Access<Stored_Key, Val, Key, test_tracker_hash>;
+        using Count_Table = Hash_Table_Access<Stored_Key, i32, Key, test_tracker_hash>;
         using Seed = std::random_device::result_type;
 
         static_assert(std::is_same_v<typename Table::Stored_Key, Stored_Key>, "!");
@@ -449,7 +437,7 @@ namespace jot::tests::hash_table
         };
         
         const auto cast_key = [](Stored_Key const& key) -> Key {
-            return Key_Castable<Key, Stored_Key>::key_cast(key); 
+            return tracker_key_cast<Key, Stored_Key>(key);
         };
 
         const auto incr_count_table = [&](Count_Table* count_table, Stored_Key const& key){

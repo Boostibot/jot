@@ -148,9 +148,9 @@ namespace jot
     struct Formattable<tests::Tracker<T>>
     {
         static
-        void format(String_Appender* appender, tests::Tracker<T> tracker) noexcept
+        void format(String_Builder* into, tests::Tracker<T> tracker) noexcept
         {
-            format_into(appender, "Tracker{ ", tracker.val, " }");
+            format_into(into, "Tracker{ ", tracker.val, " }");
         }
     };
 
@@ -158,9 +158,9 @@ namespace jot
     struct Formattable<tests::Test_String>
     {
         static
-        void format(String_Appender* appender, tests::Test_String str) noexcept
+        void format(String_Builder* into, tests::Test_String str) noexcept
         {
-            format_into(appender, str.content);
+            format_into(into, str.content);
         }
     };
 }

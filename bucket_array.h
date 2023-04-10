@@ -236,21 +236,24 @@ namespace jot
             if(bucket_reserve != Allocation_State::OK)
                 return bucket_reserve;
 
-            Allocation_Result data = alloc->allocate(data_size, slots_align);
-            if(data.state != Allocation_State::OK)
-                return data.state;
+            Slice<u8> data_items;
+            Slice<u8> mask_items;
 
-            Allocation_Result mask = alloc->allocate(masks_size, USED_SLOTS_ALIGN);
-            if(mask.state != Allocation_State::OK)
+            Allocation_State data_state = alloc->allocate(&data_items, data_size, slots_align);
+            if(data_state != Allocation_State::OK)
+                return data_state;
+
+            Allocation_State mask_state = alloc->allocate(&mask_items, masks_size, USED_SLOTS_ALIGN);
+            if(mask_state != Allocation_State::OK)
             {
-                alloc->deallocate(data.items, slots_align);
-                return mask.state;
+                alloc->deallocate(data_items, slots_align);
+                return mask_state;
             }
             
-            null_items(mask.items);
+            null_items(mask_items);
 
-            u8* curr_data = data.items.data;
-            Mask* curr_mask = cast(Mask*) mask.items.data;
+            u8* curr_data = data_items.data;
+            Mask* curr_mask = cast(Mask*) mask_items.data;
             for(isize i = 0; i < bucket_count; i++)
             {
                 Bucket bucket;

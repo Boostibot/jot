@@ -3,6 +3,7 @@
 #include "memory.h"
 #include "hash.h"
 #include "stack.h"
+#include "utils.h"
 #include "defines.h"
 
 namespace jot
@@ -15,6 +16,23 @@ namespace jot
     
     template<typename Key>
     using Key_Hash_Func  = hash_t (*)(Key const&);
+
+
+    //@TODO: figure out how to not use IS_SAME at all
+    template<typename A, typename B>
+    static constexpr bool IS_SAME = false;
+    
+    template<typename A>
+    static constexpr bool IS_SAME<A, A> = true;
+
+    template<bool cond, typename A, typename B>
+    struct Conditional_Struct { using type = A; };
+    
+    template<typename A, typename B>
+    struct Conditional_Struct<false, A, B> { using type = B; };
+
+    template<bool cond, typename A, typename B>
+    using Conditional = typename Conditional_Struct<cond, A, B>::type;
 
     //Cache efficient packed hash table. Stores the jump table, keys and values all in seperate arrays for maximum cache utilization.
     // This also allows us to expose the values array directly to the user which removes the need for custom iterators. 
@@ -44,7 +62,7 @@ namespace jot
         //we assume that if the entry size is equal or greater than 8 (which is usually the case) 
         // we wont ever hold more than 4 million entries (would be more than 32GB of data)
         // this reduces the necessary size for linker by 50%
-        using Link = std::conditional_t<(sizeof(Stored_Key) + sizeof(Value) > 4), u32, u64>;
+        using Link = Conditional<(sizeof(Stored_Key) + sizeof(Value) > 4), u32, u64>;
         
         Allocator* _allocator = memory_globals::default_allocator();
         Stored_Key* _keys = nullptr;
@@ -101,8 +119,8 @@ namespace jot
         isize jump_table_base_size = 32;
     };
 
-    constexpr static isize HASH_TABLE_ENTRIES_ALIGN = 32;
-    constexpr static isize HASH_TABLE_LINKER_ALIGN = 32;
+    constexpr static isize HASH_TABLE_ENTRIES_ALIGN = 8;
+    constexpr static isize HASH_TABLE_LINKER_ALIGN = 8;
     constexpr static isize HASH_TABLE_LINKER_BASE_SIZE = 16;
 
     template <class Info> nodisc
@@ -192,7 +210,7 @@ namespace jot
         template <class Info>
         hash_t do_hash(Info_Stored_Key const& stored_key)
         {
-            if constexpr(std::is_same_v<Info_Key, Info_Stored_Key>)
+            if constexpr(IS_SAME<Info_Key, Info_Stored_Key>)
                 return Info::key_hash(stored_key);
             else
             {
@@ -210,35 +228,37 @@ namespace jot
             info.new_capacity = new_capacity;
             info.try_resize = true;
 
-            Allocator* alloc = hash->_allocator;
-            isize align = HASH_TABLE_ENTRIES_ALIGN;
-            isize size = hash->_entries_size;
-
             using Stored_Key = Info_Stored_Key;
             using Value = Info_Value;
 
-            Slice<Stored_Key> old_keys = Slice<Stored_Key>{hash->_keys, hash->_entries_capacity};
-            Slice<Value> old_values = Slice<Value>{hash->_values, hash->_entries_capacity};
+            Slice<Stored_Key> old_keys = Slice<Stored_Key>{hash->_keys, hash->_entries_size};
+            Slice<Value> old_values = Slice<Value>{hash->_values, hash->_entries_size};
 
-            Set_Capacity_Result<Stored_Key> key_res = set_capacity_allocation_stage(alloc, &old_keys, align, new_capacity, true);
-            if(key_res.state != Allocation_State::OK)
-                return key_res.state;
+            Slice<Stored_Key> new_keys;
+            Slice<Value> new_values;
+
+            isize new_size = 0;
+
+            Allocation_State key_state = set_capacity_allocate(&new_keys, &new_size, old_keys, hash->_entries_capacity, info);
+            if(key_state != Allocation_State::OK)
+                return key_state;
                 
-            Set_Capacity_Result<Value> value_res = set_capacity_allocation_stage(alloc, &old_values, align, new_capacity, true);
-            if(value_res.state != Allocation_State::OK)
+            Allocation_State value_state = set_capacity_allocate(&new_values, &new_size, old_values, hash->_entries_capacity, info);
+            if(value_state != Allocation_State::OK)
             {
-                Slice<u8> raw_keys = cast_slice<u8>(key_res.items);
-                alloc->deallocate(raw_keys, align);
+                Slice<u8> raw_keys = cast_slice<u8>(new_keys);
+                info.allocator->deallocate(raw_keys, info.align);
 
-                return value_res.state;
+                return value_state;
             }
 
-            set_capacity_deallocation_stage(alloc, &old_keys, size, align, &key_res);
-            set_capacity_deallocation_stage(alloc, &old_values, size, align, &value_res);
+            set_capacity_deallocate(&new_keys, &new_size, old_keys, hash->_entries_capacity, info);
+            set_capacity_deallocate(&new_values, &new_size, old_values, hash->_entries_capacity, info);
 
-            hash->_keys = key_res.items.data;
-            hash->_values = value_res.items.data;
+            hash->_keys = new_keys.data;
+            hash->_values = new_values.data;
             hash->_entries_capacity = new_capacity;
+            hash->_entries_size = new_size;
 
             return Allocation_State::OK;
         }
@@ -292,18 +312,18 @@ namespace jot
             to_size = max(to_size, required_min_size);
 
             Slice<Link> old_linker = table->_linker;
-            Allocation_Result result = {};
+            Slice<u8> result_items;
             
             //if to_size == 0 we only deallocate
             if(to_size != 0)
             {
-                result = table->_allocator->allocate(to_size * cast(isize) sizeof(Link), HASH_TABLE_LINKER_ALIGN);
-                if(result.state != Allocation_State::OK)
-                   return result.state; 
+                Allocation_State state = table->_allocator->allocate(to_size * cast(isize) sizeof(Link), HASH_TABLE_LINKER_ALIGN);
+                if(state != Allocation_State::OK)
+                   return state; 
             }
 
             //mark occurences of each entry index in a bool array
-            Slice<bool> marks = head(cast_slice<bool>(result.items), table->_entries_size);
+            Slice<bool> marks = head(cast_slice<bool>(result_items), table->_entries_size);
             null_items(marks);
 
             isize empty_count = 0;
@@ -376,7 +396,7 @@ namespace jot
             }
 
             //fill new_linker to empty
-            Slice<Link> new_linker = cast_slice<Link>(result.items);
+            Slice<Link> new_linker = cast_slice<Link>(result_items);
             fill(new_linker, cast(Link) EMPTY_LINK);
 
             //rehash every entry up to alive_count
@@ -568,7 +588,7 @@ namespace jot
             Stored_Key const& curr = keys[cast(isize) link];
 
             bool are_equal = false;
-            if constexpr(std::is_same_v<Info_Key, Info_Stored_Key>)
+            if constexpr(IS_SAME<Info_Key, Info_Stored_Key>)
             {
                 are_equal = Info::key_equals(curr, key);
             }
@@ -811,7 +831,7 @@ namespace jot
         // casting to Key (which as it returns a copy can be rather expensive for strings)
         //This means we have to duplicate the code
         Hash_Found found = {};
-        if constexpr(std::is_same_v<Info_Key, Info_Stored_Key>)
+        if constexpr(IS_SAME<Info_Key, Info_Stored_Key>)
         {
             hash_t hash = Info::key_hash(key);
             found = find<Info, true>(*table, key, hash);
@@ -850,7 +870,7 @@ namespace jot
             
             //I wish there was a way to do this without having to duplicate code...
             Hash_Found found = {};
-            if constexpr(std::is_same_v<Info_Key, Info_Stored_Key>)
+            if constexpr(IS_SAME<Info_Key, Info_Stored_Key>)
             {
                 hash_t hash = Info::key_hash(stored_key);
                 found = find<Info, true>(*table, stored_key, hash);
@@ -876,72 +896,47 @@ namespace jot
     #undef Info_Link         
     
     template <typename T> 
-    hash_t default_key_hash(T const& val) noexcept
+    hash_t scalar_key_hash(T const& val) noexcept
     {
         return uint64_hash(cast(u64) val);
     }
-
-    template <typename T>  
-    hash_t default_key_hash(Slice<T> const& val) noexcept
-    {
-        //if is scalar (array of bultin types ie char, int...) just use the optimal hash
-        if constexpr(std::is_scalar_v<T>)
-            return cast(hash_t) murmur_hash64(val.data, val.size * cast(isize) sizeof(T), cast(u64) val.size);
-        //else mixin the hashes for each element
-        else
-        {
-            u64 running_hash = cast(u64) val.size;
-            for(isize i = 0; i < val.size; i++)
-                running_hash ^= Hashable<T>::hash(val);
-            
-            return cast(hash_t) running_hash;
-        }
-    }
-
-    template <typename T>  
-    hash_t default_key_hash(Stack<T> const& val) noexcept
-    {
-        return default_key_hash<T>(slice(val));
-    }
-
+    
     template <typename T>
     bool default_key_equals(T const& a, T const& b)
     {
         return a == b;
     }
     
-    template <typename T>
-    bool default_key_equals(Slice<T> const& a, Slice<T> const& b) noexcept
-    {
-        //if possible use by byte compare (memcmp)
-        if constexpr(std::is_scalar_v<T>)
-            return compare(cast_slice<const u8>(a),  cast_slice<const u8>(b)) == 0;       
-        else
-        {
-            if(a.size != b.size)
-                return false;
-                
-            for(isize i = 0; i < a.size; i++)
-            {
-                if(Key_Comparable<T>::key_equals(a[i], b[i]) == false)
-                    return false;
-            }
-
-            return true;
-        }
-    }
-
-    template <typename T>
-    bool default_key_equals(Stack<T> const& a, Stack<T> const& b) noexcept
-    {
-        return default_key_equals<T>(slice(a), slice(b));
-    }
-
     template <typename To, typename From>
     To default_key_cast(From const& a) noexcept
     {
         return cast(To) a;
     }
+
+    template <typename T>  
+    hash_t scalar_slice_hash(Slice<T> const& val) noexcept
+    {
+        return cast(hash_t) murmur_hash64(val.data, val.size * cast(isize) sizeof(T), cast(u64) val.size);
+    }
+
+    template <typename T>  
+    hash_t scalar_stack_hash(Stack<T> const& val) noexcept
+    {
+        return scalar_slice_hash<T>(slice(val));
+    }
+
+    template <typename T>
+    bool slice_key_equals(Slice<T> const& a, Slice<T> const& b) noexcept
+    {
+        return are_equal(a, b);
+    }
+
+    template <typename T>
+    bool stack_key_equals(Stack<T> const& a, Stack<T> const& b) noexcept
+    {
+        return are_equal(slice(a), slice(b));
+    }
+
 
     template<
         typename Stored_Key_, 
@@ -966,7 +961,7 @@ namespace jot
         typename Stored_Key, 
         typename Value,
         typename Key,
-        Key_Hash_Func<Key>              key_hash = default_key_hash<Key>,
+        Key_Hash_Func<Key>              key_hash,
         Key_Equal_Func<Key>             key_equals = default_key_equals<Key>,
         Key_Cast_Func<Key, Stored_Key>  key_cast = default_key_cast<Key>
     >
@@ -977,7 +972,7 @@ namespace jot
     template<
         typename Key, 
         typename Value,
-        Key_Hash_Func<Key>              key_hash = default_key_hash<Key>,
+        Key_Hash_Func<Key>              key_hash,
         Key_Equal_Func<Key>             key_equals = default_key_equals<Key>
     >
     using Hash_Table = Hash_Table_Access<Key, Value, Key, key_hash, key_equals>;

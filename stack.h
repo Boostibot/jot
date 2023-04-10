@@ -158,6 +158,7 @@ namespace jot
 {
     namespace stack_internal 
     {
+        //@TODO: remove static inline
         static inline const u8 NULL_TERMINATION_ARR[8] = {'\0'};
 
         template<class T> 
@@ -381,7 +382,7 @@ namespace jot
         info.allocator     = stack->_allocator;
         info.align         = DEF_ALIGNMENT<T>;
         info.optims        = DEF_TYPE_OPTIMS<T>; 
-        info.try_resize    = stack->_size * sizeof(T) > 64 || has_flag(info.optims, Type_Optims::BYTE_COPY) == false;
+        info.try_resize    = stack->_size * sizeof(T) > 64 || is_flag_set(info.optims, Type_Optims::BYTE_COPY) == false;
         info.padding_bytes = cast(isize) is_string_char<T> * sizeof(T);
 
         Slice<T> new_slice;
@@ -449,7 +450,7 @@ namespace jot
         
         Slice<T> capacity_slice = {to->_data, to->_capacity};
         //if is byte copyable just copy the contents all in one go
-        if constexpr(has_flag(DEF_TYPE_OPTIMS<T>, Type_Optims::BYTE_COPY))
+        if constexpr(is_flag_set(DEF_TYPE_OPTIMS<T>, Type_Optims::BYTE_COPY))
             copy_items(capacity_slice, from);
         //else copy then copy construct the rest
         else
@@ -590,7 +591,7 @@ namespace jot
 
         reserve(stack, to);
         
-        if constexpr(has_flag(DEF_TYPE_OPTIMS<T>, Type_Optims::BYTE_NULL) && is_zero)
+        if constexpr(is_flag_set(DEF_TYPE_OPTIMS<T>, Type_Optims::BYTE_NULL) && is_zero)
         {
             if(stack->_size < to)
                 memset(stack->_data + stack->_size, 0, (to - stack->_size)*sizeof(T));
@@ -623,13 +624,15 @@ namespace jot
     template<class T> 
     void resize_for_overwrite(Stack<T>* stack, isize to)
     {
-        if constexpr(has_flag(DEF_TYPE_OPTIMS<T>, Type_Optims::BYTE_COPY))
+        if constexpr(is_flag_set(DEF_TYPE_OPTIMS<T>, Type_Optims::BYTE_COPY))
             return resize(stack, to);
-
-        reserve(stack, to);
-        stack->_size = to;
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
+        else
+        {
+            stack->_size = to;
+            stack_internal::null_terminate(stack);
+            assert(is_invariant(*stack));
+            reserve(stack, to);
+        }
     }
 
     template<class T> 
@@ -690,129 +693,6 @@ namespace jot
 
         push(stack, cast(T&&) what);
         swap(&stack->_data[at], last(stack));
-    }
-    
-    //Simple struct that acts as a slice to stack ment to be used
-    // as an iterface type when its desired to only allow pushing into a stack
-    // pretends it only has data from _from_index guarding the data in front of it from modification
-    template <typename T_>
-    struct Stack_Appender
-    {
-        using T = T_;
-        Stack<T>* _stack;
-        isize _from_index = 0;
-
-        Stack_Appender(Stack<T>* stack) : _stack(stack), _from_index(stack->_size) {}
-    };
-    
-    template<class T> nodisc
-    T* const data(Stack_Appender<T> const& appender)
-    {
-        return data(appender._stack) + appender._from_index;
-    }
-
-    template<class T> nodisc
-    T* data(Stack_Appender<T>* appender)
-    {
-        return data(appender->_stack) + appender->_from_index;
-    }
-
-    template<class T> nodisc
-    isize size(Stack_Appender<T> const& appender)
-    {
-        return size(*appender._stack) - appender._from_index;
-    }
-    
-    template<class T> nodisc
-    isize size(Stack_Appender<T>* appender)
-    {
-        return size(*appender);
-    }
-    
-    template<class T> nodisc
-    isize capacity(Stack_Appender<T> const& appender)
-    {
-        return capacity(*appender._stack) - appender._from_index;
-    }
-
-    template<class T> nodisc
-    isize capacity(Stack_Appender<T>* appender)
-    {
-        return capacity(*appender);
-    }
-
-    template<class T> nodisc
-    Slice<const T> slice(Stack_Appender<T> const& appender) 
-    {
-        return tail(slice(*appender._stack), appender._from_index);
-    }
-
-    template<class T> nodisc
-    Slice<T> slice(Stack_Appender<T>* appender) 
-    {
-        return tail(slice(appender->_stack), appender->_from_index);
-    }
-
-    template <class T>
-    void push_multiple(Stack_Appender<T>* appender, Slice<const typename Stack<T>::T> inserted)
-    {
-        return push_multiple(appender->_stack, inserted);
-    }
-    
-    template <class T>
-    void push_multiple_move(Stack_Appender<T>* appender, Slice<typename Stack<T>::T> inserted)
-    {
-        return push_multiple_move(appender->_stack, inserted);
-    }
-
-    template<class T>
-    void push(Stack_Appender<T>* appender, typename Stack<T>::T what)
-    {
-        return push(appender->_stack, cast(T&&) what);
-    }
-    
-    template<class T> 
-    void reserve(Stack_Appender<T>* appender, isize to)
-    {
-        return reserve(appender->_stack, to + appender->_from_index);
-    }
-    
-    template<class T> 
-    void grow(Stack_Appender<T>* appender, isize to)
-    {
-        return grow(appender->_stack, to + appender->_from_index);
-    }
-
-    template<class T> nodisc
-    Allocation_State reserve_failing(Stack_Appender<T>* appender, isize to) noexcept
-    {
-        return reserve_failing(appender->_stack, to + appender->_from_index);
-    }
-
-    template<class T> 
-    void resize(Stack_Appender<T>* appender, isize to)
-    {
-        return resize(appender->_stack, to + appender->_from_index);
-    }
-
-    template<class T> 
-    void resize_for_overwrite(Stack_Appender<T>* appender, isize to)
-    {
-        return resize_for_overwrite(appender->_stack, to + appender->_from_index);
-    }
-
-    template <class T>
-    void resize(Stack_Appender<T>* appender, isize to, typename Stack<T>::T const& fill_with)
-    {
-        return resize(appender->_stack, to + appender->_from_index, fill_with);
-    }
-    
-    template <class T>
-    Stack_Appender<T> append_to(Stack_Appender<T>* appender) noexcept
-    {
-        Stack_Appender<T> new_appender(appender->_stack);
-        new_appender._from_index = size(appender->_stack);
-        return new_appender;
     }
 }
 

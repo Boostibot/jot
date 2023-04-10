@@ -43,13 +43,11 @@ namespace jot
     using String = Slice<const char>;
     using Mutable_String = Slice<char>;
     using String_Builder = Stack<char>;
-    using String_Appender = Stack_Appender<char>;
 
     //For windows stuff...
     using wString = Slice<const wchar_t>;
     using wMutable_String = Slice<wchar_t>;
     using wString_Builder = Stack<wchar_t>;
-    using wString_Appender = Stack_Appender<wchar_t>;
 
     //Panic for String_Builder
     struct String_Builder_Panic : Panic

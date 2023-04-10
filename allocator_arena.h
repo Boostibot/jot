@@ -216,6 +216,12 @@ namespace jot
             return max_bytes_used_;    
         }
          
+        nodisc virtual
+        const char* name() const noexcept override
+        {
+            return "Arena_Allocator";
+        }
+
         virtual
         ~Arena_Allocator() override
         {
