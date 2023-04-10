@@ -21,14 +21,14 @@
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
+using isize = ptrdiff_t;
+
 namespace jot 
 {
     using File_Descriptor = int;
     using File_Flag = int;
     using File_Mode = mode_t;
     using File_Stats = Stat64;
-    
-    using isize = ptrdiff_t;
 
     //A thin wrapper around the posix file interface
     // handles closing the file automatically

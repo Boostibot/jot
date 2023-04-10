@@ -3,7 +3,10 @@
 #include "memory.h"
 #include "slice_ops.h"
 #include "panic.h"
-#include "defines.h"
+
+#ifndef NODISCARD
+    #define NODISCARD [[nodiscard]]
+#endif
 
 namespace jot
 {
@@ -34,17 +37,17 @@ namespace jot
         using iterator       = T*;
         using const_iterator = const T*;
         
-        nodisc constexpr iterator       begin() noexcept       { return _data; }
-        nodisc constexpr const_iterator begin() const noexcept { return _data; }
-        nodisc constexpr iterator       end() noexcept         { return _data + _size; }
-        nodisc constexpr const_iterator end() const noexcept   { return _data + _size; }
+        constexpr iterator       begin() noexcept       { return _data; }
+        constexpr const_iterator begin() const noexcept { return _data; }
+        constexpr iterator       end() noexcept         { return _data + _size; }
+        constexpr const_iterator end() const noexcept   { return _data + _size; }
 
-        nodisc constexpr T const& operator[](isize index) const noexcept  
+        constexpr T const& operator[](isize index) const noexcept  
         { 
             assert(0 <= index && index < _size && "index out of range"); 
             return _data[index]; 
         }
-        nodisc constexpr T& operator[](isize index) noexcept 
+        constexpr T& operator[](isize index) noexcept 
         { 
             assert(0 <= index && index < _size && "index out of range"); 
             return _data[index]; 
@@ -52,88 +55,88 @@ namespace jot
     };
     
     ///Calculates new size of a stack which is guaranteed to be greater than to_fit
-    nodisc constexpr inline
+    constexpr inline
     isize calculate_stack_growth(isize curr_size, isize to_fit, isize growth_num = 3, isize growth_den = 2, isize grow_lin = 8);
 
     ///Getters 
-    template<class T> nodisc auto data(Stack<T> const& stack) noexcept -> const T*          {return stack._data;}
-    template<class T> nodisc auto data(Stack<T>* stack) noexcept -> T*                      {return stack->_data;}
-    template<class T> nodisc auto size(Stack<T> const& stack) noexcept -> isize             {return stack._size;}
-    template<class T> nodisc auto size(Stack<T>* stack) noexcept -> isize                   {return stack->_size;}
-    template<class T> nodisc auto capacity(Stack<T> const& stack) noexcept -> isize         {return stack._capacity;}
-    template<class T> nodisc auto capacity(Stack<T>* stack) noexcept -> isize               {return stack->_capacity;}
-    template<class T> nodisc auto allocator(Stack<T> const& stack) noexcept -> Allocator*   {return stack._allocator;}
-    template<class T> nodisc auto allocator(Stack<T>* stack) noexcept -> Allocator*         {return stack->_data;}
+    template<class T> auto data(Stack<T> const& stack) noexcept -> const T*          {return stack._data;}
+    template<class T> auto data(Stack<T>* stack) noexcept -> T*                      {return stack->_data;}
+    template<class T> auto size(Stack<T> const& stack) noexcept -> isize             {return stack._size;}
+    template<class T> auto size(Stack<T>* stack) noexcept -> isize                   {return stack->_size;}
+    template<class T> auto capacity(Stack<T> const& stack) noexcept -> isize         {return stack._capacity;}
+    template<class T> auto capacity(Stack<T>* stack) noexcept -> isize               {return stack->_capacity;}
+    template<class T> auto allocator(Stack<T> const& stack) noexcept -> Allocator*   {return stack._allocator;}
+    template<class T> auto allocator(Stack<T>* stack) noexcept -> Allocator*         {return stack->_data;}
 
     ///Returns a slice containing all items of the stack
-    template<class T> nodisc auto slice(Stack<T> const& stack) noexcept -> Slice<const T>   {return {stack._data, stack._size};}
-    template<class T> nodisc auto slice(Stack<T>* stack) noexcept -> Slice<T>               {return {stack->_data, stack->_size};}
+    template<class T> auto slice(Stack<T> const& stack) noexcept -> Slice<const T>   {return {stack._data, stack._size};}
+    template<class T> auto slice(Stack<T>* stack) noexcept -> Slice<T>               {return {stack->_data, stack->_size};}
 
     ///Get first and last items of a stack. Cannot be used on empty stack!
-    template<class T> nodisc auto last(Stack<T>* stack) noexcept -> T*;
-    template<class T> nodisc auto last(Stack<T> const& stack) noexcept -> T const&;
-    template<class T> nodisc auto first(Stack<T>* stack) noexcept -> T*;
-    template<class T> nodisc auto first(Stack<T> const& stack) noexcept -> T const&;
+    template<class T> auto last(Stack<T>* stack) noexcept -> T*;
+    template<class T> auto last(Stack<T> const& stack) noexcept -> T const&;
+    template<class T> auto first(Stack<T>* stack) noexcept -> T*;
+    template<class T> auto first(Stack<T> const& stack) noexcept -> T const&;
     
     ///Returns true i
-    template<class T> nodisc auto is_invariant(Stack<T> const& stack) noexcept -> bool;
-    template<class T> nodisc auto is_empty(Stack<T> const& stack) noexcept -> bool;
+    template<class T> auto is_invariant(Stack<T> const& stack) noexcept -> bool;
+    template<class T> auto is_empty(Stack<T> const& stack) noexcept -> bool;
 
     ///swaps contents of left and right stacks
-    template<class T>        void swap(Stack<T>* left, Stack<T>* right) noexcept;
+    template<class T> void swap(Stack<T>* left, Stack<T>* right) noexcept;
     ///Copies items to stack. Items within the stack before this opperations are discarded
-    template<class T>        void copy(Stack<T>* stack, Slice<const T> items);
+    template<class T> void copy(Stack<T>* stack, Slice<const T> items);
     ///Removes all items from stack
-    template<class T>        void clear(Stack<T>* stack);
+    template<class T> void clear(Stack<T>* stack);
 
     ///Makes a new stack with copied items using the probided allocator
-    template<class T> nodisc auto own(Slice<const T> from, Allocator* alloc = default_allocator()) -> Stack<T>;
-    template<class T> nodisc auto own(Slice<T> from, Allocator* alloc = default_allocator()) -> Stack<T>;
-    template<class T> nodisc auto own_scratch(Slice<const T> from, Allocator* alloc = scratch_allocator()) -> Stack<T> {return own(from, alloc);}
-    template<class T> nodisc auto own_scratch(Slice<T> from, Allocator* alloc = scratch_allocator()) -> Stack<T>       {return own(from, alloc);}
+    template<class T> auto own(Slice<const T> from, Allocator* alloc = default_allocator()) -> Stack<T>;
+    template<class T> auto own(Slice<T> from, Allocator* alloc = default_allocator()) -> Stack<T>;
+    template<class T> auto own_scratch(Slice<const T> from, Allocator* alloc = scratch_allocator()) -> Stack<T> {return own(from, alloc);}
+    template<class T> auto own_scratch(Slice<T> from, Allocator* alloc = scratch_allocator()) -> Stack<T>       {return own(from, alloc);}
 
     ///Reallocates stack to the specified capacity. If the capacity is smaller then its size, shrinks it destroying items
     ///in process
-    template<class T> nodisc auto set_capacity_failing(Stack<T>* stack, isize new_capacity) noexcept -> Allocation_State;
-    template<class T>        void set_capacity(Stack<T>* stack, isize new_capacity);
+    template<class T> NODISCARD auto set_capacity_failing(Stack<T>* stack, isize new_capacity) noexcept -> Allocation_State;
+    template<class T> void set_capacity(Stack<T>* stack, isize new_capacity);
 
     ///Potentially reallocates stack so that capacity is at least to_size. If capacity is already greater than to_size
     ///does nothing.
-    template<class T> nodisc auto reserve_failing(Stack<T>* stack, isize to_size) noexcept -> Allocation_State;
-    template<class T>        void reserve(Stack<T>* stack, isize to_size);
+    template<class T> NODISCARD auto reserve_failing(Stack<T>* stack, isize to_size) noexcept -> Allocation_State;
+    template<class T> void reserve(Stack<T>* stack, isize to_size);
 
     ///Same as reserve expect when reallocation happens grows according to calculate_stack_growth()
-    template<class T>        void grow(Stack<T>* stack, isize to_fit);
+    template<class T> void grow(Stack<T>* stack, isize to_fit);
 
     ///Sets size of stack. If to_size is smaller then stack size trims the stack. If is greater fills the added space with fill_with
-    template<class T>        void resize(Stack<T>* stack, isize to_size, typename Stack<T>::T const& fill_with) noexcept;
+    template<class T> void resize(Stack<T>* stack, isize to_size, typename Stack<T>::T const& fill_with) noexcept;
     ///Sets size of stack. If to_size is smaller then stack size trims the stack. If is greater fills the added space with T()
-    template<class T>        void resize(Stack<T>* stack, isize to_size);
+    template<class T> void resize(Stack<T>* stack, isize to_size);
     ///Sets size of stack. If to_size is smaller then stack size trims the stack. 
     ///If is greater and the T type allows it leaves the space uninitialized
-    template<class T>        void resize_for_overwrite(Stack<T>* stack, isize to);
+    template<class T> void resize_for_overwrite(Stack<T>* stack, isize to);
 
     ///Adds an item to the end of the stack
-    template<class T>        void push(Stack<T>* stack, typename Stack<T>::T what);
+    template<class T> void push(Stack<T>* stack, typename Stack<T>::T what);
     ///Removes an item at the end stack. The stack must not be empty!
-    template<class T>           T pop(Stack<T>* stack) noexcept;
+    template<class T>    T pop(Stack<T>* stack) noexcept;
 
     ///Pushes all items from inserted slice into the stack
-    template<class T>        void push_multiple(Stack<T>* stack, Slice<const typename Stack<T>::T> inserted);
+    template<class T> void push_multiple(Stack<T>* stack, Slice<const typename Stack<T>::T> inserted);
     ///Pushes all items from inserted slice into the stack moving them out of inserted slice
-    template<class T>        void push_multiple_move(Stack<T>* stack, Slice<typename Stack<T>::T> inserted);
+    template<class T> void push_multiple_move(Stack<T>* stack, Slice<typename Stack<T>::T> inserted);
     ///Pops multiple items from stack. The stack must contain at least count elements!
-    template<class T>        void pop_multiple(Stack<T>* stack, isize count) noexcept;
+    template<class T> void pop_multiple(Stack<T>* stack, isize count) noexcept;
 
     ///Inserts an item into the stack so that its index is at. Moves all later elemnts forward one index
-    template<class T>        void insert(Stack<T>* stack, isize at, typename Stack<T>::T what);
+    template<class T> void insert(Stack<T>* stack, isize at, typename Stack<T>::T what);
     ///Removes an item from the stack at specified index. Moves all later elemnts backwards one index. The stack most not be empty!
-    template<class T>           T remove(Stack<T>* stack, isize at) noexcept;
+    template<class T>    T remove(Stack<T>* stack, isize at) noexcept;
 
     ///Inserts an item into the stack so that its index is at. The item that was originally at this index becomes last
-    template<class T>        void unordered_insert(Stack<T>* stack, isize at, typename Stack<T>::T what);
+    template<class T> void unordered_insert(Stack<T>* stack, isize at, typename Stack<T>::T what);
     ///Removes an item from the stack at specified index. Moves the last item into freed up spot. The stack most not be empty!
-    template<class T>           T unordered_remove(Stack<T>* stack, isize at) noexcept;
+    template<class T>    T unordered_remove(Stack<T>* stack, isize at) noexcept;
     
     ///Pair of functions for dealing with any stacks without having to construct Stack<T> directly.
     ///Can be used when we have SOA struct with many arrays whose size and capacity is the same yet we dont want to keep
@@ -143,7 +146,7 @@ namespace jot
     /// set_capacity_deallocate on each and copy data from mini stacks back to appropriate struct fields
     struct Set_Capacity_Info;
 
-    template<class T> nodisc
+    template<class T> NODISCARD
     Allocation_State set_capacity_allocate(Slice<T>* new_slice, isize* new_size, Slice<T> old_slice, isize old_size, Set_Capacity_Info info) noexcept;
 
     template<class T>
@@ -159,7 +162,7 @@ namespace jot
     namespace stack_internal 
     {
         //@TODO: remove static inline
-        static inline const u8 NULL_TERMINATION_ARR[8] = {'\0'};
+        static inline const uint8_t NULL_TERMINATION_ARR[8] = {'\0'};
 
         template<class T> 
         void null_terminate(Stack<T>* stack) noexcept
@@ -172,7 +175,7 @@ namespace jot
         void set_data_to_termination(Stack<T>* stack)
         {
             if constexpr(is_string_char<T>)
-                stack->_data = cast(T*) cast(void*) NULL_TERMINATION_ARR;
+                stack->_data = (T*) (void*) NULL_TERMINATION_ARR;
             else
                 stack->_data = nullptr;
         }   
@@ -183,8 +186,8 @@ namespace jot
             if(stack->_capacity != 0)
             {
                 destruct_items(stack->_data, 0, stack->_size);
-                Slice<T> old_slice = {stack->_data, stack->_capacity + cast(isize) is_string_char<T>};
-                stack->_allocator->deallocate(cast_slice<u8>(old_slice), DEF_ALIGNMENT<T>);
+                Slice<T> old_slice = {stack->_data, stack->_capacity + (isize) is_string_char<T>};
+                stack->_allocator->deallocate(cast_slice<uint8_t>(old_slice), DEF_ALIGNMENT<T>);
             }
         }
     }
@@ -206,7 +209,7 @@ namespace jot
     Stack<T>::Stack(Stack && other) noexcept 
     {
         stack_internal::set_data_to_termination(this);
-        *this = cast(Stack&&) other;
+        *this = (Stack&&) other;
     }
 
     template<typename T>
@@ -275,7 +278,7 @@ namespace jot
     }
     
     //Returns new size of a stack which is guaranteed to be greater than to_fit
-    nodisc constexpr inline
+    constexpr inline
     isize calculate_stack_growth(isize curr_size, isize to_fit, isize growth_num, isize growth_den, isize grow_lin)
     {
         //with default values for small sizes grows fatser than classic factor of 2 for big slower
@@ -304,7 +307,7 @@ namespace jot
         Type_Optims optims = Type_Optims::DEF;
     };
     
-    template<class T> nodisc
+    template<class T>
     Allocation_State set_capacity_allocate(Slice<T>* new_slice, isize* new_size, Slice<T> old_slice, isize old_size, Set_Capacity_Info info) noexcept
     {
         *new_slice = Slice<T>{};
@@ -315,15 +318,15 @@ namespace jot
             return Allocation_State::OK;
         
         const isize new_byte_capacity = info.new_capacity * sizeof(T) + info.padding_bytes;
-        Slice<u8> new_data;
+        Slice<uint8_t> new_data;
         Allocation_State allocation_res = Allocation_State::UNSUPPORTED_ACTION;
 
         //If can & should resize tries to resize
         if(old_slice.size > 0 && info.try_resize)
         {
-            Slice<u8> old_data = cast_slice<u8>(old_slice);
+            Slice<uint8_t> old_data = cast_slice<uint8_t>(old_slice);
             old_data.size += info.padding_bytes;
-            allocation_res = info.allocator->resize(&new_data, cast_slice<u8>(old_slice), new_byte_capacity, info.align);
+            allocation_res = info.allocator->resize(&new_data, cast_slice<uint8_t>(old_slice), new_byte_capacity, info.align);
         }
 
         //If resize failed or didnt even try (allocation_res is set to unsupported) tries to allocate
@@ -350,7 +353,7 @@ namespace jot
             return Allocation_State::OK;
 
         //If just deallocating deallocate
-        Slice<u8> old_data = cast_slice<u8>(old_slice);
+        Slice<uint8_t> old_data = cast_slice<uint8_t>(old_slice);
         old_data.size += info.padding_bytes;
         if(info.new_capacity <= 0)
         {
@@ -372,7 +375,7 @@ namespace jot
         }
     }
 
-    template<class T> nodisc
+    template<class T>
     Allocation_State set_capacity_failing(Stack<T>* stack, isize new_capacity) noexcept
     {
         assert(is_invariant(*stack));
@@ -383,7 +386,7 @@ namespace jot
         info.align         = DEF_ALIGNMENT<T>;
         info.optims        = DEF_TYPE_OPTIMS<T>; 
         info.try_resize    = stack->_size * sizeof(T) > 64 || is_flag_set(info.optims, Type_Optims::BYTE_COPY) == false;
-        info.padding_bytes = cast(isize) is_string_char<T> * sizeof(T);
+        info.padding_bytes = (isize) is_string_char<T> * sizeof(T);
 
         Slice<T> new_slice;
         isize new_size = 0; 
@@ -408,7 +411,7 @@ namespace jot
         return Allocation_State::OK;
     }
      
-    template<class T> nodisc
+    template<class T>
     Allocation_State reserve_failing(Stack<T>* stack, isize to_size) noexcept
     {
         if (stack->_capacity >= to_size)
@@ -422,7 +425,7 @@ namespace jot
     {
         Allocation_State state = set_capacity_failing(stack, new_capacity);
         if(state != Allocation_State::OK)
-            panic("Stack<T> allocation failed!");
+            PANIC("Stack<T> allocation failed!");
     }
 
     template<class T>
@@ -473,7 +476,7 @@ namespace jot
         assert(is_invariant(*to));
     }
     
-    template<class T> nodisc
+    template<class T>
     Stack<T> own(Slice<const T> from, Allocator* alloc)
     {
         Stack<T> out(alloc);
@@ -481,11 +484,11 @@ namespace jot
         return out;
     }
     
-    template<class T> nodisc
+    template<class T>
     Stack<T> own(Slice<T> from, Allocator* alloc)
     {
         Stack<T> out(alloc);
-        copy<T>(&out, cast(Slice<const T>) from);
+        copy<T>(&out, (Slice<const T>) from);
         return out;
     }
     
@@ -498,7 +501,7 @@ namespace jot
         swap(&left->_allocator, &right->_allocator);
     }
     
-    template<class T> nodisc
+    template<class T>
     bool is_empty(Stack<T> const& stack) noexcept
     {
         assert(is_invariant(stack));
@@ -513,7 +516,7 @@ namespace jot
         grow(stack, stack->_size + 1);
         
         T* ptr = stack->_data + stack->_size;
-        new(ptr) T(cast(T&&) what);
+        new(ptr) T((T&&) what);
         stack->_size++;
         
         stack_internal::null_terminate(stack);
@@ -528,7 +531,7 @@ namespace jot
 
         stack->_size--;
 
-        T ret = cast(T&&) (stack->_data[stack->_size]);
+        T ret = (T&&) (stack->_data[stack->_size]);
         stack->_data[stack->_size].~T();
         
         stack_internal::null_terminate(stack);
@@ -640,17 +643,17 @@ namespace jot
     {
         assert(0 <= at && at <= stack->_size);
         if(at >= size(*stack))
-            return push(stack, cast(T&&) what);
+            return push(stack, (T&&) what);
             
         grow(stack, stack->_size + 1);
 
-        new(last(stack) + 1) T(cast(T&&) *last(stack));
+        new(last(stack) + 1) T((T&&) *last(stack));
 
         Slice<T> move_from = slice_range(slice(stack), at, stack->_size - 1);
         Slice<T> move_to = slice_range(slice(stack), at + 1, stack->_size);
         move_items(move_to, move_from);
 
-        stack->_data[at] = cast(T&&) what;
+        stack->_data[at] = (T&&) what;
         stack->_size += 1;
         stack_internal::null_terminate(stack);
         assert(is_invariant(*stack));
@@ -662,7 +665,7 @@ namespace jot
         assert(0 <= at && at < stack->_size);
         assert(stack->_size > 0);
         
-        T removed = cast(T&&) stack->_data[at];
+        T removed = (T&&) stack->_data[at];
         
         Slice<T> move_from = slice_range(slice(stack), at + 1, stack->_size);
         Slice<T> move_to = slice_range(slice(stack), at, stack->_size - 1);
@@ -691,7 +694,7 @@ namespace jot
     {
         assert(0 <= at && at <= stack->_size);
 
-        push(stack, cast(T&&) what);
+        push(stack, (T&&) what);
         swap(&stack->_data[at], last(stack));
     }
 }
@@ -710,5 +713,3 @@ namespace std
         jot::swap(&stack1, &stack2);
     }
 }
-
-#include "undefs.h"

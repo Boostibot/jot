@@ -30,6 +30,7 @@ namespace jot
         {
             return _cstring_message;
         }
+
         virtual ~Panic() noexcept {}
     };
 
@@ -60,25 +61,20 @@ namespace jot
     {
         return Panic(line_info, string);
     }
-    
-    inline Panic make_panic(Line_Info line_info) noexcept
-    {
-        return Panic(line_info, "<empty panic>");
-    }
         
     //This is necessary for empty panic to compile on MSVC
-    #define MAKE_PANIC_MACRO(...) ::jot::make_panic(GET_LINE_INFO(), ##__VA_ARGS__)
+    #define MAKE_PANIC(...) ::jot::make_panic(GET_LINE_INFO(), ##__VA_ARGS__)
 
     //Constructs a panic via make_panic from the given arguments and then throws it
     #define PANIC_WITH(condition, ...)                                     \
         while(condition) {                                                 \
-            auto const& _local_panicable_ = MAKE_PANIC_MACRO(__VA_ARGS__); \
+            auto const& _local_panicable_ = MAKE_PANIC(__VA_ARGS__); \
             ::jot::panic_handler()->handle(_local_panicable_);             \
             throw _local_panicable_;                                       \
         }                                                                  \
     
     //invokes a panic handler then constructs a Panic out out of the given arguments and current Line_Info
-    #define panic(...)       PANIC_WITH(true, __VA_ARGS__)
+    #define PANIC(...)       PANIC_WITH(true, __VA_ARGS__)
     
     //An assert that gets called even in release. Panics if the check fails.
     #define force(condition) PANIC_WITH(!(condition), "Check failed: force(" #condition ")") 

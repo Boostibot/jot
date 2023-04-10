@@ -1,14 +1,12 @@
 #pragma once
 namespace meta
 {
-    #define nodisc [[nodiscard]]
-
     //returns compiler specific (but very readable!) name at compile time
-    template<typename T> nodisc constexpr
+    template<typename T> constexpr
     const char* type_name() noexcept ;
 
     //takes a type declared in a namespace and returns that namespace (is useful for macros that tell where they are)
-    template<typename Dummy_Struct> nodisc constexpr
+    template<typename Dummy_Struct> constexpr
     const char* namespace_name() noexcept;
 
     // type_name() examples:
@@ -56,7 +54,7 @@ namespace meta
         }
     };
 
-    template<typename T> nodisc constexpr
+    template<typename T> constexpr
     String function_name_string() 
     {
         const char* whole_name_str = __FUNCTION_NAME__;
@@ -67,7 +65,7 @@ namespace meta
         return String{whole_name_str, 0, function_size};
     }
 
-    template<typename T> nodisc constexpr
+    template<typename T> constexpr
     String type_name_string() 
     {
         String function_name = function_name_string<T>();
@@ -93,7 +91,7 @@ namespace meta
     }
 
 
-    template<typename Dummy_Struct> nodisc constexpr
+    template<typename Dummy_Struct> constexpr
     String namespace_name_string() noexcept
     {
         String type_name = type_name_string<Dummy_Struct>();
@@ -154,16 +152,15 @@ namespace meta
         };
     }
 
-    template<typename Dummy_Struct> nodisc constexpr
+    template<typename Dummy_Struct> constexpr
     const char* namespace_name() noexcept
     {
         return internal::Namespace_Name_Holder<Dummy_Struct>::static_str.string;
     }
 
-    template<typename T> nodisc constexpr
+    template<typename T> constexpr
     const char* type_name() noexcept 
     {
         return internal::Type_Name_Holder<T>::static_str.string;
     }
 }
-#undef nodisc

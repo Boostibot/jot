@@ -33,17 +33,15 @@
 
 #endif
 
+#ifndef NODISCARD
+    #define NODISCARD [[nodiscard]]
+#endif
+
 #include "slice.h"
 
-#define nodisc [[nodiscard]]
-#define cast(a) (a)
 
 namespace jot
 {
-    using u8 = uint8_t;
-    using isize = ptrdiff_t;
-    using usize = size_t;
-
     enum class Allocation_State : uint32_t
     {
         OK = 0,
@@ -54,28 +52,28 @@ namespace jot
     
     struct Allocator
     {
-        nodisc virtual
-        Allocation_State allocate(Slice<u8>* output, isize size, isize align) noexcept = 0; 
+        NODISCARD virtual
+        Allocation_State allocate(Slice<uint8_t>* output, isize size, isize align) noexcept = 0; 
         
         virtual 
-        Allocation_State deallocate(Slice<u8> allocated, isize align) noexcept = 0; 
+        Allocation_State deallocate(Slice<uint8_t> allocated, isize align) noexcept = 0; 
 
-        nodisc virtual
-        Allocation_State resize(Slice<u8>* output, Slice<u8> allocated, isize new_size, isize align) noexcept = 0; 
+        NODISCARD virtual
+        Allocation_State resize(Slice<uint8_t>* output, Slice<uint8_t> allocated, isize new_size, isize align) noexcept = 0; 
         
-        nodisc virtual
+        virtual
         isize bytes_allocated() const noexcept = 0;
 
-        nodisc virtual
+        virtual
         isize bytes_used() const noexcept = 0;
 
-        nodisc virtual
+        virtual
         isize max_bytes_allocated() const noexcept = 0;
 
-        nodisc virtual
+        virtual
         isize max_bytes_used() const noexcept = 0;
         
-        nodisc virtual
+        virtual
         const char* name() const noexcept = 0;
 
         virtual
@@ -88,16 +86,15 @@ namespace jot
     };
     
     
-    template<typename T> nodisc constexpr
-    bool is_in_slice(T* ptr, Slice<T> slice);
-
-    nodisc inline bool is_power_of_two(isize num);
-    nodisc inline isize ptrdiff(void* ptr1, void* ptr2);
-    nodisc inline uint8_t* align_forward(uint8_t* ptr, isize align_to);
-    nodisc inline uint8_t* align_backward(uint8_t* ptr, isize align_to);
-    nodisc inline Slice<u8> align_forward(Slice<u8> space, isize align_to);
-    nodisc inline void* malloc_aligned(size_t byte_size, size_t align);
-    nodisc inline void free_aligned(void* aligned_ptr, size_t byte_size, size_t align);
+    template<typename T> constexpr
+    inline bool is_in_slice(T* ptr, Slice<T> slice);
+    inline bool is_power_of_two(isize num);
+    inline ptrdiff_t ptrdiff(void* ptr1, void* ptr2);
+    inline uint8_t* align_forward(uint8_t* ptr, isize align_to);
+    inline uint8_t* align_backward(uint8_t* ptr, isize align_to);
+    inline Slice<uint8_t> align_forward(Slice<uint8_t> space, isize align_to);
+    inline void* malloc_aligned(size_t byte_size, size_t align);
+    inline void free_aligned(void* aligned_ptr, size_t byte_size, size_t align);
 
     //Acts as regular maloc
     struct Default_Allocator : Allocator
@@ -105,11 +102,11 @@ namespace jot
         isize total_alloced = 0;
         isize max_alloced = 0;
 
-        nodisc virtual
-        Allocation_State allocate(Slice<u8>* output, isize size, isize align) noexcept override
+        NODISCARD virtual
+        Allocation_State allocate(Slice<uint8_t>* output, isize size, isize align) noexcept override
         {
             output->size = size;
-            output->data = (u8*) malloc_aligned(size, align);
+            output->data = (uint8_t*) malloc_aligned(size, align);
             if(output->data == nullptr)
                 return Allocation_State::OUT_OF_MEMORY;
 
@@ -120,8 +117,8 @@ namespace jot
             return Allocation_State::OK;
         }
 
-        nodisc virtual 
-        Allocation_State deallocate(Slice<u8> allocated, isize align) noexcept override
+        virtual 
+        Allocation_State deallocate(Slice<uint8_t> allocated, isize align) noexcept override
         {
             free_aligned(allocated.data, allocated.size, align);
 
@@ -129,8 +126,8 @@ namespace jot
             return Allocation_State::OK;
         } 
 
-        nodisc virtual
-        Allocation_State resize(Slice<u8>* output, Slice<u8>, isize new_size, isize align) noexcept override
+        NODISCARD virtual
+        Allocation_State resize(Slice<uint8_t>* output, Slice<uint8_t>, isize new_size, isize align) noexcept override
         {
             assert(new_size >= 0 && is_power_of_two(align));
             output->data = nullptr;
@@ -139,31 +136,31 @@ namespace jot
             return Allocation_State::UNSUPPORTED_ACTION;
         } 
 
-        nodisc virtual
+        virtual
         isize bytes_allocated() const noexcept override 
         {
             return total_alloced;
         }
 
-        nodisc virtual
+        virtual
         isize bytes_used() const noexcept override 
         {
             return SIZE_NOT_TRACKED;
         }
 
-        nodisc virtual
+        virtual
         isize max_bytes_allocated() const noexcept override 
         {
             return max_alloced;
         }
 
-        nodisc virtual
+        virtual
         isize max_bytes_used() const noexcept override 
         {
             return SIZE_NOT_TRACKED;
         }
 
-        nodisc virtual
+        virtual
         const char* name() const noexcept override
         {
             return "Default_Allocator";
@@ -182,24 +179,22 @@ namespace jot
             thread_local inline static Allocator* SCRATCH_ALLOCATOR = &NEW_DELETE_ALLOCATOR;
         }
 
-        nodisc inline Allocator* default_allocator() noexcept 
+        inline Allocator* default_allocator() noexcept 
         {
             return hidden::DEFAULT_ALLOCATOR;
         }
 
-        nodisc inline Allocator* scratch_allocator() noexcept 
+        inline Allocator* scratch_allocator() noexcept 
         {
             return hidden::SCRATCH_ALLOCATOR;
         }
         
-        nodisc constexpr 
-        Allocator** default_allocator_ptr() noexcept 
+        inline Allocator** default_allocator_ptr() noexcept 
         {
             return &hidden::DEFAULT_ALLOCATOR;
         }
 
-        nodisc constexpr 
-        Allocator** scratch_allocator_ptr() noexcept 
+        inline Allocator** scratch_allocator_ptr() noexcept 
         {
             return &hidden::SCRATCH_ALLOCATOR;
         }
@@ -230,88 +225,83 @@ namespace jot
 
 
     template <typename T>
-    static constexpr isize DEF_ALIGNMENT = cast(isize) (alignof(T) > 8 ? alignof(T) : 8);
+    static constexpr isize DEF_ALIGNMENT = (isize) (alignof(T) > 8 ? alignof(T) : 8);
     
     namespace memory_constants
     {
         static constexpr int64_t PAGE = 4096;
-        static constexpr int64_t KIBI_BYTE = cast(int64_t) 1 << 10;
-        static constexpr int64_t MEBI_BYTE = cast(int64_t) 1 << 20;
-        static constexpr int64_t GIBI_BYTE = cast(int64_t) 1 << 30;
-        static constexpr int64_t TEBI_BYTE = cast(int64_t) 1 << 40;
+        static constexpr int64_t KIBI_BYTE = (int64_t) 1 << 10;
+        static constexpr int64_t MEBI_BYTE = (int64_t) 1 << 20;
+        static constexpr int64_t GIBI_BYTE = (int64_t) 1 << 30;
+        static constexpr int64_t TEBI_BYTE = (int64_t) 1 << 40;
     }
 }
 
 namespace jot
 {
     
-    template<typename T> nodisc constexpr
-    bool is_in_slice(T* ptr, Slice<T> slice)
+    template<typename T> constexpr
+    inline bool is_in_slice(T* ptr, Slice<T> slice)
     {
         return ptr >= slice.data && ptr <= slice.data + slice.size;
     }
 
-    nodisc inline 
-    bool is_power_of_two(isize num) 
+    inline bool is_power_of_two(isize num) 
     {
-        usize n = cast(usize) num;
+        usize n = (usize) num;
         return (n>0 && ((n & (n-1)) == 0));
     }
    
-    nodisc inline
-    isize ptrdiff(void* ptr1, void* ptr2)
+    inline isize ptrdiff(void* ptr1, void* ptr2)
     {
-        return cast(isize) ptr1 - cast(isize) ptr2;
+        return (isize) ptr1 - (isize) ptr2;
     }
 
-    nodisc inline
-    uint8_t* align_forward(uint8_t* ptr, isize align_to)
+    inline uint8_t* align_forward(uint8_t* ptr, isize align_to)
     {
         assert(is_power_of_two(align_to));
 
         //this is a little criptic but according to the iternet should be the fastest way of doing this
         // my benchmarks support this. 
         //(its about 50% faster than using div_round_up would be - even if we supply log2 alignment and bitshifts)
-        usize mask = cast(usize) (align_to - 1);
-        isize ptr_num = cast(isize) ptr;
+        usize mask = (usize) (align_to - 1);
+        isize ptr_num = (isize) ptr;
         ptr_num += (-ptr_num) & mask;
 
-        return cast(uint8_t*) ptr_num;
+        return (uint8_t*) ptr_num;
     }
 
-    nodisc inline
-    uint8_t* align_backward(uint8_t* ptr, isize align_to)
+    inline uint8_t* align_backward(uint8_t* ptr, isize align_to)
     {
         assert(is_power_of_two(align_to));
 
-        usize ualign = cast(usize) align_to;
+        usize ualign = (usize) align_to;
         usize mask = ~(ualign - 1);
-        usize ptr_num = cast(usize) ptr;
+        usize ptr_num = (usize) ptr;
         ptr_num = ptr_num & mask;
 
-        return cast(uint8_t*) ptr_num;
+        return (uint8_t*) ptr_num;
     }
     
-    nodisc inline
-    Slice<u8> align_forward(Slice<u8> space, isize align_to)
+    inline Slice<uint8_t> align_forward(Slice<uint8_t> space, isize align_to)
     {
-        u8* aligned = align_forward(space.data, align_to);
+        uint8_t* aligned = align_forward(space.data, align_to);
         isize offset = ptrdiff(aligned, space.data);
         if(offset < 0)
             offset = 0;
 
         return tail(space, offset);
     }
-    
-    void* malloc_aligned(size_t byte_size, size_t align)
+
+    inline void* malloc_aligned(size_t byte_size, size_t align)
     {
         assert(byte_size >= 0 && is_power_of_two(align));
         //For the vast majority of cases the default align will suffice
-        if(align <= cast(size_t) JOT_DEFAULT_MALLOC_ALIGN)
+        if(align <= (size_t) JOT_DEFAULT_MALLOC_ALIGN)
             return JOT_MALLOC(byte_size, align);
 
         //Else we allocate extra size for alignemnt and uint32_t marker
-        u8* original_ptr = (u8*) JOT_MALLOC(byte_size + align + sizeof(uint32_t), align);
+        uint8_t* original_ptr = (uint8_t*) JOT_MALLOC(byte_size + align + sizeof(uint32_t), align);
         if(original_ptr == nullptr)
             return nullptr;
 
@@ -322,17 +312,14 @@ namespace jot
         return aligned_ptr;
     }
     
-    void free_aligned(void* aligned_ptr, size_t byte_size, size_t align)
+    inline void free_aligned(void* aligned_ptr, size_t byte_size, size_t align)
     {
-        cast(void) byte_size;
-        if(aligned_ptr == nullptr || align <= cast(size_t) JOT_DEFAULT_MALLOC_ALIGN)
+        (void) byte_size;
+        if(aligned_ptr == nullptr || align <= (size_t) JOT_DEFAULT_MALLOC_ALIGN)
             return JOT_FREE(aligned_ptr, byte_size, align);
 
         uint32_t offset = *((uint32_t*) aligned_ptr - 1);
-        u8* original_ptr = (u8*) aligned_ptr - offset;
+        uint8_t* original_ptr = (uint8_t*) aligned_ptr - offset;
         JOT_FREE((void*) original_ptr, byte_size, align);
     }
 }
-
-#undef nodisc
-#undef cast

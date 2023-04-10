@@ -3,8 +3,9 @@
 #include <cstring>
 #include "slice.h"
 
-#define cast(...) (__VA_ARGS__)
-#define nodisc [[nodiscard]]
+#ifndef NODISCARD
+    #define NODISCARD [[nodiscard]]
+#endif
 
 namespace jot
 {
@@ -37,12 +38,12 @@ namespace jot
         DEF = BYTE_TRANSFER, //Most types fit this 
     };
     
-    constexpr Type_Optims operator | (Type_Optims a, Type_Optims b) { return cast(Type_Optims) (a | b); }
-    constexpr Type_Optims operator & (Type_Optims a, Type_Optims b) { return cast(Type_Optims) (a & b); }
+    constexpr Type_Optims operator | (Type_Optims a, Type_Optims b) { return (Type_Optims) (a | b); }
+    constexpr Type_Optims operator & (Type_Optims a, Type_Optims b) { return (Type_Optims) (a & b); }
 
     constexpr bool is_flag_set(Type_Optims optims, Type_Optims flag)
     {
-        return (cast(uint32_t) optims & cast(uint32_t) flag) > 0;
+        return ((uint32_t) optims & (uint32_t) flag) > 0;
     }
 
     template<typename T>
@@ -51,24 +52,24 @@ namespace jot
     template<typename T>
     constexpr static Type_Optims DEF_TYPE_OPTIMS<Slice<T>> = Type_Optims::POD;
 
-    template<typename T> nodisc constexpr 
+    template<typename T> constexpr 
     bool is_aliasing(Slice<T> left, Slice<T> right)
     { 
-        uintptr_t left_pos = cast(uintptr_t) left.data;
-        uintptr_t right_pos = cast(uintptr_t) right.data;
+        uintptr_t left_pos = (uintptr_t) left.data;
+        uintptr_t right_pos = (uintptr_t) right.data;
         if(right_pos < left_pos)
         {
             uintptr_t diff = left_pos - right_pos;
-            return diff < cast(uintptr_t) right.size;
+            return diff < (uintptr_t) right.size;
         }
         else
         {
             uintptr_t diff = right_pos - left_pos;
-            return diff < cast(uintptr_t) left.size;
+            return diff < (uintptr_t) left.size;
         }
     }
 
-    template<typename T> nodisc constexpr 
+    template<typename T> constexpr 
     bool is_front_aliasing(Slice<T> before, Slice<T> after)
     { 
         return (before.data + before.size > after.data) && (after.data > before.data);
@@ -90,11 +91,11 @@ namespace jot
             return;
         }
 
-        fill(to, cast(T) 0);
+        fill(to, (T) 0);
     }
 
     //@TODO: rename to format is + something
-    template<typename T> nodisc constexpr 
+    template<typename T> constexpr 
     bool are_equal(Slice<T> a, Slice<T> b, Type_Optims optims = DEF_TYPE_OPTIMS<T>) noexcept
     {
         if(a.size != b.size)
@@ -139,7 +140,7 @@ namespace jot
     template<typename T> constexpr 
     void copy_items(Slice<T> to, Slice<T> from, Type_Optims optims = DEF_TYPE_OPTIMS<T>)
     {
-        return copy_items<T>(to, cast(Slice<const T>) from, optims);
+        return copy_items<T>(to, (Slice<const T>) from, optims);
     }
     
     template<typename T> constexpr 
@@ -155,12 +156,12 @@ namespace jot
         if(to.data < from.data)
         {
             for(isize i = 0; i < from.size; i++)
-                to.data[i] = cast(T&&) from.data[i];
+                to.data[i] = (T&&) from.data[i];
         }
         else
         {
             for(isize i = from.size; i-- > 0;)
-                to.data[i] = cast(T&&) from.data[i];
+                to.data[i] = (T&&) from.data[i];
         }
     }
 
@@ -186,7 +187,7 @@ namespace jot
         {
             assert(to.size >= from.size && "size must be big enough");
             for(isize i = 0; i < from.size; i++)
-                new(to.data + i) T(cast(T&&) from.data[i]);
+                new(to.data + i) T((T&&) from.data[i]);
         }
     }
     template<typename T> constexpr 
@@ -216,12 +217,10 @@ namespace jot
             assert(to.size >= from.size && "size must be big enough");
             for(isize i = 0; i < from.size; i++)
             {
-                new(to.data + i) T(cast(T&&) from.data[i]);
+                new(to.data + i) T((T&&) from.data[i]);
                 from.data[i].~T();
             }
         }
     }
 }
 
-#undef nodisc
-#undef cast
