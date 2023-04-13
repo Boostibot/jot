@@ -2,65 +2,32 @@
 
 #include <stddef.h>
 #include <stdint.h>
-
-//Set this to use c++ new delete instead of c malloc
-#ifdef JOT_USE_NEW_DELETE
-
-    #include <new>
-
-    #define JOT_MALLOC(size, align) operator new((size_t) size, std::align_val_t{(size_t) align}, std::nothrow_t{})
-    #define JOT_FREE(ptr, size, align) operator delete(ptr, std::align_val_t{(size_t) align}, std::nothrow_t{})
-    #define JOT_DEFAULT_MALLOC_ALIGN -1
-    #define JOT_USE_CUSTOM_ALLOCATOR
-
-#endif
-
-//We give option to use external default allocators 
-//(such as the c++ aligned new delete)
-#ifndef JOT_USE_CUSTOM_ALLOCATOR
-
-    #include <stdlib.h>
-    //even though we only use some arguments we give option to 
-    // use all so that proper align sensitive routines can be
-    // provided
-    #define JOT_MALLOC(size, align) malloc(size)
-    #define JOT_FREE(ptr, size, align) free(ptr)
-
-    //Sets the default alignment of the function given to JOT_MALLOC
-    //if your function implements alignment set this to -1 and no
-    //alignment overhead will ever happen
-    #define JOT_DEFAULT_MALLOC_ALIGN 8
-
-#endif
+#include <stdlib.h>
+#include <assert.h>
 
 #ifndef NODISCARD
     #define NODISCARD [[nodiscard]]
 #endif
 
-#include "slice.h"
+#ifndef _MSC_VER
+    #define __FUNCTION__ __func__
+#endif
+
+using isize = ptrdiff_t;
+using usize = size_t;
 
 namespace jot
 {
-    //@TODO: remove!
-    inline Slice<uint8_t> align_forward(Slice<uint8_t> space, isize align_to)
-    {
-        uint8_t* aligned = align_forward(space.data, align_to);
-        isize offset = ptrdiff(aligned, space.data);
-        if(offset < 0)
-            offset = 0;
-
-        return tail(space, offset);
-    }
-
-
-    struct Line_Info
-    {
-        const char* file = "";
-        const char* func = "";
-        int line = -1;
-    };
+    #ifndef GET_LINE_INFO
+        struct Line_Info
+        {
+            const char* file = "";
+            const char* func = "";
+            ptrdiff_t line = -1;
+        };
     
-    #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
+        #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
+    #endif
 
     struct Allocator
     {
@@ -99,12 +66,12 @@ namespace jot
         ~Allocator() noexcept {}
     };
 
-    inline bool is_power_of_two(isize num);
-    inline ptrdiff_t ptrdiff(void* ptr1, void* ptr2);
-    inline uint8_t* align_forward(uint8_t* ptr, isize align_to);
-    inline uint8_t* align_backward(uint8_t* ptr, isize align_to);
-    inline void* malloc_aligned(size_t byte_size, size_t align);
-    inline void free_aligned(void* aligned_ptr, size_t byte_size, size_t align);
+    inline bool  is_power_of_two(isize num);
+    inline isize ptrdiff(void* ptr1, void* ptr2);
+    inline void* align_forward(void* ptr, isize align_to);
+    inline void* align_backward(void* ptr, isize align_to);
+    static void* aligned_malloc(isize byte_size, isize align) noexcept;
+    static void  aligned_free(void* aligned_ptr, isize byte_size, isize align) noexcept;
     
     //These three functions let us easily write custom 'set_capacity' or 'realloc' functions without losing on generality or safety. (see ALLOC_RESIZE_EXAMPLE)
     //They primarily serve to simplify writing reallocation rutines for SOA structs where we want all of the arrays to have the same capacity.
@@ -121,10 +88,10 @@ namespace jot
         isize max_alloced = 0;
         
         NODISCARD virtual
-        void* allocate(isize size, isize align, Line_Info) noexcept
+        void* allocate(isize size, isize align, Line_Info) noexcept override
         {
             assert(size >= 0 && is_power_of_two(align));
-            void* out = malloc_aligned(size, align);
+            void* out = aligned_malloc(size, align);
             if(out == nullptr)
                 return out;
 
@@ -136,18 +103,19 @@ namespace jot
         } 
         
         virtual 
-        bool deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept
+        bool deallocate(void* allocated, isize old_size, isize align, Line_Info) noexcept override
         {
             assert(old_size > 0 && is_power_of_two(align));
-            free_aligned(allocated, old_size, align);
+            aligned_free(allocated, old_size, align);
             total_alloced -= old_size;
             return true;
         }
 
         NODISCARD virtual
-        bool resize(void* allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept
+        bool resize(void* allocated, isize new_size, isize old_size, isize align, Line_Info) noexcept override
         {
             assert(old_size > 0 && new_size >= 0 && is_power_of_two(align));
+            (void) allocated;
             return false;
         }
 
@@ -182,7 +150,7 @@ namespace jot
 
         inline Allocator** scratch_allocator_ptr() noexcept 
         {
-            thread_local inline static Allocator* scratch = malloc_allocator();
+            thread_local static Allocator* scratch = malloc_allocator();
             return &scratch;
         }
 
@@ -247,7 +215,7 @@ namespace jot
         return (isize) ptr1 - (isize) ptr2;
     }
 
-    inline uint8_t* align_forward(uint8_t* ptr, isize align_to)
+    inline void* align_forward(void* ptr, isize align_to)
     {
         assert(is_power_of_two(align_to));
 
@@ -258,10 +226,10 @@ namespace jot
         isize ptr_num = (isize) ptr;
         ptr_num += (-ptr_num) & mask;
 
-        return (uint8_t*) ptr_num;
+        return (void*) ptr_num;
     }
 
-    inline uint8_t* align_backward(uint8_t* ptr, isize align_to)
+    inline void* align_backward(void* ptr, isize align_to)
     {
         assert(is_power_of_two(align_to));
 
@@ -270,18 +238,18 @@ namespace jot
         usize ptr_num = (usize) ptr;
         ptr_num = ptr_num & mask;
 
-        return (uint8_t*) ptr_num;
+        return (void*) ptr_num;
     }
 
-    inline void* malloc_aligned(size_t byte_size, size_t align)
+    static void* aligned_malloc(isize byte_size, isize align) noexcept
     {
         assert(byte_size >= 0 && is_power_of_two(align));
         //For the vast majority of cases the default align will suffice
-        if(align <= (size_t) JOT_DEFAULT_MALLOC_ALIGN)
-            return JOT_MALLOC(byte_size, align);
+        if(align <= sizeof(size_t))
+            return malloc(byte_size);
 
         //Else we allocate extra size for alignemnt and uint32_t marker
-        uint8_t* original_ptr = (uint8_t*) JOT_MALLOC(byte_size + align + sizeof(uint32_t), align);
+        uint8_t* original_ptr = (uint8_t*) malloc(byte_size + align + sizeof(uint32_t));
         if(original_ptr == nullptr)
             return nullptr;
 
@@ -292,15 +260,15 @@ namespace jot
         return aligned_ptr;
     }
     
-    inline void free_aligned(void* aligned_ptr, size_t byte_size, size_t align)
+    static void aligned_free(void* aligned_ptr, isize byte_size, isize align) noexcept
     {
         (void) byte_size;
-        if(aligned_ptr == nullptr || align <= (size_t) JOT_DEFAULT_MALLOC_ALIGN)
-            return JOT_FREE(aligned_ptr, byte_size, align);
+        if(aligned_ptr == nullptr || align <= sizeof(size_t))
+            return free(aligned_ptr);
 
         uint32_t offset = *((uint32_t*) aligned_ptr - 1);
         uint8_t* original_ptr = (uint8_t*) aligned_ptr - offset;
-        JOT_FREE((void*) original_ptr, byte_size, align);
+        free(original_ptr);
     }
     
     static bool resize_allocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept
@@ -314,7 +282,7 @@ namespace jot
             return true;
         }
 
-        if(old_allocated != nullptr)
+        if(old_allocated != nullptr && old_size != 0)
         {
             if(alloc->resize(old_allocated, new_size, old_size, align, callee))
             {
@@ -355,9 +323,8 @@ namespace jot
         //else deallocate newly allocated
         return alloc->deallocate(*new_allocated, new_size, align, callee);
     }
-
     
-    #ifndef ALLOC_RESIZE_EXAMPLE
+    #ifdef ALLOC_RESIZE_EXAMPLE
     static void destroy_extra(Slice<uint8_t> slice, isize from_size);
     
     static bool set_capacity(Allocator* alloc, isize new_size)

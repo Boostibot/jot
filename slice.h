@@ -140,7 +140,7 @@ namespace jot
     }
     
     template<typename T> 
-    void are_bytes_equal(Slice<T> a, Slice<T> b) noexcept
+    bool are_bytes_equal(Slice<T> a, Slice<T> b) noexcept
     {
         if(a.size != b.size)
             return false;

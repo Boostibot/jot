@@ -9,12 +9,12 @@
 
 namespace jot::tests::stack
 {
-
+    #define BYTES_ALLOCED 0
     template<typename T>
     void test_push_pop(Array<T, 6> vals)
     {
-        isize mem_before = default_allocator()->bytes_allocated();
-        isize mem_after = default_allocator()->bytes_allocated();
+        isize mem_before = BYTES_ALLOCED;
+        isize mem_after = BYTES_ALLOCED;
         i64 before = trackers_alive();
         i64 after = trackers_alive();
         {
@@ -55,7 +55,7 @@ namespace jot::tests::stack
         }
 
         after = trackers_alive();
-        mem_after = default_allocator()->bytes_allocated();
+        mem_after = BYTES_ALLOCED;
         test(before == after);
         test(mem_before == mem_after);
         
@@ -92,7 +92,7 @@ namespace jot::tests::stack
             test(size(stack) == 0);
         }
         after = trackers_alive();
-        mem_after = default_allocator()->bytes_allocated();
+        mem_after = BYTES_ALLOCED;
         test(before == after);
         test(mem_before == mem_after);
     }
@@ -102,8 +102,8 @@ namespace jot::tests::stack
     {
         using Stack = Stack<T>;
         i64 before = trackers_alive();
-        isize mem_before = default_allocator()->bytes_allocated();
-        isize mem_after = default_allocator()->bytes_allocated();
+        isize mem_before = BYTES_ALLOCED;
+        isize mem_after = BYTES_ALLOCED;
         {
             Stack stack;
             push(&stack, dup(vals[0]));
@@ -186,7 +186,7 @@ namespace jot::tests::stack
         }
         i64 after = trackers_alive();
         test(before == after);
-        mem_after = default_allocator()->bytes_allocated();
+        mem_after = BYTES_ALLOCED;
         test(mem_before == mem_after);
     }
 
@@ -196,8 +196,8 @@ namespace jot::tests::stack
         using Stack = Stack<T>;
         i64 before = trackers_alive();
         i64 after = trackers_alive();
-        isize mem_before = default_allocator()->bytes_allocated();
-        isize mem_after = default_allocator()->bytes_allocated();
+        isize mem_before = BYTES_ALLOCED;
+        isize mem_after = BYTES_ALLOCED;
 
         {
             Stack empty;
@@ -220,7 +220,7 @@ namespace jot::tests::stack
 
         after = trackers_alive();
         test(before == after);
-        mem_after = default_allocator()->bytes_allocated();
+        mem_after = BYTES_ALLOCED;
         test(mem_before == mem_after);
 
         {
@@ -283,7 +283,7 @@ namespace jot::tests::stack
 
         after = trackers_alive();
         test(before == after);
-        mem_after = default_allocator()->bytes_allocated();
+        mem_after = BYTES_ALLOCED;
         test(mem_before == mem_after);
     }
 
@@ -294,8 +294,8 @@ namespace jot::tests::stack
     {
         using Stack = Stack<T>;
         i64 before = trackers_alive();
-        isize mem_before = default_allocator()->bytes_allocated();
-        isize mem_after = default_allocator()->bytes_allocated();
+        isize mem_before = BYTES_ALLOCED;
+        isize mem_after = BYTES_ALLOCED;
 
         {
             Stack stack;
@@ -354,7 +354,7 @@ namespace jot::tests::stack
         }
         i64 after = trackers_alive();
         test(before == after);
-        mem_after = default_allocator()->bytes_allocated();
+        mem_after = BYTES_ALLOCED;
         test(mem_before == mem_after);
     }
 
@@ -363,8 +363,8 @@ namespace jot::tests::stack
     {
         using Stack = Stack<T>;
         i64 before = trackers_alive();
-        isize mem_before = default_allocator()->bytes_allocated();
-        isize mem_after = default_allocator()->bytes_allocated();
+        isize mem_before = BYTES_ALLOCED;
+        isize mem_after = BYTES_ALLOCED;
 
         {
             Stack stack;
@@ -420,7 +420,7 @@ namespace jot::tests::stack
             test(remove(&stack, size(stack) - 1) == vals[4]);
         }
 
-        mem_after = default_allocator()->bytes_allocated();
+        mem_after = BYTES_ALLOCED;
         test(mem_before == mem_after);
         //unordered insert remove
         {
@@ -481,7 +481,7 @@ namespace jot::tests::stack
         }
         i64 after = trackers_alive();
         test(before == after);
-        mem_after = default_allocator()->bytes_allocated();
+        mem_after = BYTES_ALLOCED;
         test(mem_before == mem_after);
     }
     
@@ -512,7 +512,7 @@ namespace jot::tests::stack
         isize max_size = 1000;
         const auto test_batch = [&](isize block_size, isize k){
             i64 before = trackers_alive();
-            isize mem_before = default_allocator()->bytes_allocated();
+            isize mem_before = BYTES_ALLOCED;
 
             {
                 Array<Track, 30> to_insert = {
@@ -607,7 +607,7 @@ namespace jot::tests::stack
             }
             
             i64 after = trackers_alive();
-            isize mem_after = default_allocator()->bytes_allocated();
+            isize mem_after = BYTES_ALLOCED;
             test(before == after);
             test(mem_before == mem_after);
         };

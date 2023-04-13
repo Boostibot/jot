@@ -46,7 +46,7 @@ namespace jot::tests
 
         bool operator==(Test_String const& other) const
         {
-            return are_equal(slice(content), slice(other.content));
+            return are_bytes_equal(slice(content), slice(other.content));
         }
     };
 

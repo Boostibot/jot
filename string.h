@@ -53,9 +53,12 @@ namespace jot
     struct String_Builder_Panic : Panic
     {
         String_Builder message;
-
+        
+        //"<This is an uninit panic message member! "
+        //"This is probably because you are catching Panic by value and displaying its what() message. "
+        //"Catch Panic const& instead and try again>"
         String_Builder_Panic(Line_Info line_info, String_Builder message) 
-            : Panic(line_info), message(move(&message)) {}
+            : Panic(line_info, "String_Builder_Panic"), message(move(&message)) {}
 
         virtual const char* what() const noexcept 
         {
