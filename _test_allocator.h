@@ -283,7 +283,7 @@ namespace jot::tests::allocator
                 allocs[i] = result.items;
                 Slice<u8> added = slice(result.items, old_size);
                 if(touch)
-                    null_items(&added);
+                    memset(added.data, 0, added.size);
             }
 
             for(isize i = 1; i < block_size; i += 2)

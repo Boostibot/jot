@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory.h"
+#include <ctime>
 
 #ifndef NODISCARD
     #define NODISCARD [[nodiscard]]
@@ -8,25 +9,42 @@
 
 namespace jot
 {   
-    using hash_t = uint64_t;
-
     template<typename Key> using Equal_Fn = bool   (*)(Key const&, Key const&);
-    template<typename Key> using Hash_Fn  = hash_t (*)(Key const&);
-
-    template <typename T>
-    bool default_key_equals(T const& a, T const& b)
-    {
-        return a == b;
-    }
+    template<typename Key> using Hash_Fn  = uint64_t (*)(Key const&, uint64_t seed);
 
     template<bool cond, typename A, typename B>
     struct Conditional_Struct { using type = A; };
     
     template<typename A, typename B>
     struct Conditional_Struct<false, A, B> { using type = B; };
-
+    
     template<bool cond, typename A, typename B>
     using Conditional = typename Conditional_Struct<cond, A, B>::type;
+
+    namespace hash_table_globals
+    {
+        uint64_t* seed_ptr()
+        {
+            static uint64_t hash = (uint64_t) clock();
+            return &hash;
+        }
+        
+        uint64_t seed() 
+        {
+            return *seed_ptr(); 
+        }
+
+        void set_seed(uint64_t seed) 
+        {
+            *seed_ptr() = seed; 
+        }
+    }
+
+    template <typename T>
+    bool default_key_equals(T const& a, T const& b)
+    {
+        return a == b;
+    }
 
     //Cache efficient packed hash table. Stores the jump table, keys and values all in seperate arrays for maximum cache utilization.
     // This also allows us to expose the values array directly to the user which removes the need for custom iterators. 
@@ -46,31 +64,32 @@ namespace jot
         //we assume that if the entry size is equal or greater than 8 (which is usually the case) 
         // we wont ever hold more than 4 million entries (would be more than 32GB of data)
         // this reduces the necessary size for linker by 50%
-        using Link = Conditional<(sizeof(Key) + sizeof(Value) > 4), u32, u64>;
+        using Link = Conditional<(sizeof(Key) + sizeof(Value) > 4), uint64_t, uint32_t>;
         
         Allocator* _allocator = memory_globals::default_allocator();
         Key* _keys = nullptr;
         Value* _values = nullptr;
         Slice<Link> _linker = {nullptr, 0};
         
-        isize _entries_size = 0;
-        isize _entries_capacity = 0;
+        Link _entries_size = 0;
+        Link _entries_capacity = 0;
 
         //the count of gravestones in linker array + the count of unreferenced entries
         // when too large triggers rehash to same size (cleaning)
-        isize _gravestone_count = 0; 
-
-        //@NOTE: we *could* use Stack to hold keys and Stack to hold values since 
-        // we effectively use one. That would howeever cost us extra 3*8 redundant bytes 
-        // which would mean this structure would no longer fit into 64B cache line and thus 
-        // requiring more than one memory read. This could very negatively impact performance.
+        Link _gravestone_count = 0; 
         
+        //The count of hash colisions currently in the table. Does properly hold for multihash as well.
+        Link _hash_collisions = 0;
+
+        uint64_t _seed = hash_table_globals::seed();
+
         //@NOTE: we can implement multi hash table or properly support deletion if we added extra array
         //   called _group containg for each entry a next and prev entry index (as u32). That way we 
         //   could upon deletion go to back or prev and change the _linker index to point to either of them
 
         Hash_Table() noexcept = default;
-        Hash_Table(Allocator* alloc) noexcept : _allocator(alloc) {}
+        Hash_Table(Allocator* alloc, uint64_t seed = hash_table_globals::seed()) noexcept 
+            : _allocator(alloc), _seed(seed) {}
         Hash_Table(Hash_Table&& other) noexcept;
         Hash_Table(Hash_Table const& other) = delete;
         ~Hash_Table() noexcept;
@@ -88,24 +107,24 @@ namespace jot
     struct Hash_Table_Growth
     {
         //at what occupation of the jump table is rehash triggered
-        i32 rehash_at_fullness_num = 1;
-        i32 rehash_at_fullness_den = 4;
+        int32_t rehash_at_fullness_num = 1;
+        int32_t rehash_at_fullness_den = 4;
 
         //at what occupation of the jump table with gravestones
         // is rehash to same size triggered 
         // (if normal rehash happens first all gravestones are cleared)
-        i32 rehash_at_gravestone_fullness_num = 1;
-        i32 rehash_at_gravestone_fullness_den = 4;
+        int32_t rehash_at_gravestone_fullness_num = 1;
+        int32_t rehash_at_gravestone_fullness_den = 4;
 
         //the ratio entries size grows when full according to formula:
         // new_size = old_size * entries_growth + entries_growth_linear
-        i32 entries_growth_num = 3;
-        i32 entries_growth_den = 2;
-        i32 entries_growth_linear = 8;
+        int32_t entries_growth_num = 3;
+        int32_t entries_growth_den = 2;
+        int32_t entries_growth_linear = 8;
 
         //The size of the first allocation of jump table
         //Needs to be exact power of two
-        i32 jump_table_base_size = 32;
+        int32_t jump_table_base_size = 32;
     };
 
     constexpr static isize HASH_TABLE_ENTRIES_ALIGN = 8;
@@ -201,8 +220,8 @@ namespace jot
         isize new_capacity = calculate_stack_growth(table->_entries_capacity, to_fit, 
             growth.entries_growth_num, growth.entries_growth_den, growth.entries_growth_linear);
 
-        Slice<u8> new_keys;
-        Slice<u8> new_values;
+        Slice<uint8_t> new_keys;
+        Slice<uint8_t> new_values;
 
         Allocator* alloc = table->_allocator;
         Allocation_State key_state = alloc->allocate(&new_keys, new_capacity * sizeof(Key), HASH_TABLE_ENTRIES_ALIGN);
@@ -216,8 +235,8 @@ namespace jot
             return key_state;
         }
             
-        Slice<u8> old_keys = cast_slice<u8>(Slice<Key>{table->_keys, table->_entries_capacity});
-        Slice<u8> old_values = cast_slice<u8>(Slice<Value>{table->_values, table->_entries_capacity});
+        Slice<uint8_t> old_keys = cast_slice<uint8_t>(Slice<Key>{table->_keys, table->_entries_capacity});
+        Slice<uint8_t> old_values = cast_slice<uint8_t>(Slice<Value>{table->_values, table->_entries_capacity});
 
         //@NOTE: We assume transferable ie. that the object helds in each slice
         // do not depend on their own adress => can be freely moved around in memory
@@ -257,7 +276,7 @@ namespace jot
             to_size = max(to_size, required_min_size);
 
             Slice<Link> old_linker = table->_linker;
-            Slice<u8> result_items;
+            Slice<uint8_t> result_items;
             
             //if to_size == 0 we only deallocate
             if(to_size != 0)
@@ -346,14 +365,14 @@ namespace jot
                 new_linker[i] = (Link) EMPTY_LINK;
 
             //rehash every entry up to alive_count
-            hash_t mask = (hash_t) new_linker.size - 1;
+            uint64_t mask = (uint64_t) new_linker.size - 1;
 
             assert(alive_count <= new_linker.size && "there must be enough size to fit all entries");
             for(isize entry_index = 0; entry_index < alive_count; entry_index++)
             {
                 Key const& stored_key = table->_keys[entry_index];
-                hash_t hash = hash(stored_key);
-                hash_t slot = hash & mask;
+                uint64_t hashed = hash(stored_key, table->_seed);
+                uint64_t slot = hashed & mask;
 
                 //if linker slot is taken iterate until we find an empty slot
                 for(isize passed = 0;; slot = (slot + 1) & mask, passed ++)
@@ -382,7 +401,7 @@ namespace jot
             table->_gravestone_count = 0;
             table->_entries_size = alive_count;
             table->_linker = new_linker;
-            table->_allocator->deallocate(cast_slice<u8>(old_linker), HASH_TABLE_LINKER_ALIGN);
+            table->_allocator->deallocate(cast_slice<uint8_t>(old_linker), HASH_TABLE_LINKER_ALIGN);
             
             assert(is_invariant(*table));
 
@@ -485,7 +504,7 @@ namespace jot
     }
 
     template <class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-    Hash_Found find(Hash_Table_T const& table, Hash_Key const& key, hash_t hashed, bool break_on_gravestone = false) noexcept
+    Hash_Found find(Hash_Table_T const& table, Hash_Key const& key, uint64_t hashed, bool break_on_gravestone = false) noexcept
     {
         using Link = Hash_Link;
 
@@ -498,12 +517,12 @@ namespace jot
         if(table._linker.size == 0)
             return found;
 
-        hash_t mask = (hash_t) table._linker.size - 1;
+        uint64_t mask = (uint64_t) table._linker.size - 1;
 
         Slice<const Link> links = table._linker;
         Slice<const Key> keys = jot::keys(table);
 
-        hash_t i = hashed & mask;
+        uint64_t i = hashed & mask;
         for(isize passed = 0;; i = (i + 1) & mask, passed ++)
         {
             Link link = links[(isize) i];
@@ -532,7 +551,7 @@ namespace jot
     }
    
     template <class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-    Hash_Found find_found_entry(Hash_Table_T const& table, isize entry_i, hash_t hashed, bool break_on_gravestone = false) noexcept
+    Hash_Found find_found_entry(Hash_Table_T const& table, isize entry_i, uint64_t hashed, bool break_on_gravestone = false) noexcept
     {
         using Link = Hash_Link;
         assert(is_invariant(table));
@@ -545,11 +564,11 @@ namespace jot
         if(table._linker.size == 0)
             return found;
 
-        hash_t mask = (hash_t) table._linker.size - 1;
+        uint64_t mask = (uint64_t) table._linker.size - 1;
 
         Slice<const Link> links = table._linker;
 
-        hash_t i = hashed & mask;
+        uint64_t i = hashed & mask;
         for(isize passed = 0;; i = (i + 1) & mask, passed ++)
         {
             Link link = links[(isize) i];
@@ -574,7 +593,7 @@ namespace jot
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
     Hash_Found find(Hash_Table_T const& table, Hash_Key const& key, bool break_on_gravestone = false) noexcept
     {
-        hash_t hash = hash(key);
+        uint64_t hash = hash(key, table->_seed);
         return find(table, key, hash);
     }
     
@@ -623,7 +642,7 @@ namespace jot
         if(removed_i != last)
         {
 
-            hash_t last_hash = hash(keys[last);
+            uint64_t last_hash = hash(keys[last], table->_seed);
             Hash_Found changed_for = find_found_entry(*table, last, last_hash);
 
             //in the case the table contains 'mark_removed' entries
@@ -689,7 +708,7 @@ namespace jot
 
         if(this->_linker.data != nullptr)
         {
-            Slice<u8> bytes = cast_slice<u8>(this->_linker);
+            Slice<uint8_t> bytes = cast_slice<uint8_t>(this->_linker);
             this->_allocator->deallocate(bytes, HASH_TABLE_LINKER_ALIGN);
         }
     }
@@ -768,7 +787,7 @@ namespace jot
             assert(prev.hash_index != -1 && "must be found!");
             assert(prev.entry_index != -1 && "must be found!");
 
-            return find(table, prev_key, (hash_t) prev.hash_index + 1, break_on_gravestone);
+            return find(table, prev_key, (uint64_t) prev.hash_index + 1, break_on_gravestone);
         }
 
         template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
@@ -776,6 +795,7 @@ namespace jot
         {
             grow_if_overfull(table, growth);
             
+            //@TODO: make a specific function for this type of find.
             Hash_Found found = find(*table, key, true);
             while(found.entry_index != -1)
                 found = find_next(*table, key, found, true);

@@ -6,14 +6,6 @@
 
 namespace jot
 {
-    struct Line_Info
-    {
-        const char* file = "";
-        const char* func = "";
-        int line = -1;
-    };
-    
-    #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
 
     struct Panic
     {

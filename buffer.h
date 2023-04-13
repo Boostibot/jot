@@ -72,11 +72,11 @@ namespace jot
     template<class T> auto slice(Stack<T>* stack) noexcept -> Slice<T>               {return {stack->_data, stack->_size};}
 
     ///Get first and last items of a stack. Cannot be used on empty stack!
-    template<class T> auto last(Stack<T>* stack) noexcept -> T*;
-    template<class T> auto last(Stack<T> const& stack) noexcept -> T const&;
-    template<class T> auto first(Stack<T>* stack) noexcept -> T*;
-    template<class T> auto first(Stack<T> const& stack) noexcept -> T const&;
-    
+    template<class T> auto last(Stack<T>* stack) noexcept -> T*                      { assert(stack->_size > 0); return &stack->_data[stack->_size - 1]; }
+    template<class T> auto last(Stack<T> const& stack) noexcept -> T const&          { assert(stack._size > 0);  return stack._data[stack._size - 1]; }
+    template<class T> auto first(Stack<T>* stack) noexcept -> T*                     { assert(stack->_size > 0); return &stack->_data[0]; }
+    template<class T> auto first(Stack<T> const& stack) noexcept -> T const&         { assert(stack._size > 0);  return stack._data[0];}
+
     ///Returns true i
     template<class T> auto is_invariant(Stack<T> const& stack) noexcept -> bool;
     template<class T> auto is_empty(Stack<T> const& stack) noexcept -> bool;
@@ -176,15 +176,6 @@ namespace jot
             else
                 stack->_data = nullptr;
         }   
-        
-        template<typename T> constexpr 
-        void destruct_items(T* data, isize from, isize to) noexcept
-        {
-            bool byte_destruct = JOT_IS_TRIVIALLY_DESTRUCTIBLE(T);
-            if(byte_destruct == false)
-                for(isize i = from; i < to; i++)
-                    data[i].~T();
-        }
     }
 
     template<typename T>
@@ -199,7 +190,6 @@ namespace jot
     {
         if(_capacity != 0)
         {
-            stack_internal::destruct_items(_data, 0, _size);
             Slice<T> old_slice = {_data, _capacity + (isize) is_string_char<T>};
             _allocator->deallocate(cast_slice<uint8_t>(old_slice), DEF_ALIGNMENT<T>);
         }
@@ -231,34 +221,6 @@ namespace jot
     {
         copy(this, slice(other));
         return *this;
-    }
-
-    template<class T>
-    T* last(Stack<T>* stack) noexcept
-    {
-        assert(stack->_size > 0);
-        return &stack->_data[stack->_size - 1];
-    }
-
-    template<class T>
-    T const& last(Stack<T> const& stack) noexcept
-    {
-        assert(stack._size > 0);
-        return stack._data[stack._size - 1];
-    }
-
-    template<class T>
-    T* first(Stack<T>* stack) noexcept
-    {
-        assert(stack->_size > 0);
-        return &stack->_data[0];
-    }
-
-    template<class T>
-    T const& first(Stack<T> const& stack) noexcept
-    {
-        assert(stack._size > 0);
-        return stack._data[0];
     }
 
     template<class T>
@@ -355,34 +317,14 @@ namespace jot
         Slice<uint8_t> old_data = cast_slice<uint8_t>(old_slice);
         old_data.size += info.padding_bytes;
         if(info.new_capacity <= 0)
-        {
-            stack_internal::destruct_items(old_slice.data, 0, old_size);
             return info.allocator->deallocate(old_data, info.align);
-        }
 
         //if resized in place just destroy extra items (happens while shrinking)
         if(new_slice->data == old_slice.data)
-        {
-            stack_internal::destruct_items(tail(old_slice, *new_size));
             return Allocation_State::OK;
-        }
-        else
-        {
-            bool byte_trasnfer = JOT_IS_REALLOCATABLE(T);
-            if(byte_trasnfer)
-                memmove(to.data, from.data, from.size * sizeof(T));
-            else
-            {
-                for(isize i = 0; i < *new_size; i++)
-                {
-                    new(new_slice->data + i) T((T&&) old_slice.data[i]);
-                    old_slice.data[i].~T();
-                }
-            }
 
-            stack_internal::destruct_items(old_slice.data, *new_size, old_size);
-            return info.allocator->deallocate(old_data, info.align);
-        }
+        memmove(new_slice.data, old_slice.data, old_slice.size * sizeof(T));
+        return info.allocator->deallocate(old_data, info.align);
     }
 
     template<class T>
@@ -459,27 +401,7 @@ namespace jot
     {
         assert(is_invariant(*to));
         reserve(to, from.size);
-        
-        Slice<T> capacity_slice = {to->_data, to->_capacity};
-        //if is byte copyable just copy the contents all in one go
-        bool by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
-        if(by_byte)
-            memmove(capacity_slice.data, from.data, from.size * sizeof(T))
-        //else copy then copy construct the rest
-        else
-        {
-            isize copy_to = to->_size;
-            if(copy_to > from.size)
-                copy_to = from.size;
-
-            for(isize i = 0; i < copy_to; i++)
-                capacity_slice[i] = from[i];
-
-            for(isize i = copy_to; i < from->size; i++)
-                new(&capacity_slice[i]) T(from[i]);
-        }
-
-        stack_internal::destruct_items(to->_data, from.size, to->_size);
+        memmove(to->_data, from.data, from.size * sizeof(T))
 
         to->_size = from.size;
         if(to->_capacity == 0)
@@ -528,10 +450,7 @@ namespace jot
         assert(is_invariant(*stack));
 
         grow(stack, stack->_size + 1);
-        
-        T* ptr = stack->_data + stack->_size;
-        new(ptr) T((T&&) what);
-        stack->_size++;
+        stack->_data[stack->_size] = what;
         
         stack_internal::null_terminate(stack);
         assert(is_invariant(*stack));
@@ -544,9 +463,7 @@ namespace jot
         assert(stack->_size != 0);
 
         stack->_size--;
-
-        T ret = (T&&) (stack->_data[stack->_size]);
-        stack->_data[stack->_size].~T();
+        T ret = stack->_data[stack->_size];
         
         stack_internal::null_terminate(stack);
         assert(is_invariant(*stack));
@@ -557,34 +474,7 @@ namespace jot
     void push_multiple(Stack<T>* stack, Slice<const typename Stack<T>::T> inserted)
     {
         grow(stack, stack->_size + inserted.size);
-        
-        bool is_by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
-        if(is_by_byte)
-            memmove(stack->_data, inserted.data, inserted.size * sizeof(T));
-        else
-        {
-            for(isize i = 0; i < inserted.size; i++)
-                new(stack->_data + i) T(inserted.data[i]);
-        }
-
-        stack->_size += inserted.size;
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
-    }
-    
-    template <class T>
-    void push_multiple_move(Stack<T>* stack, Slice<typename Stack<T>::T> inserted)
-    {
-        grow(stack, stack->_size + inserted.size);
-        
-        bool is_by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
-        if(is_by_byte)
-            memmove(stack->_data, from.data, from.size * sizeof(T));
-        else
-        {
-            for(isize i = 0; i < from.size; i++)
-                new(stack->_data + i) T((T&&) from.data[i]);
-        }
+        memmove(stack->_data, inserted.data, inserted.size * sizeof(T));
 
         stack->_size += inserted.size;
         stack_internal::null_terminate(stack);
@@ -595,8 +485,6 @@ namespace jot
     void pop_multiple(Stack<T>* stack, isize count) noexcept
     {
         assert(count <= size(*stack));
-        stack_internal::destruct_items(stack->_data, stack->_size - count, stack->_size);
-
         stack->_size -= count;
         stack_internal::null_terminate(stack);
         assert(is_invariant(*stack));
@@ -619,8 +507,6 @@ namespace jot
         for (isize i = stack->_size; i < to; i++)
             new(stack->_data + i) T(fill_with);
 
-        stack_internal::destruct_items(stack->_data, to, stack->_size);
-        
         stack->_size = to;
         stack_internal::null_terminate(stack);
         assert(is_invariant(*stack));
@@ -629,16 +515,10 @@ namespace jot
     template<class T> 
     void resize_for_overwrite(Stack<T>* stack, isize to)
     {
-        bool is_by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
-        if(is_by_byte)
-            return resize(stack, to);
-        else
-        {
-            stack->_size = to;
-            stack_internal::null_terminate(stack);
-            assert(is_invariant(*stack));
-            reserve(stack, to);
-        }
+        stack->_size = to;
+        stack_internal::null_terminate(stack);
+        assert(is_invariant(*stack));
+        reserve(stack, to);
     }
 
     template<class T> 
@@ -649,12 +529,7 @@ namespace jot
             return push(stack, (T&&) what);
             
         grow(stack, stack->_size + 1);
-
-        new(last(stack) + 1) T((T&&) *last(stack));
-
-        Slice<T> move_from = slice_range(slice(stack), at, stack->_size - 1);
-        Slice<T> move_to = slice_range(slice(stack), at + 1, stack->_size);
-        move_items(move_to, move_from);
+        memmove(stack->_data + at + 1, stack->_data + at, stack->_size - at - 1);
 
         stack->_data[at] = (T&&) what;
         stack->_size += 1;
@@ -669,13 +544,8 @@ namespace jot
         assert(stack->_size > 0);
         
         T removed = (T&&) stack->_data[at];
+        memmove(stack->_data + at, stack->_data + at + 1, stack->_size - at - 1);
         
-        Slice<T> move_from = slice_range(slice(stack), at + 1, stack->_size);
-        Slice<T> move_to = slice_range(slice(stack), at, stack->_size - 1);
-        move_items(move_to, move_from);
-
-        T* last_ = last(stack);
-        last_->~T();
         stack->_size -= 1;
         stack_internal::null_terminate(stack);
         assert(is_invariant(*stack));
@@ -685,18 +555,13 @@ namespace jot
     template<class T> 
     T unordered_remove(Stack<T>* stack, isize at) noexcept
     {
-        assert(0 <= at && at < stack->_size);
-        assert(stack->_size > 0);
-
-        swap(&stack->_data[at], last(stack));
+        swap((*stack)[at], last(stack));
         return pop(stack);
     }
 
     template<class T>
     void unordered_insert(Stack<T>* stack, isize at, typename Stack<T>::T what)
     {
-        assert(0 <= at && at <= stack->_size);
-
         push(stack, (T&&) what);
         swap(&stack->_data[at], last(stack));
     }
