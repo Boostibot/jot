@@ -210,7 +210,7 @@ namespace jot
     {
         //we by default use memmove since its safer and means less worry later on
         assert(to.size >= from.size && "size must be big enough");
-        bool by_byte = __is_trivially_assignable(T, T);
+        bool by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
         if(by_byte)
         {
             memmove(to.data, from.data, from.size * sizeof(T));
@@ -233,7 +233,7 @@ namespace jot
     void move_items(Slice<T> to, Slice<T> from) noexcept
     {
         assert(to.size >= from.size && "size must be big enough");
-        bool by_byte = __is_trivially_assignable(T, T);
+        bool by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
         if(by_byte)
         {
             memmove(to.data, from.data, from.size * sizeof(T));
@@ -260,12 +260,6 @@ namespace jot
 
     //this is technically unrelated to slice but since slice is a 
     // centerpoint of this entire library it makes sense to put it here
-    
-    #define MIN(a, b)                   ((a) < (b) ? (a) : (b))
-    #define MAX(a, b)                   ((a) > (b) ? (a) : (b))
-    #define CLAMP(val, lo, hi)          MAX(lo, MIN(val, hi))
-    #define DIV_ROUND_UP(val, div_by)   (((val) + (div_by) - 1) / (div_by))
-
     constexpr isize max(isize a, isize b)
     {
         return a > b ? a : b;
