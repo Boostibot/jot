@@ -7,10 +7,11 @@
 #include <unordered_map>
 
 #include "_test.h"
-#include "hash_table.h"
+#include "string_hash.h"
 #include "bucket_array.h"
 #include "format.h"
 #include "time.h"
+#include "benchmark.h"
 #include "defines.h"
 
 namespace jot
@@ -18,7 +19,7 @@ namespace jot
     template <> struct Formattable<Bench_Result>
     {
         nodisc static
-        void format(String_Appender* appender, Bench_Result result) noexcept
+        void format(String_Builder* appender, Bench_Result result) noexcept
         {
             format_into(appender, "{ ", result.mean_ms, "ms [", result.deviation_ms, "] (", result.iters, ") }");
         }
@@ -28,9 +29,9 @@ namespace jot
 namespace jot::tests::bucket_array
 {
     template <typename T>
-    void test_insert_remove(Array<T, 10> const& values)
+    void test_insert_remove(Static_Array<T, 10> const& values)
     {
-        isize mem_before = default_allocator()->bytes_allocated();
+        isize mem_before = default_allocator()->get_stats().bytes_allocated;
         isize alive_before = trackers_alive();
         {
             Bucket_Array<T> arr(2);
@@ -108,7 +109,7 @@ namespace jot::tests::bucket_array
             test(v4 == values[4]);
             test(v5 == values[5]);
         }
-        isize mem_after = default_allocator()->bytes_allocated();
+        isize mem_after = default_allocator()->get_stats().bytes_allocated;
         isize alive_after = trackers_alive();
 
         test(alive_after == alive_before);
@@ -132,11 +133,11 @@ namespace jot::tests::bucket_array
 
         std::mt19937 gen;
         const auto test_batch = [&](isize block_size, isize j){
-            i64 before = trackers_alive();
-            isize mem_before = default_allocator()->bytes_allocated();
+            i64 trackers_before = trackers_alive();
+            isize memory_before = default_allocator()->get_stats().bytes_allocated;
 
             {
-                Hash_Table<isize, Bucket_Index> truth;
+                Hash_Table<isize, Bucket_Index, int_hash<isize>> truth;
                 Bucket_Array<isize> bucket_array;
 
                 reserve(&truth, block_size);
@@ -198,10 +199,10 @@ namespace jot::tests::bucket_array
                 if(print) println("  i: {}\t batch: {}\t final_size: {}", j, block_size, size(bucket_array));
             }
 
-            i64 after = trackers_alive();
-            isize mem_after = default_allocator()->bytes_allocated();
-            test(before == after);
-            test(mem_after == mem_before);
+            i64 trackers_after = trackers_alive();
+            isize memory_after = default_allocator()->get_stats().bytes_allocated;
+            test(trackers_before == trackers_after);
+            test(memory_before == memory_after);
         };
         
         Seed seed = rd();
@@ -223,9 +224,9 @@ namespace jot::tests::bucket_array
     {
         bool print = !(flags & Test_Flags::SILENT);
 
-        Array<i32, 10>          arr1 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-        Array<Test_String, 10>  arr2 = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
-        Array<Tracker<i32>, 10> arr3 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+        Static_Array<i32, 10>          arr1 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+        Static_Array<Test_String, 10>  arr2 = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
+        Static_Array<Tracker<i32>, 10> arr3 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
         
         if(print) println("\test_bucket_array()");
         if(print) println("  type: i32");
@@ -255,24 +256,26 @@ namespace jot::benchmarks
         
             bool test_std = false;
 
-            Bench_Result res_add_stack = benchmark(GIVEN_TIME, [&]{
-                Stack<u64> stack;
+            Bench_Result res_add_array = benchmark(GIVEN_TIME, [&]{
+                Array<u64> array;
                 for(u64 i = 0; i < batch_size; i++)
                 {
-                    push(&stack, i);
-                    do_no_optimize(stack);
+                    push(&array, i);
+                    do_no_optimize(array);
                     read_write_barrier();
                 }
+                return true;
             });
             
             Bench_Result res_add_hash_table = benchmark(GIVEN_TIME, [&]{
-                Hash_Table<u32, u64> hash_table;
+                Hash_Table<u32, u64, int_hash<u32>> hash_table;
                 for(u64 i = 0; i < batch_size; i++)
                 {
                     set(&hash_table, cast(u32) i, i);
                     do_no_optimize(hash_table);
                     read_write_barrier();
                 }
+                return true;
             });
             
             Bench_Result res_add_bucket_array = benchmark(GIVEN_TIME, [&]{
@@ -283,6 +286,7 @@ namespace jot::benchmarks
                     do_no_optimize(bucket_array);
                     read_write_barrier();
                 }
+                return true;
             });
 
             Bench_Result res_add_vector;
@@ -298,6 +302,7 @@ namespace jot::benchmarks
                         do_no_optimize(vec);
                         read_write_barrier();
                     }
+                    return true;
                 });
             
                 res_add_unordered_map = benchmark(GIVEN_TIME, [&]{
@@ -308,6 +313,7 @@ namespace jot::benchmarks
                         do_no_optimize(map);
                         read_write_barrier();
                     }
+                    return true;
                 });
             }
 
@@ -317,7 +323,7 @@ namespace jot::benchmarks
                 println("unordered_map:", res_add_unordered_map);
             }
 
-            println("stack:        ", res_add_stack);
+            println("stack:        ", res_add_array);
             println("hash_table:   ", res_add_hash_table);
             println("bucket_array: ", res_add_bucket_array);
         };

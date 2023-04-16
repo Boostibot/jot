@@ -17,7 +17,6 @@
 
 #include "unistd.h"
 
-#define cast(a) (a)
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
@@ -46,6 +45,7 @@ namespace jot
             ::close(descriptor);
         }
     };
+
 
     //Shared flags
     namespace Flags {
@@ -161,7 +161,7 @@ namespace jot
 
     inline bool has_access(const char* path, Access_Permission permission) noexcept
     {
-        return ::access(path, cast(int) permission) != -1;
+        return ::access(path, (int) permission) != -1;
     }
 
     inline File copy(File const& fd) noexcept
@@ -177,7 +177,7 @@ namespace jot
     //Truncates file specified by fd to specified size in bytes
     inline bool truncate(File* fd, long size) noexcept
     {
-        return ::ftruncate(fd->descriptor, cast(long) size) == 0;
+        return ::ftruncate(fd->descriptor, (long) size) == 0;
     }
 
     //deletes a name and possibly the file it refers to
@@ -229,13 +229,13 @@ namespace jot
         if(from == Seek_From::End)
             assert(offset <= 0 && "cannot seek past end");
         
-        off64_t cast_offset = cast(off64_t) offset;
-        return cast(isize) ::lseek64(fd->descriptor, cast_offset, cast(int) from);
+        off64_t cast_offset = (off64_t) offset;
+        return (isize) ::lseek64(fd->descriptor, cast_offset, (int) from);
     } 
 
     inline isize tell(File const& fd) noexcept
     {
-        return cast(isize) ::tell64(fd.descriptor);
+        return (isize) ::tell64(fd.descriptor);
     }
 
     inline bool make_dir(const char* dirname) noexcept
@@ -256,26 +256,17 @@ namespace jot
     struct File_IO_Result
     {
         isize processed_size = 0;
+        errno_t errno_code = 0; // (has the value of errno at the time of erro)
+        bool ok = false; //if an error was encountered (does NOT include EOF)
+        bool eof = false; //if end of file was reached
+        bool file_closed = false; //if file was not opened;
+        bool continue_io_loop = false; //a control variable used for reading
 
-        //if an error was encountered (does NOT include EOF)
-        bool ok = false;
-
-        //if end of file was reached
-        bool eof = false;
-
-        //if file was not opened;
-        bool file_closed = false;
-        
-        //a control variable used for reading:
-        bool continue_io_loop = false;
         // while(continue_io_loop)
         //   //read...
         //
         // if is set to false further reads wont be possible
-        // the following holds: continue_io_loop = ok && !eof;
-
-        // (has the value of errno at the time of erro)
-        errno_t errno_code = 0;
+        // the following always holds: continue_io_loop = ok && !eof;
     };
 
     //Reads any buffer size to buffer and returns state
@@ -302,8 +293,8 @@ namespace jot
             while(result.processed_size < buffer_size)
             {
                 isize remaining = buffer_size - result.processed_size;;
-                unsigned single_read = cast(unsigned) min(remaining, MAX_READ_WRITE_CHUNK);
-                void* read_to = cast(char*) buffer + result.processed_size;
+                unsigned single_read = (unsigned) min(remaining, MAX_READ_WRITE_CHUNK);
+                void* read_to = (char*) buffer + result.processed_size;
 
                 int res = ::read(fd->descriptor, read_to, single_read);
                 if(res == 0) 
@@ -379,8 +370,8 @@ namespace jot
             while(result.processed_size < buffer_size)
             {
                 isize remaining = buffer_size - result.processed_size;;
-                unsigned single_read = cast(unsigned) min(remaining, MAX_READ_WRITE_CHUNK);
-                void* read_to = cast(char*) buffer + result.processed_size;
+                unsigned single_read = (unsigned) min(remaining, MAX_READ_WRITE_CHUNK);
+                void* read_to = (char*) buffer + result.processed_size;
 
                 int res = ::write(fd->descriptor, read_to, single_read);
                 if(res < 0)
@@ -455,6 +446,6 @@ namespace jot
     #endif // !SET_UTF8_LOCALE
 }
 
-#undef cast
+#undef 
 #undef min
 #undef max

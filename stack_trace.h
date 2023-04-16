@@ -22,7 +22,7 @@ namespace jot
     struct Stack_Tracer
     {
         //captures the stack trace at the place of the call site
-        virtual Stack<Stack_Trace_Entry> capture_stack_trace(isize skip_levels = 0, isize max_levels = -1) = 0; 
+        virtual Array<Stack_Trace_Entry> capture_stack_trace(isize skip_levels = 0, isize max_levels = -1) = 0; 
 
         //Calls protected_fn with the given protected_context. 
         //If protected_fn completes and no exception occurs returns true. 
@@ -35,7 +35,7 @@ namespace jot
         //@NOTE: to call this function use the free function version below that also accepts lambdas
         virtual bool protected_call(
             void (*protected_fn)(void* p_context), void* protected_context, 
-            void (*fallback_fn)(void* f_context, Stack<Stack_Trace_Entry> trace), void* fallback_context
+            void (*fallback_fn)(void* f_context, Array<Stack_Trace_Entry> trace), void* fallback_context
         ) = 0;
 
         virtual ~Stack_Tracer() noexcept {}
@@ -43,7 +43,7 @@ namespace jot
     
     //Marks all traces from the specified file as architectural. This is useful for files such as this one which should
     // be transparent as far as stack trace is concerned
-    static void mark_traces_from_file_as_archutectural(Stack<Stack_Trace_Entry>* traces, String file)
+    static void mark_traces_from_file_as_archutectural(Array<Stack_Trace_Entry>* traces, String file)
     {
         //Mark all traces from this file as architectural
         for(Stack_Trace_Entry& trace : *traces)
@@ -68,7 +68,7 @@ namespace jot
                 fn();
             }
             
-            static void fallback_adaptor(void* args, Stack<Stack_Trace_Entry> trace)
+            static void fallback_adaptor(void* args, Array<Stack_Trace_Entry> trace)
             {
                 mark_traces_from_file_as_archutectural(&trace, "stack_trace.h");
                 Fallback_Fn& fn = *(Fallback_Fn*) args;

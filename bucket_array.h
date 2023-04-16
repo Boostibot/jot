@@ -2,7 +2,7 @@
 
 #include "memory.h"
 #include "intrusive_index_list.h"
-#include "stack.h" //remove this dependency
+#include "array.h" //remove this dependency
 #include "intrin.h"
 
 namespace jot
@@ -80,7 +80,7 @@ namespace jot
 
         Bucket_Index out = {};
         out.bucket_i = index >> log2_bucket_size;
-        out.slot_i = index & mask;
+        out.slot_i = (isize) (index & mask);
 
         return out;
     }
@@ -92,14 +92,14 @@ namespace jot
         assert(0 <= index.slot_i && (index.slot_i >> log2_bucket_size) == 0 && "must be within range!");
         assert(0 < log2_bucket_size && log2_bucket_size < 64);
 
-        usize out = (index.bucket_i << log2_bucket_size) + index.slot_i;
+        isize out = (index.bucket_i << log2_bucket_size) + index.slot_i;
         return out;
     }
 
     namespace bucket_array_internal
     {
         using Mask = uint64_t;
-        static constexpr isize MASK_BITS = sizeof(Mask) * 8;
+        static constexpr isize MASK_BITS = (isize) sizeof(Mask) * 8;
 
         struct Bucket
         {
@@ -114,7 +114,7 @@ namespace jot
 
         struct Untyped_Bucket_Array
         {
-            Stack<Bucket> _buckets = {}; //4
+            Array<Bucket> _buckets = {}; //4
             Index_Chain _open_buckets = {}; //1
             isize _total_used = 0;      //1
             isize _total_capacity = 0;  //1
@@ -218,12 +218,12 @@ namespace jot
 
         //Allocates contiguously space for total_block_size elements and adds total_block_size / bucket_size blocks to the block stack.
         static
-        Allocation_State add_bucket_block(Untyped_Bucket_Array* bucket_array, isize total_block_size, isize slot_size, isize slots_align) noexcept
+        bool add_bucket_block(Untyped_Bucket_Array* bucket_array, isize total_block_size, isize slot_size, isize slots_align) noexcept
         {
             assert(total_block_size > 0 && slot_size > 0 && slots_align > 0);
 
             Allocator* alloc = bucket_array->_buckets._allocator;
-            Stack<Bucket>* buckets = &bucket_array->_buckets;
+            Array<Bucket>* buckets = &bucket_array->_buckets;
 
             isize bucket_size = (isize) 1 << bucket_array->_log2_bucket_size;
             isize bucket_count = div_round_up(total_block_size, bucket_size);
@@ -232,30 +232,26 @@ namespace jot
             isize new_block_size = bucket_count * bucket_size;
 
             isize data_size = new_block_size * slot_size;
-            isize masks_size = single_mask_size * bucket_count * sizeof(Mask);
+            isize masks_size = single_mask_size * bucket_count * (isize) sizeof(Mask);
             
-            Allocation_State bucket_reserve = reserve_failing(buckets, bucket_count + size(buckets));
-            if(bucket_reserve != Allocation_State::OK)
-                return bucket_reserve;
+            if(reserve_failing(buckets, bucket_count + size(buckets)) == false)
+                return false;
 
-            Slice<uint8_t> data_items;
-            Slice<uint8_t> mask_items;
+            void* new_data = alloc->allocate(data_size, slots_align, GET_LINE_INFO());
+            if(new_data == nullptr)
+                return false;
 
-            Allocation_State data_state = alloc->allocate(&data_items, data_size, slots_align);
-            if(data_state != Allocation_State::OK)
-                return data_state;
-
-            Allocation_State mask_state = alloc->allocate(&mask_items, masks_size, USED_SLOTS_ALIGN);
-            if(mask_state != Allocation_State::OK)
+            void* new_mask = alloc->allocate(masks_size, USED_SLOTS_ALIGN, GET_LINE_INFO());
+            if(new_mask == nullptr)
             {
-                alloc->deallocate(data_items, slots_align);
-                return mask_state;
+                alloc->deallocate(new_data, data_size, slots_align, GET_LINE_INFO());
+                return false;
             }
             
-            null_items(mask_items);
+            memset(new_data, 0, data_size);
 
-            uint8_t* curr_data = data_items.data;
-            Mask* curr_mask = (Mask*) mask_items.data;
+            uint8_t* curr_data = (uint8_t*) new_data;
+            Mask* curr_mask = (Mask*) new_mask;
             for(isize i = 0; i < bucket_count; i++)
             {
                 Bucket bucket;
@@ -273,7 +269,7 @@ namespace jot
             bucket_array->_max_bucket_size = max(bucket_array->_max_bucket_size, (uint32_t) total_block_size);
             bucket_array->_total_capacity += new_block_size;
 
-            return Allocation_State::OK;
+            return true;
         }
         
         struct Bucket_Array_Growth
@@ -301,8 +297,14 @@ namespace jot
                 + last_size * growth.mult_increment_num / growth.mult_increment_den;
 
             assert(new_size > 0 && "resulting size must be nonzero!");
-            Allocation_State alloc_state = add_bucket_block(bucket_array, new_size, slot_size, slots_align);
-            force(alloc_state == Allocation_State::OK && "bucket array allocation failed!");
+            if(add_bucket_block(bucket_array, new_size, slot_size, slots_align) == false)
+            {
+                PANIC(panic_cformat, "bucket array allocation failed! "
+                    "attempted size: %t slot size: %t slot align: %t "
+                    "bucket array: {used: %t, capacity %t, buckets %t, log2_size: %t}", 
+                    new_size, slot_size, slots_align,
+                    bucket_array->_total_used, bucket_array->_total_capacity, size(bucket_array->_buckets), bucket_array->_log2_bucket_size);
+            }
             
             //insert all allocated buckets to the free list
             Slice<Bucket> buckets = slice(&bucket_array->_buckets);
@@ -312,11 +314,6 @@ namespace jot
             return (uint32_t) size_before;
         }
         
-        //@TODO: fix crashes of map on stress test when shrinking rehash (add rehash test to other tests 
-        // then add rehash to size to test options
-        //@TODO: speed up compilation and type erasure of everything
-        //@TODO: more elaborated benchmark of iteration
-        //@TODO: make separate stack header that contains the bare minimum
         static 
         Bucket_Index prepare_for_insert(Untyped_Bucket_Array* bucket_array, Bucket_Array_Growth const& growth, isize slot_size, isize slots_align)
         {
@@ -527,11 +524,8 @@ namespace jot
 
             if(i == buckets.size - 1 || buckets[i+1].has_allocation)
             {
-                Slice<uint8_t> data = {accumulated_data_ptr, accumulated_data_byte_size};
-                Slice<uint8_t> mask = {accumulated_mask_ptr, accumulated_mask_byte_size};
-                    
-                alloc->deallocate(data, alignof(T));
-                alloc->deallocate(mask, USED_SLOTS_ALIGN);
+                alloc->deallocate(accumulated_data_ptr, accumulated_data_byte_size, alignof(T), GET_LINE_INFO());
+                alloc->deallocate(accumulated_mask_ptr, accumulated_mask_byte_size, USED_SLOTS_ALIGN, GET_LINE_INFO());
 
                 accumulated_data_byte_size = 0;
                 accumulated_mask_byte_size = 0;
@@ -653,12 +647,12 @@ namespace jot
     }
     
     template <typename T> NODISCARD
-    Allocation_State reserve_failing(Bucket_Array<T>* bucket_array, isize to_size) noexcept
+    bool reserve_failing(Bucket_Array<T>* bucket_array, isize to_size) noexcept
     {
         if(to_size <= bucket_array->_total_capacity)
-            return Allocation_State::OK;
+            return true;
 
-        return bucket_array_internal::add_bucket_block(bucket_array, to_size, sizeof(T), alignof(T));
+        return bucket_array_internal::add_bucket_block(bucket_array, to_size, (isize) sizeof(T), alignof(T));
     }
     
     template <typename T>
@@ -667,14 +661,16 @@ namespace jot
         if(to_size <= bucket_array->_total_capacity)
             return;
 
-        Allocation_State s = bucket_array_internal::add_bucket_block(bucket_array, to_size, sizeof(T), alignof(T));
-        force(s == Allocation_State::OK && "Bucket_Array allocation failed!");
+        if(bucket_array_internal::add_bucket_block(bucket_array, to_size, (isize) sizeof(T), alignof(T)))
+        {
+            PANIC(Panic, "Bucket_Array allocation failed!")
+        }
     }
 
     template <typename T>
     Bucket_Index insert_bucket_index(Bucket_Array<T>* bucket_array, T val, Bucket_Array_Growth growth = {})
     {
-        Bucket_Index loc = bucket_array_internal::prepare_for_insert(bucket_array, growth, sizeof(T), alignof(T));
+        Bucket_Index loc = bucket_array_internal::prepare_for_insert(bucket_array, growth, (isize) sizeof(T), alignof(T));
         T* address = get(bucket_array, loc);
 
         new (address) T(move(&val));

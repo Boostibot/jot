@@ -4,48 +4,42 @@
 
 #include "_test.h"
 #include "hash_table.h"
+#include "string_hash.h"
 #include "string.h"
 #include "format.h"
-#include "defines.h"
 
 namespace jot
 {
-    template <typename T> nodisc
-    hash_t tracker_hash(tests::Tracker<T> const& tracker) noexcept
+    template <typename T>
+    uint64_t tracker_hash(tests::Tracker<T> const& tracker, uint64_t seed) noexcept
     {
-        return default_key_hash(tracker.val);
-    }
-    
-    template <typename A, typename B> nodisc
-    tests::Tracker<A> tracker_key_cast(tests::Tracker<B> const& tracker)
-    {
-        return tests::Tracker<A>{cast(A) tracker.val};
+        return int_hash<T>(tracker.val, seed);
     }
 }
 
 namespace jot::tests::hash_table
 {
     template <typename Table> 
-    bool value_matches_at(Table const& table, typename Table::Stored_Key const& key, typename Table::Value const& value)
+    bool value_matches_at(Table const& table, typename Table::Key const& key, typename Table::Value const& value)
     {
         using Val = typename Table::Value;
-        isize found = find_entry(table, move(&key));
+        isize found = find(table, key).entry_index;
         if(found == -1)
             return false;
 
         auto const& manual = values(table)[found];
         auto const& obtained = get(table, key, value);
         
-        bool do_manual_match = Table::key_equal(manual, obtained);
-        bool do_expected_match = Table::key_equal(manual, value);
+        bool do_manual_match = manual == obtained;
+        bool do_expected_match = manual == value;
         test(do_manual_match);
         return do_expected_match;
     }
 
     template <typename Table> 
-    bool empty_at(Table const& table, typename Table::Stored_Key const& key)
+    bool empty_at(Table const& table, typename Table::Key const& key)
     {
-        bool manual = find_entry(table, key) == -1;
+        bool manual = find(table, key).entry_index == -1;
         bool obtained = has(table, key) == false;
 
         test(manual == obtained);
@@ -97,7 +91,7 @@ namespace jot::tests::hash_table
     }
         
     template <typename Table> 
-    void test_table_add_find_any(Array<typename Table::Stored_Key, 10> keys, Array<typename Table::Value, 10> values)
+    void test_table_add_find_any(Static_Array<typename Table::Key, 10> keys, Static_Array<typename Table::Value, 10> values)
     {
         isize alive_before = trackers_alive();
         {
@@ -226,9 +220,9 @@ namespace jot::tests::hash_table
             if(i != 0)
                 format_into(&builder, ", ");
 
-            if(linker[i] == cast(Link) hash_table_internal::EMPTY_LINK)
+            if(linker[i] == (Link) hash_table_internal::EMPTY_LINK)
                 format_into(&builder, '-');
-            else if(linker[i] == cast(Link) hash_table_internal::GRAVESTONE_LINK)
+            else if(linker[i] == (Link) hash_table_internal::GRAVESTONE_LINK)
             {
                 gravestone_count ++;
                 format_into(&builder, 'R');
@@ -236,7 +230,7 @@ namespace jot::tests::hash_table
             else
             {
                 alive_count ++;
-                format_into(&builder, cast(i64) linker[i]);
+                format_into(&builder, (i64) linker[i]);
             }
         }
         format_into(&builder, "] #A: {} #R: {}", alive_count, gravestone_count);
@@ -341,13 +335,13 @@ namespace jot::tests::hash_table
     }
 
     template <typename Key>     
-    static uint64_t test_int_hash(Key const& key) 
+    static uint64_t test_int_hash(Key const& key, uint64_t) 
     {
-        return cast(hash_t) key;
+        return (uint64_t) key;
     }
-    static uint64_t test_tracker_hash(Tracker<i32> const& key) 
+    static uint64_t test_tracker_hash(Tracker<i32> const& key, uint64_t) 
     {
-        return cast(hash_t) key.val;
+        return (uint64_t) key.val;
     }   
     
     static
@@ -403,16 +397,13 @@ namespace jot::tests::hash_table
     template<bool do_cast>
     void test_stress()
     {
-        using Stored_Key = std::conditional_t<do_cast, Tracker<i64>, Tracker<i32>>;
-        using Val = Stored_Key;
+        using Val = Tracker<i32>;
         using Key = Tracker<i32>;
 
-        using Table = Hash_Table_Access<Stored_Key, Val, Key, test_tracker_hash>;
-        using Count_Table = Hash_Table_Access<Stored_Key, i32, Key, test_tracker_hash>;
+        using Table = Hash_Table<Key, Val, test_tracker_hash>;
+        using Count_Table = Hash_Table<Key, i32, test_tracker_hash>;
         using Seed = std::random_device::result_type;
 
-        static_assert(std::is_same_v<typename Table::Stored_Key, Stored_Key>, "!");
-        static_assert(std::is_same_v<typename Table::Key, Key>, "!");
         std::random_device rd;
         
         static constexpr isize OP_SET = 0;
@@ -436,23 +427,17 @@ namespace jot::tests::hash_table
             DO_MULTIADD = 4,
         };
         
-        const auto cast_key = [](Stored_Key const& key) -> Key {
-            return tracker_key_cast<Key, Stored_Key>(key);
-        };
-
-        const auto incr_count_table = [&](Count_Table* count_table, Stored_Key const& key){
-            Key access = cast_key(key);
-            i32 count = get(*count_table, access, 0);
+        const auto incr_count_table = [&](Count_Table* count_table, Key const& key){
+            i32 count = get(*count_table, key, 0);
             set(count_table, key, count + 1);
             
             return count + 1;
         };
 
-        const auto decr_count_table = [&](Count_Table* count_table, Stored_Key const& key){
-            Key access = cast_key(key);
-            i32 count = get(*count_table, access, 0);
+        const auto decr_count_table = [&](Count_Table* count_table, Key const& key){
+            i32 count = get(*count_table, key, 0);
             if(count <= 1)
-                remove(count_table, access);
+                remove(count_table, key);
             else
                 set(count_table, key, count - 1);
 
@@ -476,13 +461,13 @@ namespace jot::tests::hash_table
                     isize op = (isize) op_distribution(gen);
                     isize index = (isize) index_distribution(gen);
                     
-                    Slice<const Stored_Key> keys = jot::keys(table);
+                    Slice<const Key> keys = jot::keys(table);
                     
                     bool skipped = false;
                     switch(op)
                     {
                         case OP_SET: {
-                            Stored_Key key = Stored_Key{added_i};
+                            Key key = Key{added_i};
                             Val val = Val{added_i};
 
                             set(&table, key, val);
@@ -497,7 +482,7 @@ namespace jot::tests::hash_table
                                 skipped = true;
                             else
                             {
-                                Stored_Key key = Stored_Key{added_i - 1};
+                                Key key = Key{added_i - 1};
 
                                 incr_count_table(&count_table, key);
                                 multi::add_another(&table, key, key);
@@ -511,9 +496,8 @@ namespace jot::tests::hash_table
                             else
                             {
                                 //select a random key from the entries and remove it
-                                Stored_Key key = keys[index % keys.size];
-                                Key acess = cast_key(key);
-                                bool was_found = remove(&table, acess); 
+                                Key key = keys[index % keys.size];
+                                bool was_found = remove(&table, key); 
                                 if(was_found)
                                     decr_count_table(&count_table, key);
 
@@ -528,8 +512,8 @@ namespace jot::tests::hash_table
                             else
                             {
                                 //select a random key from the entries and remove it
-                                Stored_Key key = keys[index % keys.size];
-                                isize entry_i = mark_removed(&table, cast_key(key)); 
+                                Key key = keys[index % keys.size];
+                                isize entry_i = mark_removed(&table, key); 
                                 if(entry_i != -1)
                                     decr_count_table(&count_table, key);
                             }
@@ -563,19 +547,18 @@ namespace jot::tests::hash_table
                     //   deleted and thus cannot be found via the find function
                     if(do_mark_removed == false)
                     {
-                        Slice<const Stored_Key> count_table_keys = jot::keys(count_table);
+                        Slice<const Key> count_table_keys = jot::keys(count_table);
                         Slice<const Val> table_values = jot::values(table);
-                        Slice<const Stored_Key> table_keys = jot::keys(table);
+                        Slice<const Key> table_keys = jot::keys(table);
 
                         //all count_table keys keys need to be correct
                         for(isize k = 0; k < count_table_keys.size; k++)
                         {
-                            Stored_Key key = count_table_keys[k];
-                            Key acess = cast_key(key);
-                            i32 generation_size = get(count_table, acess, -1);
+                            Key key = count_table_keys[k];
+                            i32 generation_size = get(count_table, key, -1);
                             test(generation_size > 0 && "count must be present");
 
-                            Hash_Found found = find(table, acess);
+                            Hash_Found found = find(table, key);
                             i32 found_generation_size = 0;
                             
                             while(found.entry_index != -1)
@@ -583,7 +566,7 @@ namespace jot::tests::hash_table
                                 Val value = table_values[found.entry_index];
                                 test(value.val == key.val && "key values must form a pair");
 
-                                found = multi::find_next(table, acess, found);
+                                found = multi::find_next(table, key, found);
                                 found_generation_size ++;
                             }
 
@@ -592,9 +575,8 @@ namespace jot::tests::hash_table
 
                         for(isize k = 0; k < table_keys.size; k++)
                         {
-                            Stored_Key key = table_keys[k];
-                            Key acess = cast_key(key);
-                            bool is_found = has(table, acess);
+                            Key key = table_keys[k];
+                            bool is_found = has(table, key);
                             test(is_found && "all table keys need to be in count_table (otherwise the above test wouldnt be exhaustive)");
                         }
                     }
@@ -635,19 +617,18 @@ namespace jot::tests::hash_table
     void test_hash_table(u32 flags)
     {
         bool print = !(flags & Test_Flags::SILENT);
-        isize memory_before = memory_globals::default_allocator()->bytes_allocated();
-
+        isize memory_before = default_allocator()->get_stats().bytes_allocated;
         {
             if(print) println("\ntest_hash_table()");
 
             using Trc = Tracker<i32>;
-            test_table_add_find<Hash_Table<hash_t, i32, test_int_hash<hash_t>>>();
-            test_table_add_find<Hash_Table<u32, u32>>();
-            test_table_add_find<Hash_Table<u32, Trc>>();
+            test_table_add_find<Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>>();
+            test_table_add_find<Hash_Table<u32, u32, int_hash<u32>>>();
+            test_table_add_find<Hash_Table<u32, Trc, int_hash<u32>>>();
             test_table_add_find<Hash_Table<Trc, u32, test_tracker_hash>>();
             test_table_add_find<Hash_Table<Trc, Trc, test_tracker_hash>>();
             
-            if(print) println("  test_table_add_find() type: Hash_Table<hash_t, i32, test_int_hash<hash_t>>");
+            if(print) println("  test_table_add_find() type: Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>");
             if(print) println("  test_table_add_find() type: Hash_Table<u32, u32>");
             if(print) println("  test_table_add_find() type: Hash_Table<u32, Trc>");
             if(print) println("  test_table_add_find() type: Hash_Table<Trc, u32, test_tracker_hash>");
@@ -662,36 +643,35 @@ namespace jot::tests::hash_table
                 return builder;
             };
 
-            Array<String_Builder, 10> builders = {{own("1"), own("2"), own("3"), own("4"), own("5"), own("6"), own("7"), own("8"), own("9"), own("10")}};
-            Array<String, 10> strings = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
+            Static_Array<String_Builder, 10> builders = {{own("1"), own("2"), own("3"), own("4"), own("5"), own("6"), own("7"), own("8"), own("9"), own("10")}};
+            Static_Array<String, 10> strings = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
 
-            test_table_add_find_any<Hash_Table<String, String_Builder>>(strings, builders); 
-            test_table_add_find_any<Hash_Table<String_Builder, String>>(builders, strings); 
-            test_table_add_find_any<Hash_Table<String_Builder, String_Builder>>(builders, builders); 
+            test_table_add_find_any<String_Hash<String>>(builders, strings); 
             
             if(print) println("  test_table_add_find_any() type: Hash_Table<String, String_Builder>");
             if(print) println("  test_table_add_find_any() type: Hash_Table<String_Builder, String>");
             if(print) println("  test_table_add_find_any() type: Hash_Table<String_Builder, String_Builder>");
 
-            test_table_mark_remove<Hash_Table<hash_t, i32, test_int_hash<hash_t>>>();
-            test_table_mark_remove<Hash_Table<u32, u32>>();
-            test_table_mark_remove<Hash_Table<u32, Trc>>();
-            test_table_mark_remove<Hash_Table<Trc, u32, test_tracker_hash>>();
-            test_table_mark_remove<Hash_Table<Trc, Trc, test_tracker_hash>>();
+            test_table_mark_remove<Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>>();
+            test_table_mark_remove<Hash_Table<u8, u8, int_hash<u8>>>();
+            test_table_mark_remove<Hash_Table<u32, u32, int_hash<u32>>>();
+            test_table_mark_remove<Hash_Table<u32, Trc, int_hash<u32>>>();
+            test_table_mark_remove<Hash_Table<Trc, u32, tracker_hash<i32>>>();
+            test_table_mark_remove<Hash_Table<Trc, Trc, tracker_hash<i32>>>();
             
-            if(print) println("  test_table_mark_remove() type: Hash_Table<hash_t, i32, test_int_hash<hash_t>>");
+            if(print) println("  test_table_mark_remove() type: Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>");
             if(print) println("  test_table_mark_remove() type: Hash_Table<u32, u32>");
             if(print) println("  test_table_mark_remove() type: Hash_Table<u32, Trc>");
             if(print) println("  test_table_mark_remove() type: Hash_Table<Trc, u32, test_tracker_hash>");
             if(print) println("  test_table_mark_remove() type: Hash_Table<Trc, Trc, test_tracker_hash>");
 
-            test_table_remove<Hash_Table<hash_t, i32, test_int_hash<hash_t>>>();
-            test_table_remove<Hash_Table<u32, u32>>();
-            test_table_remove<Hash_Table<u32, Trc>>();
+            test_table_remove<Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>>();
+            test_table_remove<Hash_Table<u32, u32, int_hash<u32>>>();
+            test_table_remove<Hash_Table<u32, Trc, int_hash<u32>>>();
             test_table_remove<Hash_Table<Trc, u32, test_tracker_hash>>();
             test_table_remove<Hash_Table<Trc, Trc, test_tracker_hash>>();
             
-            if(print) println("  test_table_remove() type: Hash_Table<hash_t, i32, test_int_hash<hash_t>>");
+            if(print) println("  test_table_remove() type: Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>");
             if(print) println("  test_table_remove() type: Hash_Table<u32, u32>");
             if(print) println("  test_table_remove() type: Hash_Table<u32, Trc>");
             if(print) println("  test_table_remove() type: Hash_Table<Trc, u32, test_tracker_hash>");
@@ -703,11 +683,8 @@ namespace jot::tests::hash_table
                 test_stress<true>();
             }
         }
-
         
-        isize memory_after = memory_globals::default_allocator()->bytes_allocated();
+        isize memory_after = default_allocator()->get_stats().bytes_allocated;
         test(memory_before == memory_after);
     }
 }
-
-#include "undefs.h"

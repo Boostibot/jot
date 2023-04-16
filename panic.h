@@ -8,6 +8,9 @@
 namespace jot
 {
     #ifndef GET_LINE_INFO
+    #ifndef _MSC_VER
+        #define __FUNCTION__ __func__
+    #endif
 
     struct Line_Info
     {
@@ -27,7 +30,7 @@ namespace jot
         
         Panic(Line_Info line_info, const char* message, bool malloced = false);
         Panic(Panic const&) = delete;
-        Panic(Panic&& other);
+        Panic(Panic&& other) noexcept;
 
         virtual const char* what() const noexcept;
         virtual ~Panic() noexcept;
@@ -88,7 +91,7 @@ namespace jot
         _cstring_message(message), 
         _is_malloced(alloced) {}
 
-    Panic::Panic(Panic&& other) 
+    Panic::Panic(Panic&& other) noexcept
         : line_info(other.line_info), 
         _cstring_message(other._cstring_message), 
         _is_malloced(other._is_malloced)
@@ -110,21 +113,23 @@ namespace jot
     static char* malloc_vcformat(const char* cformat, va_list args)
     {
         //we try to save one call of vsnprintf so we uses some local buffer
-        const int BUFF_SIZE = 8;
+        const size_t BUFF_SIZE = 8;
         char local_buffer[BUFF_SIZE] = {0};
 
         va_list args_copy;
         va_copy(args_copy, args);
-        size_t count = vsnprintf(local_buffer, BUFF_SIZE, cformat, args);
-        
-        char* return_buffer = (char*) malloc(count+1);
+        int count = vsnprintf(local_buffer, BUFF_SIZE, cformat, args);
+        if(count < 0)
+            count = 1;
+
+        char* return_buffer = (char*) malloc((size_t) count+1);
         if(return_buffer == nullptr)
             return return_buffer;
 
         if(count < BUFF_SIZE)
-            memcpy(return_buffer, local_buffer, count);
+            memcpy(return_buffer, local_buffer, (size_t) count);
         else
-            vsnprintf(return_buffer, count, cformat, args_copy);
+            vsnprintf(return_buffer, (size_t) count, cformat, args_copy);
 
         return_buffer[count] = '\0';
         return return_buffer;

@@ -1,8 +1,8 @@
 #pragma once 
 
-#include <cassert>
-#include <cstddef>
-#include <cstring>
+#include <assert.h>
+#include <stddef.h>
+#include <string.h>
 
 using isize = ptrdiff_t;
 using usize = size_t;
@@ -73,15 +73,25 @@ namespace jot
     template<typename T> constexpr 
     Slice<T> tail(Slice<T> slice, isize from = 1) noexcept
     {
-        assert((0 <= from && from <= slice.size) && "index out of bounds");
+        assert(0 <= from && from <= slice.size && "index out of bounds");
         return Slice<T>{slice.data + from, slice.size - from};
     }
 
     template<typename T> constexpr 
     Slice<T> head(Slice<T> slice, isize to_index = 1) noexcept
     {   
-        assert((0 <= to_index && to_index <= slice.size) && "index out of bounds");
+        assert(0 <= to_index && to_index <= slice.size && "index out of bounds");
         return Slice<T>{slice.data, to_index};
+    }
+    
+    template<typename T> constexpr 
+    Slice<T> limit(Slice<T> slice, isize max_size) noexcept
+    {   
+        assert(0 <= max_size && "index out of bounds");
+        if(slice.size > max_size)
+            slice.size = max_size;
+
+        return slice;
     }
 
     template<typename T> constexpr 
@@ -108,7 +118,6 @@ namespace jot
         isize new_size = slice.size * (isize) sizeof(From) / (isize) sizeof(To);
         return {(To*) (void*) slice.data, new_size};
     }
-  
     
     template<typename T> constexpr 
     bool is_aliasing(Slice<T> left, Slice<T> right)
@@ -251,6 +260,12 @@ namespace jot
 
     //this is technically unrelated to slice but since slice is a 
     // centerpoint of this entire library it makes sense to put it here
+    
+    #define MIN(a, b)                   ((a) < (b) ? (a) : (b))
+    #define MAX(a, b)                   ((a) > (b) ? (a) : (b))
+    #define CLAMP(val, lo, hi)          MAX(lo, MIN(val, hi))
+    #define DIV_ROUND_UP(val, div_by)   (((val) + (div_by) - 1) / (div_by))
+
     constexpr isize max(isize a, isize b)
     {
         return a > b ? a : b;

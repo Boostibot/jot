@@ -30,14 +30,13 @@ namespace jot
     typedef u8 byte;
     typedef const char* cstring;
 
-    typedef ptrdiff_t isize;
-    typedef size_t usize;
-    
-    #ifndef __cpp_char8_t
-    typedef char char8_t;
-    #endif
-
+    //#ifndef __cpp_char8_t
+    //typedef char char8_t;
+    //#endif
     
 #ifdef __cplusplus
 }
 #endif
+
+typedef ptrdiff_t isize;
+typedef size_t usize;

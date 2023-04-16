@@ -32,14 +32,14 @@ namespace jot
     };
 
     static
-    Stack<Process_Module> get_process_modules(HANDLE process);
+    Array<Process_Module> get_process_modules(HANDLE process);
 
     struct Debug_Context
     {
         HANDLE process = 0;
         HANDLE thread = 0;
         String_Builder search_path;
-        Stack<Process_Module> modules;
+        Array<Process_Module> modules;
         bool is_init = false;
         DWORD error = 0;
         isize max_traces = 256;
@@ -88,9 +88,9 @@ namespace jot
     
 
     static
-    Stack<Process_Module> get_process_modules(HANDLE process)
+    Array<Process_Module> get_process_modules(HANDLE process)
     {
-        Stack<Process_Module> modules;
+        Array<Process_Module> modules;
         DWORD module_handles_size_needed = 0;
         HMODULE module_handles[256] = {0};
         TCHAR temp[4096] = {0};
@@ -122,7 +122,7 @@ namespace jot
     }
     
     static
-    Stack<void*> fill_stack_frames(CONTEXT context, Debug_Context* debug_context, DWORD image_type = 0, isize max_frames = cast(isize) 1 << 62)
+    Array<void*> fill_stack_frames(CONTEXT context, Debug_Context* debug_context, DWORD image_type = 0, isize max_frames = cast(isize) 1 << 62)
     {
         STACKFRAME64 frame = {0};
         #ifdef _M_IX86
@@ -159,7 +159,7 @@ namespace jot
             image_type = native_image; 
     
         isize frame_count = 0;
-        Stack<void*> frames;
+        Array<void*> frames;
         for(frame_count; frame_count < max_frames; frame_count++)
         {
             bool ok = StackWalk64(image_type, debug_context->process, debug_context->thread, &frame, &context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
@@ -174,7 +174,7 @@ namespace jot
     }
 
     static
-    Stack<Stack_Trace_Entry> process_stack_trace(Debug_Context* debug_context, Slice<void*> addr_array) 
+    Array<Stack_Trace_Entry> process_stack_trace(Debug_Context* debug_context, Slice<void*> addr_array) 
     {
         constexpr isize max_name_len = 1024;
         constexpr isize total_symbol_info_size = sizeof(SYMBOL_INFO) + max_name_len + 1;
@@ -182,7 +182,7 @@ namespace jot
         char symbol_info_data[total_symbol_info_size] = {0};
         char symbol_name_data[max_name_len] = {0};
 
-        Stack<Stack_Trace_Entry> entries;
+        Array<Stack_Trace_Entry> entries;
 
         DWORD offset_from_symbol=0;
         IMAGEHLP_LINE64 line = {0};
@@ -244,23 +244,23 @@ namespace jot
     }
     
     static
-    Stack<Stack_Trace_Entry> get_stack_trace(Debug_Context* debug_context, const EXCEPTION_POINTERS* exp_ptrs)
+    Array<Stack_Trace_Entry> get_stack_trace(Debug_Context* debug_context, const EXCEPTION_POINTERS* exp_ptrs)
     {
         void *base = debug_context->modules[0].base_address;
         IMAGE_NT_HEADERS *image_header = ImageNtHeader(base);
         DWORD image_type = image_header->FileHeader.Machine;
     
-        Stack<void*> addr_array = fill_stack_frames(*exp_ptrs->ContextRecord, debug_context, image_type);
+        Array<void*> addr_array = fill_stack_frames(*exp_ptrs->ContextRecord, debug_context, image_type);
         return process_stack_trace(debug_context, slice(&addr_array));
     }
     
     static
-    Stack<Stack_Trace_Entry> get_stack_trace(Debug_Context* debug_context, isize skip_levels = 1, isize max_levels = -1)
+    Array<Stack_Trace_Entry> get_stack_trace(Debug_Context* debug_context, isize skip_levels = 1, isize max_levels = -1)
     {
         if(max_levels < 0)
             max_levels = debug_context->max_traces; //large number
 
-        Stack<void*> addr_array;
+        Array<void*> addr_array;
         resize(&addr_array, max_levels);
         DWORD hash;
         isize frames = CaptureStackBackTrace(cast(DWORD) skip_levels, cast(DWORD) size(addr_array), data(&addr_array), &hash);
@@ -299,25 +299,25 @@ namespace jot
             : debug_context(search_path) 
         {}
 
-        virtual Stack<Stack_Trace_Entry> capture_stack_trace(isize skip_levels = 0, isize max_levels = -1) override 
+        virtual Array<Stack_Trace_Entry> capture_stack_trace(isize skip_levels = 0, isize max_levels = -1) override 
         {
-            Stack<Stack_Trace_Entry> traces = get_stack_trace(&debug_context, skip_levels + 2, max_levels);
+            Array<Stack_Trace_Entry> traces = get_stack_trace(&debug_context, skip_levels + 2, max_levels);
             //mark_traces_from_file_as_archutectural(&traces, "stack_trace_windows.h");
             return traces;
         }
 
         virtual bool protected_call(
             void (*protected_fn)(void* p_context), void* protected_context, 
-            void (*fallback_fn)(void* f_context, Stack<Stack_Trace_Entry> trace), void* fallback_context
+            void (*fallback_fn)(void* f_context, Array<Stack_Trace_Entry> trace), void* fallback_context
         ) override
         {
             //in function using __try __except cannot be anything using destructors -> we use pointers instead
             struct local_fn
             {
                 static DWORD process_and_call_exception(EXCEPTION_POINTERS *ep, Debug_Context* debug_context,
-                    void (*fallback_fn)(void* f_context, Stack<Stack_Trace_Entry> trace), void* fallback_context) 
+                    void (*fallback_fn)(void* f_context, Array<Stack_Trace_Entry> trace), void* fallback_context) 
                 {
-                    Stack<Stack_Trace_Entry> traces = get_stack_trace(debug_context, ep);
+                    Array<Stack_Trace_Entry> traces = get_stack_trace(debug_context, ep);
                     mark_traces_from_file_as_archutectural(&traces, "stack_trace_windows.h");
 
                     fallback_fn(fallback_context, traces);

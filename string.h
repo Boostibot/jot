@@ -1,8 +1,6 @@
 #pragma once
 #include "types.h"
-#include "stack.h"
-
-#define nodisc [[nodiscard]]
+#include "array.h"
 
 namespace jot
 {
@@ -42,13 +40,54 @@ namespace jot
 
     using String = Slice<const char>;
     using Mutable_String = Slice<char>;
-    using String_Builder = Stack<char>;
+    using String_Builder = Array<char>;
 
     //For windows stuff...
     using wString = Slice<const wchar_t>;
     using wMutable_String = Slice<wchar_t>;
-    using wString_Builder = Stack<wchar_t>;
+    using wString_Builder = Array<wchar_t>;
 
+
+    static isize first_index_of(String in_str, String search_for, isize from = 0) noexcept;
+    
+    static isize last_index_of(String in_str, String search_for, isize from = (isize) 1 << 62) noexcept;
+
+    static isize split_into(Slice<String> parts, String string, String separator, isize* optional_next_index = nullptr) noexcept;
+    
+    static void split_into(Array<String>* parts, String string, String separator, isize max_parts = (isize) 1 << 62);
+    
+    static void join_into(String_Builder* builder, Slice<const String> parts, String separator = "");
+    
+    static Array<String> split(String string, String separator, isize max_parts = (isize) 1 << 62, Allocator* alloc = default_allocator());
+
+    static String_Builder join(Slice<const String> parts, String separator = "", Allocator* alloc = default_allocator());
+
+    inline String_Builder concat(String a1, String a2)
+    {
+        String strings[] = {a1, a2};
+        Slice<const String> parts = {strings, 2};
+        return join(parts);
+    }
+
+    inline String_Builder concat(
+        String a1, String a2, String a3, String a4 = "", String a5 = "", 
+        String a6 = "", String a7 = "", String a8 = "", String a9 = "", String a10 = "")
+    {
+        String strings[] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10};
+        Slice<const String> parts = {strings, 10};
+        return join(parts);
+    }
+
+    inline String_Builder own(const char* string, Allocator* alloc = default_allocator())
+    {
+        return own(String(string), alloc);
+    }
+
+    inline String_Builder own_scratch(const char* string)
+    {
+        return own(String(string), scratch_allocator());
+    }
+    
     //Panic for String_Builder
     struct String_Builder_Panic : Panic
     {
@@ -73,51 +112,11 @@ namespace jot
     {
         return String_Builder_Panic(line_info, move(&message));
     }
-
-    nodisc static isize first_index_of(String in_str, String search_for, isize from = 0) noexcept;
-    
-    nodisc static isize last_index_of(String in_str, String search_for, isize from = (isize) 1 << 62) noexcept;
-
-    nodisc static isize split_into(Slice<String> parts, String string, String separator, isize* optional_next_index = nullptr) noexcept;
-    
-           static void split_into(Stack<String>* parts, String string, String separator, isize max_parts = (isize) 1 << 62);
-    
-           static void join_into(String_Builder* stack, Slice<const String> parts, String separator = "");
-    
-    nodisc static Stack<String> split(String string, String separator, isize max_parts = (isize) 1 << 62, Allocator* alloc = default_allocator());
-
-    nodisc static String_Builder join(Slice<const String> parts, String separator = "", Allocator* alloc = default_allocator());
-
-    nodisc inline String_Builder concat(String a1, String a2)
-    {
-        String strings[] = {a1, a2};
-        Slice<const String> parts = {strings, 2};
-        return join(parts);
-    }
-
-    nodisc inline String_Builder concat(
-        String a1, String a2, String a3, String a4 = "", String a5 = "", 
-        String a6 = "", String a7 = "", String a8 = "", String a9 = "", String a10 = "")
-    {
-        String strings[] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10};
-        Slice<const String> parts = {strings, 10};
-        return join(parts);
-    }
-
-    nodisc inline String_Builder own(const char* string, Allocator* alloc = default_allocator())
-    {
-        return own(String(string), alloc);
-    }
-
-    nodisc inline String_Builder own_scratch(const char* string)
-    {
-        return own(String(string), scratch_allocator());
-    }
 }
 
 namespace jot
 {
-    nodisc static  
+    static  
     isize first_index_of(String in_str, String search_for, isize from) noexcept
     {
         if(search_for.size == 0)
@@ -143,7 +142,7 @@ namespace jot
         return -1;
     }
 
-    nodisc static  
+    static  
     isize last_index_of(String in_str, String search_for, isize from) noexcept
     {
         if(search_for.size == 0)
@@ -173,7 +172,7 @@ namespace jot
     }
     
     static 
-    void join_into(String_Builder* stack, Slice<const String> parts, String separator)
+    void join_into(String_Builder* builder, Slice<const String> parts, String separator)
     {
         isize size_sum = 0;
         for(isize i = 0; i < parts.size; i++)
@@ -182,18 +181,18 @@ namespace jot
         if(parts.size > 0)
             size_sum += separator.size * (parts.size - 1);
 
-        reserve(stack, size(stack) + size_sum);
+        reserve(builder, size(builder) + size_sum);
         if(parts.size > 0)
-            push_multiple(stack, parts[0]);
+            push_multiple(builder, parts[0]);
 
         for(isize i = 1; i < parts.size; i++)
         {
-            push_multiple(stack, separator);
-            push_multiple(stack, parts[i]);
+            push_multiple(builder, separator);
+            push_multiple(builder, parts[i]);
         }
     }
     
-    nodisc static 
+    static 
     isize split_into(Slice<String> parts, String string, String separator, isize* optional_next_index) noexcept
     {
         isize from = 0;
@@ -216,16 +215,16 @@ namespace jot
         return parts.size;
     }
 
-    nodisc static 
+    static 
     String_Builder join(Slice<const String> parts, String separator, Allocator* alloc)
     {
-        String_Builder stack(alloc);
-        join_into(&stack, parts, separator);
-        return stack;
+        String_Builder builder(alloc);
+        join_into(&builder, parts, separator);
+        return builder;
     }
     
-    nodisc static 
-    void split_into(Stack<String>* parts, String string, String separator, isize max_parts)
+    static 
+    void split_into(Array<String>* parts, String string, String separator, isize max_parts)
     {
         isize from = 0;
         for(isize i = 0; i < max_parts; i++)
@@ -244,10 +243,10 @@ namespace jot
             push(parts, part);
     }
     
-    nodisc static 
-    Stack<String> split(String string, String separator, isize max_parts, Allocator* alloc)
+    static 
+    Array<String> split(String string, String separator, isize max_parts, Allocator* alloc)
     {
-        Stack<String> parts(alloc);
+        Array<String> parts(alloc);
         split_into(&parts, string, separator, max_parts);
         return parts;
     }

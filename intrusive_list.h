@@ -1,5 +1,4 @@
 #pragma once
-#define nodisc [[nodiscard]]
 
 //if defined checks the integrity (if the list is conected)
 // on every mutating function
@@ -39,7 +38,7 @@ namespace jot
         Node* last = nullptr;
     };
 
-    template<typename Node> nodisc constexpr
+    template<typename Node> constexpr
     bool is_isolated(Node node)
     {
         if constexpr(Node::is_bidirectional)
@@ -48,7 +47,7 @@ namespace jot
             return node.next == nullptr;
     }
 
-    template<typename Node> nodisc constexpr
+    template<typename Node> constexpr
     bool is_isolated(const Node first, const Node last)
     {
         if constexpr(Node::is_bidirectional)
@@ -60,7 +59,7 @@ namespace jot
     //Checks if last node is reachable from first.
     // null - null is also valid chain but any other combination
     // of null and not null is not
-    template<typename Node> nodisc constexpr
+    template<typename Node> constexpr
     bool is_connected(const Node* first, const Node* last)
     {
         const Node* current = first;
@@ -75,12 +74,13 @@ namespace jot
         return prev == last;
     }
     
-    template<typename Node> nodisc constexpr
+    template<typename Node> constexpr
     bool _check_is_connected(const Node* first, const Node* last) noexcept
     {
         #ifdef INTRUSIVE_INDEX_LIST_PEDANTIC
         return is_connected(first, last, arr);
         #else
+        (void) first; (void) last;
         return true;
         #endif
     }
@@ -208,5 +208,3 @@ namespace jot
         assert(_check_is_connected(to->first, to->last));
     }
 }
-
-#undef nodisc

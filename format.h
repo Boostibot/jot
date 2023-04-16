@@ -85,7 +85,7 @@ namespace jot
         Format_Adaptor const& a10 = {} \
 
     ///Formats the provided arguments and returns String_Builder witht the result
-    NO_INLINE nodisc static String_Builder format(FORMAT_ADAPTOR_10_ARGS_DECL);
+    NO_INLINE static String_Builder format(FORMAT_ADAPTOR_10_ARGS_DECL);
     ///Formats the provided arguments and appends the result to String_Builder
     NO_INLINE static void format_into(String_Builder* into,  FORMAT_ADAPTOR_10_ARGS_DECL);
     ///Formats the provided agument and appends the result to String_Builder. Has optimal
@@ -94,7 +94,7 @@ namespace jot
 
     ///Formats the provided arguments according to standard c format
     ///and returns String_Builder witht the result
-    NO_INLINE nodisc static String_Builder cformat(const char* cformat, ...);
+    NO_INLINE static String_Builder cformat(const char* cformat, ...);
     ///Uses cformat to format varargs and appends the result string into 'into'
     NO_INLINE static void cformat_into(String_Builder* into, const char* cformat, ...);
     ///Uses cformat to format varargs and appends the result string into 'into'
@@ -129,7 +129,7 @@ namespace jot
         static void format(String_Builder* into, T const& value)
         {
             static_assert(sizeof(T) == 0, "This type does not have a format! (yet)");
-            cast(void) into; cast(void) value;
+            (void) into; (void) value;
         }
     };
 
@@ -198,12 +198,12 @@ namespace jot
         isize estimated_size = format_size + 10;
         resize_for_overwrite(into, base_size + estimated_size);
 
-        isize count = snprintf(data(into) + base_size, size(into) - base_size, format, val);
+        isize count = snprintf(data(into) + base_size, (size_t) (size(into) - base_size), format, val);
         resize(into, base_size + count);
         if(count < estimated_size)
             return;
 
-        count = snprintf(data(into) + base_size, size(into) - base_size, format, val);
+        count = snprintf(data(into) + base_size, (size_t) (size(into) - base_size), format, val);
     }
 
     static void vcformat_into(String_Builder* into, const char* format, va_list args)
@@ -216,13 +216,13 @@ namespace jot
 
         va_list args_copy;
         va_copy(args_copy, args);
-        isize count = vsnprintf(data(into) + base_size, size(into) - base_size, format, args);
+        isize count = vsnprintf(data(into) + base_size, (size_t) (size(into) - base_size), format, args);
         
         resize(into, base_size + count);
         if(count < estimated_size)
             return;
         
-        count = vsnprintf(data(into) + base_size, size(into) - base_size, format, args_copy);
+        count = vsnprintf(data(into) + base_size, (size_t) (size(into) - base_size), format, args_copy);
     }
 
     NO_INLINE 
@@ -234,7 +234,7 @@ namespace jot
         va_end(args);
     }
     
-    NO_INLINE nodisc 
+    NO_INLINE 
     static String_Builder cformat(const char* format, ...)
     {
         String_Builder builder;
@@ -296,7 +296,7 @@ namespace jot
         }
 
         int used_size = 0;
-        uint64_t last = cast(uint64_t) num;
+        uint64_t last = (uint64_t) num;
         while(true)
         {
             uint64_t div = last / base;
@@ -330,7 +330,7 @@ namespace jot
         {                                                           \
             static void format(String_Builder* into, TYPE val)     \
             {                                                       \
-                return format_number_into(into, cast(int64_t) val); \
+                return format_number_into(into, (int64_t) val); \
             }                                                       \
         }                                                           \
     
@@ -341,7 +341,7 @@ namespace jot
             {                                                       \
                 Format_Num_Info info;                               \
                 info.is_unsigned = true;                            \
-                return format_number_into(into, val, 10, info);     \
+                return format_number_into(into, (int64_t) val, 10, info);     \
             }                                                       \
         }                                                           \
 
@@ -397,7 +397,7 @@ namespace jot
         static void format(String_Builder* into, Padded_Float_Format const& padded)
         {
             assert(false && "TODO"); 
-            cast(void) into; cast(void) padded;
+            (void) into; (void) padded;
         }
     };
     
@@ -417,7 +417,7 @@ namespace jot
             info.pad_to = 8;
             info.is_unsigned = true;
             push_multiple(into, "0x");
-            format_number_into(into, cast(int64_t) val, 16, info);
+            format_number_into(into, (int64_t) val, 16, info);
         }
     };
     
@@ -425,7 +425,7 @@ namespace jot
     {
         static void format(String_Builder* into, nullptr_t)
         {
-            return Formattable<void*>::format(into, cast(void*) nullptr);
+            return Formattable<void*>::format(into, (void*) nullptr);
         }
     };
     
@@ -487,9 +487,9 @@ namespace jot
         }
     };
 
-    template <typename T> struct Formattable<Stack<T>>
+    template <typename T> struct Formattable<Array<T>>
     {
-        static void format(String_Builder* into, Stack<T> const& stack)
+        static void format(String_Builder* into, Array<T> const& stack)
         {
             Slice<const T> s = slice(stack);
             Formattable<Slice<const T>>::format(into, s);
@@ -512,27 +512,27 @@ namespace jot
         template <typename T>
         static void format_adaptor(String_Builder* into, Format_Adaptor adaptor)
         {
-            T* casted = cast(T*) adaptor._data;
-            Formattable<T>::format(into, *casted);
+            T* ed = (T*) adaptor._data;
+            Formattable<T>::format(into, *ed);
         }
         
         template <typename T>
         static String format_string_adaptor(Format_Adaptor adaptor)
         {
-            T* casted = cast(T*) adaptor._data;
-            String format_str = Formattable<T>::format_string(*casted);
+            T* ed = (T*) adaptor._data;
+            String format_str = Formattable<T>::format_string(*ed);
             return format_str;
         }
 
         static void cstring_format_adaptor(String_Builder* into, Format_Adaptor adaptor)
         {
-            String str = cast(const char*) adaptor._data;
+            String str = (const char*) adaptor._data;
             Formattable<String>::format(into, str);
         }
         
         static String cstring_format_string_adaptor(Format_Adaptor adaptor)
         {
-            String str = cast(const char*) adaptor._data;
+            String str = (const char*) adaptor._data;
             return str;
         }
     }
@@ -540,7 +540,7 @@ namespace jot
     template<typename T>
     Format_Adaptor::Format_Adaptor(T const& val) noexcept
     {
-        _data = cast(void*) &val;
+        _data = (void*) &val;
         _format = format_internal::format_adaptor<T>;
         constexpr bool is_fmt_string = __is_base_of(Is_String_Format, Formattable<T>);
         if constexpr(is_fmt_string)
@@ -549,7 +549,7 @@ namespace jot
         
     Format_Adaptor::Format_Adaptor(const char* val) noexcept
     {
-        _data = cast(void*) val;
+        _data = (void*) val;
         _format = format_internal::cstring_format_adaptor;
         _format_string = format_internal::cstring_format_string_adaptor;
     }
@@ -655,7 +655,7 @@ namespace jot
         _format_into(into, FORMAT_ADAPTOR_10_ARGS);
     }
 
-    NO_INLINE nodisc 
+    NO_INLINE 
     static String_Builder format(FORMAT_ADAPTOR_10_ARGS_DECL_NO_DEF)
     {
         return _format(FORMAT_ADAPTOR_10_ARGS);
@@ -663,7 +663,7 @@ namespace jot
 
     inline void print_into(FILE* stream, String str)
     {
-        fwrite(str.data, sizeof(char), cast(size_t) str.size, stream);
+        fwrite(str.data, sizeof(char), (size_t) str.size, stream);
     }
     
     inline void println_into(FILE* stream, String str)

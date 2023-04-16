@@ -2,9 +2,6 @@
 
 #include "memory.h"
 
-#define nodisc [[nodiscard]]
-#define cast(a) (a)
-
 namespace jot
 {
     //Allocate linearry from a buffer. Once the buffer is filled no more
@@ -12,138 +9,100 @@ namespace jot
     //Doesnt insert any extra data into the provided buffer
     struct Linear_Allocator : Allocator
     {
-        Slice<u8> buffer = {};
-        isize filled_to = 0;
-        isize last_alloc = 0;
-        isize alloced = 0;
+        uint8_t* buffer_from = nullptr;
+        uint8_t* buffer_to = nullptr;
+        uint8_t* last_block_to = nullptr;
+        uint8_t* last_block_from = nullptr;
+
         isize max_alloced = 0;
+        isize current_alloced = 0;
 
         Allocator* parent = nullptr;
 
-        Linear_Allocator(Slice<u8> buffer, Allocator* parent = default_allocator()) noexcept 
-            : buffer(buffer), parent(parent) {}
-
-        Slice<u8> available_slice() const 
+        Linear_Allocator(void* buffer, isize buffer_size, Allocator* parent = default_allocator()) 
+            : parent(parent) 
         {
-            return tail(buffer, filled_to);
+            buffer_from = (uint8_t*) buffer;
+            buffer_to = buffer_from + buffer_size ;
+
+            last_block_to = buffer_from;
+            last_block_from = buffer_from;
         }
-
-        Slice<u8> used_slice() const 
+        
+        virtual
+        void* allocate(isize size, isize align, Line_Info callee) noexcept override
         {
-            return head(buffer, filled_to);
-        }
-
-        Slice<u8> last_alloced_slice() const 
-        {
-            return slice_range(buffer, last_alloc, filled_to);
-        }
-
-        nodisc virtual
-        Allocation_State allocate(Slice<u8>* output, isize size, isize align) noexcept override
-        {
-            assert(filled_to >= 0 && last_alloc >= 0);
             assert(size >= 0 && is_power_of_two(align));
 
-            Slice<u8> available = available_slice();
-            Slice<u8> aligned = _align_forward_negative(available, align);
+            uint8_t* aligned_from = (uint8_t*) align_forward(last_block_to, align);
+            uint8_t* aligned_to = aligned_from + size;
 
-            if(aligned.size < size)
-                return parent->allocate(output, size, align);
+            if(aligned_to > buffer_to) 
+                return parent->allocate(size, size, callee);
 
-            *output = head(aligned, size);
-            last_alloc = filled_to;
+            current_alloced += size;
+            if(max_alloced < current_alloced)
+                max_alloced = current_alloced;
 
-            isize total_alloced_bytes = output->data + output->size - available.data;
-            filled_to += total_alloced_bytes;
+            last_block_to = aligned_to;
+            last_block_from = aligned_from;
 
-            alloced += size;
-            if(max_alloced < alloced)
-                max_alloced = alloced;
-
-            return Allocation_State::OK;
+            return aligned_from;
         }
 
-        nodisc virtual 
-        Allocation_State deallocate(Slice<u8> allocated, isize align) noexcept override
+        virtual 
+        bool deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept override
         {
-            if(is_in_slice(allocated.data, buffer) == false)
-                return parent->deallocate(allocated, align);
+            assert(old_size >= 0 && is_power_of_two(align));
+            uint8_t* ptr = (uint8_t*) allocated;
+            if(ptr < buffer_from || buffer_to <= ptr) 
+                return parent->deallocate(allocated, old_size, align, callee);
 
-            Slice<u8> last = last_alloced_slice();
-            if(allocated.data == last.data && allocated.size == last.size)  
-                filled_to = last_alloc;
-            
-            return Allocation_State::OK;
+            //if was last reset the ptr
+            if(ptr == last_block_from && ptr + old_size == last_block_to)
+                last_block_to = last_block_from;
+
+            current_alloced -= old_size;
+
+            return true;
         } 
-
-        nodisc virtual
-        Allocation_State resize(Slice<u8>* output, Slice<u8> allocated, isize used_align, isize new_size) noexcept override 
-        {
-            assert(is_power_of_two(used_align));
-            Slice<u8> last_slice = last_alloced_slice();
-            if(is_in_slice(allocated.data, buffer) == false)
-                return parent->resize(output, allocated, used_align, new_size);
-
-            if(allocated.data != last_slice.data || allocated.size != last_slice.size)  
-            {
-                *output = Slice<u8>{};
-                return Allocation_State::NOT_RESIZABLE;
-            }
-
-            isize new_filled_to = last_alloc + new_size;
-            if(new_filled_to > buffer.size)
-            {
-                *output = Slice<u8>{};
-                return Allocation_State::OUT_OF_MEMORY;
-            }
-
-            filled_to = new_filled_to;
-            *output = last_slice;
-            return Allocation_State::OK;
-        } 
-
-        nodisc virtual
-        isize bytes_allocated() const noexcept override 
-        {
-            return alloced;
-        }
-
-        nodisc virtual
-        isize bytes_used() const noexcept override 
-        {
-            return buffer.size;
-        }
-
-        nodisc virtual
-        isize max_bytes_allocated() const noexcept override 
-        {
-            return max_alloced;
-        }
-
-        nodisc virtual
-        isize max_bytes_used() const noexcept override 
-        {
-            return buffer.size;
-        }
-
-        nodisc static 
-        Slice<u8> _align_forward_negative(Slice<u8> space, isize align_to)
-        {
-            u8* aligned = align_forward(space.data, align_to);
-            return Slice<u8>{aligned, space.size - ptrdiff(aligned, space.data)};
-        }
-
-        void reset() noexcept 
-        {
-            filled_to = 0;
-            last_alloc = 0;
-            alloced = 0;
-        };
         
-        nodisc virtual
-        const char* name() const noexcept override
+        virtual
+        bool resize(void* allocated, isize old_size, isize new_size, isize align, Line_Info callee) noexcept override 
         {
-            return "Linear_Allocator";
+            assert(new_size >= 0 && is_power_of_two(align));
+            uint8_t* ptr = (uint8_t*) allocated;
+
+            if(ptr < buffer_from || buffer_to <= ptr) 
+                return parent->resize(allocated, old_size, new_size, align, callee);
+
+            //if is last block resize else fail
+            if(last_block_from != allocated)
+                return false;
+
+            //if too big fail
+            if(ptr + new_size > buffer_to)
+                return false;
+
+            last_block_to = ptr + new_size;
+            current_alloced += new_size - old_size;
+            return false;
+        }
+        
+        virtual
+        Stats get_stats() const noexcept override
+        {
+            Stats stats = {};
+            stats.name = "Linear_Allocator";
+            stats.supports_resize = true;
+            stats.parent = parent;
+            stats.bytes_allocated = current_alloced;
+            stats.bytes_used = buffer_to - buffer_from;
+
+            stats.max_bytes_allocated = max_alloced;
+            stats.max_bytes_used = stats.bytes_used;
+            
+            return stats;
         }
 
         virtual
@@ -151,5 +110,3 @@ namespace jot
     };
 }
 
-#undef nodisc
-#undef cast

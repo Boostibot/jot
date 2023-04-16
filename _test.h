@@ -1,7 +1,7 @@
 #pragma once
 
 #include "types.h"
-#include "array.h"
+#include "static_array.h"
 #include "string.h"
 #include "format.h"
 
@@ -130,9 +130,9 @@ namespace jot::tests
         return Tracker<T>{track.val}; 
     }
 
-    template <typename T, isize N> Array<T, N> dup(Array<T, N> const& arr)
+    template <typename T, isize N> Static_Array<T, N> dup(Static_Array<T, N> const& arr)
     {
-        Array<T, N> duped = {};
+        Static_Array<T, N> duped = {};
         for(isize i = 0; i < N; i++)
             duped[i] = dup(arr[i]);
 

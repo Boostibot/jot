@@ -9,16 +9,16 @@
     #define NODISCARD [[nodiscard]]
 #endif
 
-#ifndef _MSC_VER
-    #define __FUNCTION__ __func__
-#endif
-
 using isize = ptrdiff_t;
 using usize = size_t;
 
 namespace jot
 {
     #ifndef GET_LINE_INFO
+        #ifndef _MSC_VER
+            #define __FUNCTION__ __func__
+        #endif
+
         struct Line_Info
         {
             const char* file = "";
@@ -36,14 +36,21 @@ namespace jot
             //if a returned stats struct contains 
             //default values it mean that the speicific
             //statistic is not tracked
-
-            isize bytes_used = -1;
-            isize bytes_allocated = -1;
-            isize max_bytes_used = -1;
-            isize max_bytes_allocated = -1;
-            bool supports_resize = false;
-            const char* name = nullptr;
             Allocator* parent = nullptr;
+            const char* name = nullptr;
+            bool supports_resize = false;
+
+            isize bytes_used = PTRDIFF_MIN;
+            isize bytes_allocated = PTRDIFF_MIN;
+            
+            isize max_bytes_used = PTRDIFF_MIN;
+            isize max_bytes_allocated = PTRDIFF_MIN;
+
+            isize allocation_count = PTRDIFF_MIN;
+            isize deallocation_count = PTRDIFF_MIN;
+            isize resize_count = PTRDIFF_MIN;
+
+            static constexpr isize NOT_TRACKED = PTRDIFF_MIN;
         };
 
         //We also pass line info to each allocation function. This is used to give better error/info messages esentially for free
@@ -57,7 +64,7 @@ namespace jot
         bool deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept = 0; 
 
         NODISCARD virtual
-        bool resize(void* allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept = 0; 
+        bool resize(void* allocated, isize old_size, isize new_size, isize align, Line_Info callee) noexcept = 0; 
         
         virtual
         Stats get_stats() const noexcept = 0;
@@ -71,21 +78,27 @@ namespace jot
     inline void* align_forward(void* ptr, isize align_to);
     inline void* align_backward(void* ptr, isize align_to);
     static void* aligned_malloc(isize byte_size, isize align) noexcept;
-    static void  aligned_free(void* aligned_ptr, isize byte_size, isize align) noexcept;
+    static void  aligned_free(void* aligned_ptr, isize align) noexcept;
     
     //These three functions let us easily write custom 'set_capacity' or 'realloc' functions without losing on generality or safety. (see ALLOC_RESIZE_EXAMPLE)
     //They primarily serve to simplify writing reallocation rutines for SOA structs where we want all of the arrays to have the same capacity.
-    // this means that if one fails all the allocations should be undone (precisely what resize_undo does) and the funtion should fail
+    // this means that if one fails all the allocations should be undone (precisely what memory_resize_undo does) and the funtion should fail
     NODISCARD 
-    static bool resize_allocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
-    static bool resize_deallocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
-    static bool resize_undo(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
+    static bool memory_resize_allocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
+    static bool memory_resize_deallocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
+    static bool memory_resize_undo(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
+
+
 
     //Acts as regular malloc
     struct Malloc_Allocator : Allocator
     {
         isize total_alloced = 0;
         isize max_alloced = 0;
+
+        isize allocation_count = 0;
+        isize deallocation_count = 0;
+        isize resize_count = 0;
         
         NODISCARD virtual
         void* allocate(isize size, isize align, Line_Info) noexcept override
@@ -99,23 +112,27 @@ namespace jot
             if(max_alloced < total_alloced)
                 max_alloced = total_alloced;
 
+            allocation_count++;
             return out;
         } 
         
         virtual 
-        bool deallocate(void* allocated, isize old_size, isize align, Line_Info) noexcept override
+        bool deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept override
         {
             assert(old_size > 0 && is_power_of_two(align));
-            aligned_free(allocated, old_size, align);
+            (void) old_size; (void) align; (void) callee;
+            aligned_free(allocated, align);
             total_alloced -= old_size;
+            deallocation_count ++;
             return true;
         }
 
         NODISCARD virtual
-        bool resize(void* allocated, isize new_size, isize old_size, isize align, Line_Info) noexcept override
+        bool resize(void* allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept override
         {
             assert(old_size > 0 && new_size >= 0 && is_power_of_two(align));
-            (void) allocated;
+            (void) allocated; (void) new_size; (void) old_size; (void) align; (void) callee;
+            resize_count++;
             return false;
         }
 
@@ -127,6 +144,11 @@ namespace jot
             stats.supports_resize = false;
             stats.bytes_allocated = total_alloced;
             stats.max_bytes_allocated = max_alloced;
+            
+            stats.allocation_count = allocation_count;
+            stats.deallocation_count = deallocation_count;
+            stats.resize_count = resize_count;
+            
             return stats;
         }
 
@@ -190,7 +212,7 @@ namespace jot
     using memory_globals::scratch_allocator;
 
     template <typename T>
-    static constexpr isize DEF_ALIGNMENT = (isize) (alignof(T) > 8 ? alignof(T) : 8);
+    static constexpr isize DEF_ALIGNMENT = (isize) (alignof(T) > 32 ? alignof(T) : 32);
     
     namespace memory_constants
     {
@@ -241,37 +263,52 @@ namespace jot
         return (void*) ptr_num;
     }
 
+    struct Aligned_Malloc_Header
+    {
+        uint32_t align_padding;
+        uint32_t magic_number;
+
+        static constexpr uint32_t MAGIC_NUM = 0xABCDABCD;
+    };
+
     static void* aligned_malloc(isize byte_size, isize align) noexcept
     {
         assert(byte_size >= 0 && is_power_of_two(align));
         //For the vast majority of cases the default align will suffice
         if(align <= sizeof(size_t))
-            return malloc(byte_size);
+            return malloc((size_t) byte_size);
 
         //Else we allocate extra size for alignemnt and uint32_t marker
-        uint8_t* original_ptr = (uint8_t*) malloc(byte_size + align + sizeof(uint32_t));
+        uint8_t* original_ptr = (uint8_t*) malloc(byte_size + align + sizeof(Aligned_Malloc_Header));
+        uint8_t* original_end = original_ptr + byte_size + align + sizeof(Aligned_Malloc_Header);
         if(original_ptr == nullptr)
             return nullptr;
 
-        uint32_t* aligned_ptr = (uint32_t*) align_forward(original_ptr + sizeof(uint32_t), align);
+        Aligned_Malloc_Header* aligned_ptr = (Aligned_Malloc_Header*) align_forward(original_ptr + sizeof(Aligned_Malloc_Header), align);
+        Aligned_Malloc_Header* header = aligned_ptr - 1;
+
+        (void) original_end;
+        assert(ptrdiff(original_end, aligned_ptr) >= byte_size);
 
         //set the marker thats just before the return adress 
-        *(aligned_ptr - 1) = (uint32_t) ptrdiff(original_ptr, aligned_ptr);
+        header->magic_number = Aligned_Malloc_Header::MAGIC_NUM;
+        header->align_padding = (uint32_t) ptrdiff(aligned_ptr, original_ptr);
         return aligned_ptr;
     }
     
-    static void aligned_free(void* aligned_ptr, isize byte_size, isize align) noexcept
+    static void aligned_free(void* aligned_ptr, isize align) noexcept
     {
-        (void) byte_size;
         if(aligned_ptr == nullptr || align <= sizeof(size_t))
             return free(aligned_ptr);
 
-        uint32_t offset = *((uint32_t*) aligned_ptr - 1);
-        uint8_t* original_ptr = (uint8_t*) aligned_ptr - offset;
+        Aligned_Malloc_Header* header = (Aligned_Malloc_Header*) aligned_ptr - 1;
+        assert(header->magic_number == Aligned_Malloc_Header::MAGIC_NUM && "Heap coruption detetected");
+
+        uint8_t* original_ptr = (uint8_t*) aligned_ptr - header->align_padding;
         free(original_ptr);
     }
     
-    static bool resize_allocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept
+    static bool memory_resize_allocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept
     {
         assert(alloc != nullptr && new_allocated != nullptr);
         assert(old_size >= 0 && new_size >= 0 && is_power_of_two(align));
@@ -284,7 +321,7 @@ namespace jot
 
         if(old_allocated != nullptr && old_size != 0)
         {
-            if(alloc->resize(old_allocated, new_size, old_size, align, callee))
+            if(alloc->resize(old_allocated, old_size, new_size, align, callee))
             {
                 *new_allocated = old_allocated;
                 return true;
@@ -292,10 +329,10 @@ namespace jot
         }
 
         *new_allocated = alloc->allocate(new_size, align, callee);
-        return new_allocated = nullptr;
+        return *new_allocated != nullptr;
     }
     
-    static bool resize_deallocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept
+    static bool memory_resize_deallocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept
     {
         assert(alloc != nullptr && new_allocated != nullptr);
         assert(old_size >= 0 && new_size >= 0 && is_power_of_two(align));
@@ -304,10 +341,12 @@ namespace jot
             return true;
 
         if(new_size == 0 || *new_allocated != old_allocated)
-            return alloc->deallocate(*new_allocated, old_size, align, callee);
+            return alloc->deallocate(old_allocated, old_size, align, callee);
+
+        return true;
     }
     
-    static bool resize_undo(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept
+    static bool memory_resize_undo(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept
     {
         assert(alloc != nullptr && new_allocated != nullptr);
         assert(old_size >= 0 && new_size >= 0 && is_power_of_two(align));
@@ -318,7 +357,7 @@ namespace jot
 
         //if resized resize back down
         if(*new_allocated == old_allocated)
-            return alloc->resize(*new_allocated, old_size, new_size, align, callee);
+            return alloc->resize(*new_allocated, new_size, old_size, align, callee);
         
         //else deallocate newly allocated
         return alloc->deallocate(*new_allocated, new_size, align, callee);
@@ -348,29 +387,29 @@ namespace jot
         void* new_linker = nullptr;
 
         //Do allocation part of resize
-        bool s1 = resize_allocate(alloc, &new_keys, new_size, keys.data, keys.size, align, GET_LINE_INFO());
-        bool s2 = resize_allocate(alloc, &new_values, new_size, values.data, values.size, align, GET_LINE_INFO());
-        bool s3 = resize_allocate(alloc, &new_linker, new_size, linker.data, linker.size, align, GET_LINE_INFO());
+        bool s1 = memory_resize_allocate(alloc, &new_keys,   new_size, keys.data,   keys.size,   align, GET_LINE_INFO());
+        bool s2 = memory_resize_allocate(alloc, &new_values, new_size, values.data, values.size, align, GET_LINE_INFO());
+        bool s3 = memory_resize_allocate(alloc, &new_linker, new_size, linker.data, linker.size, align, GET_LINE_INFO());
 
         //If error occured undo the allocations made and return false (only undos if there is something to undo)
         if(!s1 || !s2 || !s3)
         {
-            resize_undo(alloc, &new_keys, new_size, keys.data, keys.size, align, GET_LINE_INFO());
-            resize_undo(alloc, &new_values, new_size, values.data, values.size, align, GET_LINE_INFO());
-            resize_undo(alloc, &new_linker, new_size, linker.data, linker.size, align, GET_LINE_INFO());
+            memory_resize_undo(alloc, &new_keys,   new_size, keys.data,   keys.size,   align, GET_LINE_INFO());
+            memory_resize_undo(alloc, &new_values, new_size, values.data, values.size, align, GET_LINE_INFO());
+            memory_resize_undo(alloc, &new_linker, new_size, linker.data, linker.size, align, GET_LINE_INFO());
 
             return false;
         }
         
-        //If adress change move data over
-        if(new_keys != keys.data)     memcmp(new_keys, keys.data, keys.size);
-        if(new_values != values.data) memcmp(new_values, values.data, values.size);
-        if(new_linker != linker.data) memcmp(new_linker, linker.data, linker.size);
+        //If adress changed move data over
+        if(new_keys != keys.data)     memcpy(new_keys,   keys.data,   min(keys.size, new_size));
+        if(new_values != values.data) memcpy(new_values, values.data, min(values.size, new_size));
+        if(new_linker != linker.data) memcpy(new_linker, linker.data, min(linker.size, new_size));
         
         //After we no longer need the old arrays deallocated them (only deallocates if the ptr is not null)
-        resize_deallocate(alloc, &new_keys, new_size, keys.data, keys.size, align, GET_LINE_INFO());
-        resize_deallocate(alloc, &new_values, new_size, values.data, values.size, align, GET_LINE_INFO());
-        resize_deallocate(alloc, &new_linker, new_size, linker.data, linker.size, align, GET_LINE_INFO());
+        memory_resize_deallocate(alloc, &new_keys,   new_size, keys.data,   keys.size,   align, GET_LINE_INFO());
+        memory_resize_deallocate(alloc, &new_values, new_size, values.data, values.size, align, GET_LINE_INFO());
+        memory_resize_deallocate(alloc, &new_linker, new_size, linker.data, linker.size, align, GET_LINE_INFO());
 
         //set the result
         keys = Slice<uint8_t>{(uint8_t*) new_keys, new_size};
@@ -378,5 +417,6 @@ namespace jot
         linker = Slice<uint8_t>{(uint8_t*) new_linker, new_size};
         return true;
     }
+
     #endif
 }

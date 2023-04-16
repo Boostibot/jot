@@ -21,7 +21,7 @@ This is an attempt to rewrite everything I would need from the standard library 
 
 The following files can be used without the rest of the library. They internaly mostly just include cstd headers.
 
-- `array.h`
+- `static_array.h`
 - `bits.h`
 - `defer.h`
 - `defines.h` & `undefs.h`

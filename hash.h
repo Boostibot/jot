@@ -3,14 +3,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
+typedef ptrdiff_t isize;
 #ifdef __cplusplus
 namespace jot
 {
 #endif
-
-    typedef ptrdiff_t isize;
-    typedef uint64_t hash_t;
-
     static
     uint64_t uint64_hash(uint64_t value) 
     {
