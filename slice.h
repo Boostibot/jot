@@ -9,40 +9,26 @@ using usize = size_t;
 
 namespace jot
 {
+    #ifndef SLICE_DEFINED
+    #define SLICE_DEFINED
     //Open POD struct representing a contiguous array in memory or a string (see string.h). 
     //All types which wish to be compatible must declare a 
     // slice(T) -> Slice<...> function which acts as a constructor
     // (this lets us define the struct in such a simple manner without losing on usability)
-    template<typename T_>
+    template<typename T>
     struct Slice
     {
-        using T = T_;
-
         T* data = nullptr;
         isize size = 0;
-        
-        using value_type      = T;
-        using size_type       = size_t;
-        using difference_type = ptrdiff_t;
-        using reference       = T&;
-        using const_reference = const T&;
-        using iterator       = T*;
-        using const_iterator = const T*;
-        
-        constexpr iterator       begin() noexcept       { return data; }
-        constexpr const_iterator begin() const noexcept { return data; }
-        constexpr iterator       end() noexcept         { return data + size; }
-        constexpr const_iterator end() const noexcept   { return data + size; }
 
         constexpr T const& operator[](isize index) const noexcept  
         { 
-            assert(0 <= index && index < size && "index out of range"); 
-            return data[index]; 
+            assert(0 <= index && index < size && "index out of range"); return data[index]; 
         }
+
         constexpr T& operator[](isize index) noexcept 
         { 
-            assert(0 <= index && index < size && "index out of range"); 
-            return data[index]; 
+            assert(0 <= index && index < size && "index out of range"); return data[index]; 
         }
         
         constexpr operator Slice<const T>() const noexcept 
@@ -50,6 +36,12 @@ namespace jot
             return Slice<const T>{data, size}; 
         }
     };
+    #endif
+
+    template<typename T> constexpr T*       begin(Slice<T>& slice) noexcept         { return slice.data; }
+    template<typename T> constexpr const T* begin(Slice<T> const& slice) noexcept   { return slice.data; }
+    template<typename T> constexpr T*       end(Slice<T>& slice) noexcept           { return slice.data + slice.size; }
+    template<typename T> constexpr const T* end(Slice<T> const& slice) noexcept     { return slice.data + slice.size; }
     
     template<typename T, isize N> constexpr
     Slice<const T> slice(const T (&a)[N]) noexcept

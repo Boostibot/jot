@@ -248,7 +248,7 @@ namespace jot
                 return false;
             }
             
-            memset(new_data, 0, data_size);
+            memset(new_mask, 0, masks_size);
 
             uint8_t* curr_data = (uint8_t*) new_data;
             Mask* curr_mask = (Mask*) new_mask;
@@ -266,7 +266,7 @@ namespace jot
                 curr_mask += single_mask_size;
             }
 
-            bucket_array->_max_bucket_size = max(bucket_array->_max_bucket_size, (uint32_t) total_block_size);
+            bucket_array->_max_bucket_size = (uint32_t) max(bucket_array->_max_bucket_size, (uint32_t) total_block_size);
             bucket_array->_total_capacity += new_block_size;
 
             return true;

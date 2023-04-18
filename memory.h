@@ -29,6 +29,7 @@ namespace jot
         #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
     #endif
 
+
     struct Allocator
     {
         struct Stats
@@ -80,6 +81,32 @@ namespace jot
     static void* aligned_malloc(isize byte_size, isize align) noexcept;
     static void  aligned_free(void* aligned_ptr, isize align) noexcept;
     
+    
+    #ifndef SLICE_DEFINED
+    #define SLICE_DEFINED
+    template<typename T>
+    struct Slice
+    {
+        T* data = nullptr;
+        isize size = 0;
+
+        constexpr T const& operator[](isize index) const noexcept  
+        { 
+            assert(0 <= index && index < size && "index out of range"); return data[index]; 
+        }
+
+        constexpr T& operator[](isize index) noexcept 
+        { 
+            assert(0 <= index && index < size && "index out of range"); return data[index]; 
+        }
+        
+        constexpr operator Slice<const T>() const noexcept 
+        { 
+            return Slice<const T>{data, size}; 
+        }
+    };
+    #endif 
+
     //These three functions let us easily write custom 'set_capacity' or 'realloc' functions without losing on generality or safety. (see ALLOC_RESIZE_EXAMPLE)
     //They primarily serve to simplify writing reallocation rutines for SOA structs where we want all of the arrays to have the same capacity.
     // this means that if one fails all the allocations should be undone (precisely what memory_resize_undo does) and the funtion should fail

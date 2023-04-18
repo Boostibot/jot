@@ -73,10 +73,14 @@ namespace jot
     
     //We will use these macros often to save (quite a lot) screen space
     #define Hash_Table_T       Hash_Table<Key, Value, hash, equals>
-    #define Hash_Key           typename Hash_Table<Key, Value, hash, equals>::Key
-    #define Hash_Value         typename Hash_Table<Key, Value, hash, equals>::Value
     #define isizeof(T)         (isize) sizeof(T)
     
+    template<class _T>
+    struct _Id {using T = _T;};
+
+    template<class T>
+    using Id = typename _Id<T>::T;
+
     struct Hash_Found
     {
         isize hash_index;
@@ -167,6 +171,12 @@ namespace jot
     {
         return table._linker.size;
     }
+    
+    template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
+    isize size(Hash_Table_T const& table)
+    {
+        return table._entries_size;
+    }
 
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
     void swap(Hash_Table_T* left, Hash_Table_T* right) noexcept
@@ -211,8 +221,8 @@ namespace jot
 
     namespace hash_table_internal
     {
-        constexpr uint32_t EMPTY_LINK = -1;
-        constexpr uint32_t GRAVESTONE_LINK = -2;
+        constexpr uint32_t EMPTY_LINK = (uint32_t) -1;
+        constexpr uint32_t GRAVESTONE_LINK = (uint32_t) -2;
         
         template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
         bool set_entries_capacity(Hash_Table_T* table, isize new_capacity) noexcept
@@ -222,6 +232,15 @@ namespace jot
             void* new_keys = nullptr;
             void* new_values = nullptr;
             
+            bool state1 = memory_resize_allocate(alloc, &new_keys, new_capacity*isizeof(Key), table->_keys, capa*isizeof(Key), DEF_ALIGNMENT<Key>, GET_LINE_INFO());
+            bool state2 = memory_resize_allocate(alloc, &new_values, new_capacity*isizeof(Value), table->_values, capa*isizeof(Value), DEF_ALIGNMENT<Value>, GET_LINE_INFO());
+
+            if(!state1 || !state2)
+            {
+                memory_resize_undo(alloc, &new_keys,   new_capacity*isizeof(Key),   table->_keys,   capa*isizeof(Key), DEF_ALIGNMENT<Key>, GET_LINE_INFO());
+                memory_resize_undo(alloc, &new_values, new_capacity*isizeof(Value), table->_values, capa*isizeof(Value), DEF_ALIGNMENT<Value>, GET_LINE_INFO());
+            }
+
             //destruct extra
             if(JOT_IS_TRIVIALLY_DESTRUCTIBLE(Key) == false)
             {
@@ -235,18 +254,11 @@ namespace jot
                     table->_values[i].~Value();
             }
 
-            bool state1 = memory_resize_allocate(alloc, &new_keys, new_capacity*isizeof(Key), table->_keys, capa*isizeof(Key), DEF_ALIGNMENT<Key>, GET_LINE_INFO());
-            bool state2 = memory_resize_allocate(alloc, &new_values, new_capacity*isizeof(Value), table->_values, capa*isizeof(Value), DEF_ALIGNMENT<Value>, GET_LINE_INFO());
 
-            if(!state1 || !state2)
-            {
-                memory_resize_undo(alloc, &new_keys,   new_capacity*isizeof(Key),   table->_keys,   capa*isizeof(Key), DEF_ALIGNMENT<Key>, GET_LINE_INFO());
-                memory_resize_undo(alloc, &new_values, new_capacity*isizeof(Value), table->_values, capa*isizeof(Value), DEF_ALIGNMENT<Value>, GET_LINE_INFO());
-            }
-
-            //@NOTE: We assume transferable ie. that the object helds in each slice
+            //@NOTE: We assume reallocatble ie. that the object helds in each slice
             // do not depend on their own adress => can be freely moved around in memory
             // => we can simply memove without calling moves and destructors (see slice_ops.h)
+            assert(JOT_IS_REALLOCATABLE(T) && "we assume reallocatble!");
             size_t new_size = (size_t) min(new_capacity, table->_entries_size);
 
             if(new_keys != table->_keys)        memmove(new_keys, table->_keys, new_size*sizeof(Key));
@@ -255,7 +267,7 @@ namespace jot
             memory_resize_deallocate(alloc, &new_keys,   new_capacity*isizeof(Key),   table->_keys,   capa*isizeof(Key), DEF_ALIGNMENT<Key>, GET_LINE_INFO());
             memory_resize_deallocate(alloc, &new_values, new_capacity*isizeof(Value), table->_values, capa*isizeof(Value), DEF_ALIGNMENT<Value>, GET_LINE_INFO());
 
-            table->_entries_size = new_size;
+            table->_entries_size = (uint32_t) new_size;
             table->_entries_capacity = (uint32_t) new_capacity;
             table->_keys = (Key*) new_keys;
             table->_values = (Value*) new_values;
@@ -527,7 +539,7 @@ namespace jot
     }
 
     template <class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-    Hash_Found find(Hash_Table_T const& table, Hash_Key const& key, uint64_t hashed, bool break_on_gravestone = false) noexcept
+    Hash_Found find(Hash_Table_T const& table, Id<Key> const& key, uint64_t hashed, bool break_on_gravestone = false) noexcept
     {
         assert(is_invariant(table));
         Hash_Found found = {};
@@ -607,14 +619,14 @@ namespace jot
     }
     
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-    Hash_Found find(Hash_Table_T const& table, Hash_Key const& key, bool break_on_gravestone = false) noexcept
+    Hash_Found find(Hash_Table_T const& table, Id<Key> const& key, bool break_on_gravestone = false) noexcept
     {
         uint64_t hashed = hash(key, table._seed);
         return find(table, key, hashed, break_on_gravestone);
     }
     
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-    bool has(Hash_Table_T const& table, Hash_Key const& key) noexcept
+    bool has(Hash_Table_T const& table, Id<Key> const& key) noexcept
     {
         return find(table, key).entry_index != -1;
     }
@@ -693,7 +705,7 @@ namespace jot
     // entry individually
     //Returns index of marked entry
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-    isize mark_removed(Hash_Table_T* table, Hash_Key const& key)
+    isize mark_removed(Hash_Table_T* table, Id<Key> const& key)
     {
         Hash_Found found = find(*table, key);
         if(found.entry_index == -1)
@@ -704,7 +716,7 @@ namespace jot
     }
 
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals> 
-    bool remove(Hash_Table_T* table, Hash_Key const& key)
+    bool remove(Hash_Table_T* table, Id<Key> const& key)
     {
         Hash_Found found = find(*table, key);
         if(found.entry_index == -1)
@@ -728,7 +740,7 @@ namespace jot
     }
 
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-    Value const& get(Hash_Table_T const&  table, Hash_Key const& key, Hash_Value const& if_not_found) noexcept
+    Value const& get(Hash_Table_T const&  table, Id<Key> const& key, Id<Value> const& if_not_found) noexcept
     {
         isize index = find(table, key).entry_index;
         if(index == -1)
@@ -780,7 +792,7 @@ namespace jot
         }
     }
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-    void set(Hash_Table_T* table, Hash_Key key, Hash_Value value, Hash_Table_Growth const& growth = {})
+    void set(Hash_Table_T* table, Id<Key> key, Id<Value> value, Hash_Table_Growth const& growth = {})
     {
         grow_if_overfull(table, growth);
 
@@ -798,7 +810,7 @@ namespace jot
     namespace multi
     {
         template <class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-        Hash_Found find_next(Hash_Table_T const& table, Hash_Key const& prev_key, Hash_Found prev, 
+        Hash_Found find_next(Hash_Table_T const& table, Id<Key> const& prev_key, Hash_Found prev, 
                 bool break_on_gravestone = false) noexcept
         {
             assert(prev.hash_index != -1 && "must be found!");
@@ -808,7 +820,7 @@ namespace jot
         }
 
         template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-        void add_another(Hash_Table_T* table, Hash_Key key, Hash_Value value, Hash_Table_Growth const& growth = {})
+        void add_another(Hash_Table_T* table, Id<Key> key, Id<Value> value, Hash_Table_Growth const& growth = {})
         {
             assert(is_invariant(*table));
             grow_if_overfull(table, growth);
@@ -833,6 +845,4 @@ namespace jot
     }
 
     #undef Hash_Table_T           
-    #undef Hash_Key         
-    #undef Hash_Value          
 }

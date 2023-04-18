@@ -16,8 +16,8 @@ namespace jot
     {   
         using T = T_;
 
-        Allocator* _allocator = default_allocator();
         T* _data = nullptr;
+        Allocator* _allocator = default_allocator();
         isize _size = 0;
         isize _capacity = 0;
         
@@ -54,112 +54,112 @@ namespace jot
         }
     };
     
-    ///Calculates new size of a stack which is guaranteed to be greater than to_fit
+    ///Calculates new size of a array which is guaranteed to be greater than to_fit
     inline isize calculate_stack_growth(isize curr_size, isize to_fit, isize growth_num = 3, isize growth_den = 2, isize grow_lin = 8);
 
     ///Getters 
-    template<class T> auto data(Array<T> const& stack) noexcept -> const T*          {return stack._data;}
-    template<class T> auto data(Array<T>* stack) noexcept -> T*                      {return stack->_data;}
-    template<class T> auto size(Array<T> const& stack) noexcept -> isize             {return stack._size;}
-    template<class T> auto size(Array<T>* stack) noexcept -> isize                   {return stack->_size;}
-    template<class T> auto capacity(Array<T> const& stack) noexcept -> isize         {return stack._capacity;}
-    template<class T> auto capacity(Array<T>* stack) noexcept -> isize               {return stack->_capacity;}
-    template<class T> auto allocator(Array<T> const& stack) noexcept -> Allocator*   {return stack._allocator;}
-    template<class T> auto allocator(Array<T>* stack) noexcept -> Allocator*         {return stack->_data;}
+    template<class T> auto data(Array<T> const& array) noexcept -> const T*          {return array._data;}
+    template<class T> auto data(Array<T>* array) noexcept -> T*                      {return array->_data;}
+    template<class T> auto size(Array<T> const& array) noexcept -> isize             {return array._size;}
+    template<class T> auto size(Array<T>* array) noexcept -> isize                   {return array->_size;}
+    template<class T> auto capacity(Array<T> const& array) noexcept -> isize         {return array._capacity;}
+    template<class T> auto capacity(Array<T>* array) noexcept -> isize               {return array->_capacity;}
+    template<class T> auto allocator(Array<T> const& array) noexcept -> Allocator*   {return array._allocator;}
+    template<class T> auto allocator(Array<T>* array) noexcept -> Allocator*         {return array->_data;}
 
-    ///Returns a slice containing all items of the stack
-    template<class T> auto slice(Array<T> const& stack) noexcept -> Slice<const T>   {return {stack._data, stack._size};}
-    template<class T> auto slice(Array<T>* stack) noexcept -> Slice<T>               {return {stack->_data, stack->_size};}
+    ///Returns a slice containing all items of the array
+    template<class T> auto slice(Array<T> const& array) noexcept -> Slice<const T>   {return {array._data, array._size};}
+    template<class T> auto slice(Array<T>* array) noexcept -> Slice<T>               {return {array->_data, array->_size};}
 
-    ///Get first and last items of a stack. Cannot be used on empty stack!
-    template<class T> T*       last(Array<T>* stack) noexcept        { return &(*stack)[stack->_size - 1]; }
-    template<class T> T const& last(Array<T> const& stack) noexcept  { return (stack)[stack._size - 1];}
-    template<class T> T*       first(Array<T>* stack) noexcept       { return &(*stack)[0];}
-    template<class T> T const& first(Array<T> const& stack) noexcept { return (stack)[0];}
+    ///Get first and last items of a array. Cannot be used on empty array!
+    template<class T> T*       last(Array<T>* array) noexcept        { return &(*array)[array->_size - 1]; }
+    template<class T> T const& last(Array<T> const& array) noexcept  { return (array)[array._size - 1];}
+    template<class T> T*       first(Array<T>* array) noexcept       { return &(*array)[0];}
+    template<class T> T const& first(Array<T> const& array) noexcept { return (array)[0];}
     
     ///Returns true i
-    template<class T> auto is_invariant(Array<T> const& stack) noexcept -> bool;
-    template<class T> auto is_empty(Array<T> const& stack) noexcept -> bool;
+    template<class T> auto is_invariant(Array<T> const& array) noexcept -> bool;
+    template<class T> auto is_empty(Array<T> const& array) noexcept -> bool;
 
-    ///swaps contents of left and right stacks
+    ///swaps contents of left and right arrays
     template<class T> void swap(Array<T>* left, Array<T>* right) noexcept;
-    ///Copies items to stack. Items within the stack before this opperations are discarded
-    template<class T> void copy(Array<T>* stack, Slice<const T> items);
-    ///Removes all items from stack
-    template<class T> void clear(Array<T>* stack) noexcept;
+    ///Copies items to array. Items within the array before this opperations are discarded
+    template<class T> void copy(Array<T>* array, Slice<const T> items);
+    ///Removes all items from array
+    template<class T> void clear(Array<T>* array) noexcept;
 
-    ///Makes a new stack with copied items using the probided allocator
+    ///Makes a new array with copied items using the probided allocator
     template<class T> Array<T> own(Slice<const T> from, Allocator* alloc = default_allocator());
     template<class T> Array<T> own(Slice<T> from, Allocator* alloc = default_allocator());
     template<class T> Array<T> own_scratch(Slice<const T> from, Allocator* alloc = scratch_allocator()) {return own(from, alloc);}
     template<class T> Array<T> own_scratch(Slice<T> from, Allocator* alloc = scratch_allocator())       {return own(from, alloc);}
 
-    ///Reallocates stack to the specified capacity. If the capacity is smaller then its size, shrinks it destroying items
+    ///Reallocates array to the specified capacity. If the capacity is smaller then its size, shrinks it destroying items
     ///in process
-    template<class T> NODISCARD bool set_capacity_failing(Array<T>* stack, isize new_capacity) noexcept;
-    template<class T> void set_capacity(Array<T>* stack, isize new_capacity);
+    template<class T> NODISCARD bool set_capacity_failing(Array<T>* array, isize new_capacity) noexcept;
+    template<class T> void set_capacity(Array<T>* array, isize new_capacity);
 
-    ///Potentially reallocates stack so that capacity is at least to_size. If capacity is already greater than to_size
+    ///Potentially reallocates array so that capacity is at least to_size. If capacity is already greater than to_size
     ///does nothing.
-    template<class T> NODISCARD bool reserve_failing(Array<T>* stack, isize to_size) noexcept;
-    template<class T> void reserve(Array<T>* stack, isize to_size);
+    template<class T> NODISCARD bool reserve_failing(Array<T>* array, isize to_size) noexcept;
+    template<class T> void reserve(Array<T>* array, isize to_size);
 
     ///Same as reserve expect when reallocation happens grows according to calculate_stack_growth()
-    template<class T> void grow(Array<T>* stack, isize to_fit);
+    template<class T> void grow(Array<T>* array, isize to_fit);
 
-    ///Sets size of stack. If to_size is smaller then stack size trims the stack. If is greater fills the added space with fill_with
-    template<class T> void resize(Array<T>* stack, isize to_size, typename Array<T>::T const& fill_with = {}) noexcept;
-    ///Sets size of stack. If to_size is smaller then stack size trims the stack. 
+    ///Sets size of array. If to_size is smaller then array size trims the array. If is greater fills the added space with fill_with
+    template<class T> void resize(Array<T>* array, isize to_size, typename Array<T>::T const& fill_with = {}) noexcept;
+    ///Sets size of array. If to_size is smaller then array size trims the array. 
     ///If is greater and the T type allows it leaves the space uninitialized
-    template<class T> void resize_for_overwrite(Array<T>* stack, isize to);
+    template<class T> void resize_for_overwrite(Array<T>* array, isize to);
 
-    ///Adds an item to the end of the stack
-    template<class T> void push(Array<T>* stack, typename Array<T>::T what);
-    ///Removes an item at the end stack. The stack must not be empty!
-    template<class T>    T pop(Array<T>* stack) noexcept;
+    ///Adds an item to the end of the array
+    template<class T> void push(Array<T>* array, typename Array<T>::T what);
+    ///Removes an item at the end array. The array must not be empty!
+    template<class T>    T pop(Array<T>* array) noexcept;
 
-    ///Pushes all items from inserted slice into the stack
-    template<class T> void push_multiple(Array<T>* stack, Slice<const typename Array<T>::T> inserted);
-    ///Pushes all items from inserted slice into the stack moving them out of inserted slice
-    template<class T> void push_multiple_move(Array<T>* stack, Slice<typename Array<T>::T> inserted);
-    ///Pops multiple items from stack. The stack must contain at least count elements!
-    template<class T> void pop_multiple(Array<T>* stack, isize count) noexcept;
+    ///Pushes all items from inserted slice into the array
+    template<class T> void push_multiple(Array<T>* array, Slice<const typename Array<T>::T> inserted);
+    ///Pushes all items from inserted slice into the array moving them out of inserted slice
+    template<class T> void push_multiple_move(Array<T>* array, Slice<typename Array<T>::T> inserted);
+    ///Pops multiple items from array. The array must contain at least count elements!
+    template<class T> void pop_multiple(Array<T>* array, isize count) noexcept;
 
-    ///Inserts an item into the stack so that its index is at. Moves all later elemnts forward one index
-    template<class T> void insert(Array<T>* stack, isize at, typename Array<T>::T what);
-    ///Removes an item from the stack at specified index. Moves all later elemnts backwards one index. The stack most not be empty!
-    template<class T>    T remove(Array<T>* stack, isize at) noexcept;
+    ///Inserts an item into the array so that its index is at. Moves all later elemnts forward one index
+    template<class T> void insert(Array<T>* array, isize at, typename Array<T>::T what);
+    ///Removes an item from the array at specified index. Moves all later elemnts backwards one index. The array most not be empty!
+    template<class T>    T remove(Array<T>* array, isize at) noexcept;
 
-    ///Inserts an item into the stack so that its index is at. The item that was originally at this index becomes last
-    template<class T> void unordered_insert(Array<T>* stack, isize at, typename Array<T>::T what);
-    ///Removes an item from the stack at specified index. Moves the last item into freed up spot. The stack most not be empty!
-    template<class T>    T unordered_remove(Array<T>* stack, isize at) noexcept;
+    ///Inserts an item into the array so that its index is at. The item that was originally at this index becomes last
+    template<class T> void unordered_insert(Array<T>* array, isize at, typename Array<T>::T what);
+    ///Removes an item from the array at specified index. Moves the last item into freed up spot. The array most not be empty!
+    template<class T>    T unordered_remove(Array<T>* array, isize at) noexcept;
     
-    ///Tells stack if this type should be null terminated. Provide specialization for your desired type (see string.h)
+    ///Tells array if this type should be null terminated. Provide specialization for your desired type (see string.h)
     template<class T> static constexpr bool is_string_char = false;
 }
 
 namespace jot
 {
-    namespace stack_internal 
+    namespace array_internal 
     {
         //@TODO: remove static inline
         static inline const uint8_t NULL_TERMINATION_ARR[8] = {'\0'};
 
         template<class T> 
-        void null_terminate(Array<T>* stack) noexcept
+        void null_terminate(Array<T>* array) noexcept
         {
             if constexpr(is_string_char<T>)
-                stack->_data[stack->_size] = T();
+                array->_data[array->_size] = T();
         }
         
         template<class T> 
-        void set_data_to_termination(Array<T>* stack)
+        void set_data_to_termination(Array<T>* array)
         {
             if constexpr(is_string_char<T>)
-                stack->_data = (T*) (void*) NULL_TERMINATION_ARR;
+                array->_data = (T*) (void*) NULL_TERMINATION_ARR;
             else
-                stack->_data = nullptr;
+                array->_data = nullptr;
         }   
         
         template<typename T> constexpr 
@@ -173,11 +173,11 @@ namespace jot
     }
     
     template<class T>
-    bool set_capacity_failing(Array<T>* stack, isize new_capacity) noexcept
+    bool set_capacity_failing(Array<T>* array, isize new_capacity) noexcept
     {
-        assert(is_invariant(*stack));
+        assert(is_invariant(*array));
 
-        isize old_byte_cap = stack->_capacity * (isize) sizeof(T);
+        isize old_byte_cap = array->_capacity * (isize) sizeof(T);
         isize new_byte_cap = new_capacity * (isize) sizeof(T);
 
         bool is_string = is_string_char<T>;
@@ -188,53 +188,53 @@ namespace jot
             old_byte_cap += (isize) sizeof(T);
 
         void* new_data = nullptr;
-        bool state = memory_resize_allocate(stack->_allocator, &new_data, new_byte_cap, 
-            stack->_data, old_byte_cap, DEF_ALIGNMENT<T>, GET_LINE_INFO());
+        bool state = memory_resize_allocate(array->_allocator, &new_data, new_byte_cap, 
+            array->_data, old_byte_cap, DEF_ALIGNMENT<T>, GET_LINE_INFO());
 
         if(state == false)
             return false;
 
-        isize to_size = stack->_size;
+        isize to_size = array->_size;
         if(new_capacity < to_size)
             to_size = new_capacity;
 
-        if(new_data != stack->_data)
+        if(new_data != array->_data)
         {
             T* new_data_t = (T*) new_data; 
             bool byte_trasnfer = JOT_IS_REALLOCATABLE(T);
             if(byte_trasnfer)
-                memmove(new_data, stack->_data, (size_t) to_size * sizeof(T));
+                memmove(new_data, array->_data, (size_t) to_size * sizeof(T));
             else
             {
                 for(isize i = 0; i < to_size; i++)
                 {
-                    new(new_data_t + i) T((T&&) stack->_data[i]);
-                    stack->_data[i].~T();
+                    new(new_data_t + i) T((T&&) array->_data[i]);
+                    array->_data[i].~T();
                 }
             }
         }
 
-        stack_internal::destruct_items(stack->_data, new_capacity, stack->_size);
-        memory_resize_deallocate(stack->_allocator, &new_data, new_byte_cap, 
-            stack->_data, old_byte_cap, DEF_ALIGNMENT<T>, GET_LINE_INFO());
+        array_internal::destruct_items(array->_data, new_capacity, array->_size);
+        memory_resize_deallocate(array->_allocator, &new_data, new_byte_cap, 
+            array->_data, old_byte_cap, DEF_ALIGNMENT<T>, GET_LINE_INFO());
 
-        stack->_size = to_size;
-        stack->_data = (T*) new_data;
-        stack->_capacity = new_capacity;
+        array->_size = to_size;
+        array->_data = (T*) new_data;
+        array->_capacity = new_capacity;
 
-        if(stack->_capacity == 0)
-            stack_internal::set_data_to_termination(stack);
+        if(array->_capacity == 0)
+            array_internal::set_data_to_termination(array);
         else
-            stack_internal::null_terminate(stack);
+            array_internal::null_terminate(array);
 
-        assert(is_invariant(*stack));
+        assert(is_invariant(*array));
         return true;
     }
 
     template<typename T>
     Array<T>::Array(Allocator* allocator) noexcept
     {
-        stack_internal::set_data_to_termination(this);
+        array_internal::set_data_to_termination(this);
         _allocator = allocator;
     }
 
@@ -243,7 +243,7 @@ namespace jot
     {
         if(_capacity != 0)
         {
-            stack_internal::destruct_items(_data, 0, _size);
+            array_internal::destruct_items(_data, 0, _size);
             isize cap = _capacity + (isize) is_string_char<T>;
             _allocator->deallocate(_data, cap * (isize) sizeof(T), DEF_ALIGNMENT<T>, GET_LINE_INFO());
         }
@@ -252,7 +252,7 @@ namespace jot
     template<typename T>
     Array<T>::Array(Array && other) noexcept 
     {
-        stack_internal::set_data_to_termination(this);
+        array_internal::set_data_to_termination(this);
         *this = (Array&&) other;
     }
 
@@ -266,7 +266,7 @@ namespace jot
     template<typename T>
     Array<T>::Array(Array const& other) 
     {
-        stack_internal::set_data_to_termination(this);
+        array_internal::set_data_to_termination(this);
         copy(this, slice(other));
     }
 
@@ -278,22 +278,22 @@ namespace jot
     }
 
     template<class T>
-    bool is_invariant(Array<T> const& stack) noexcept
+    bool is_invariant(Array<T> const& array) noexcept
     {
-        bool size_inv = stack._capacity >= stack._size;
-        bool capa_inv = stack._capacity >= 0; 
+        bool size_inv = array._capacity >= array._size;
+        bool capa_inv = array._capacity >= 0; 
         bool data_inv = true;
         bool espcape_inv = true;
 
         if constexpr(is_string_char<T>)
-            espcape_inv = stack._data != nullptr && stack._data[stack._size] == T(0);
+            espcape_inv = array._data != nullptr && array._data[array._size] == T(0);
         else
-            data_inv = (stack._capacity == 0) == (stack._data == nullptr);
+            data_inv = (array._capacity == 0) == (array._data == nullptr);
 
         return size_inv && capa_inv && data_inv && espcape_inv;
     }
     
-    //Returns new size of a stack which is guaranteed to be greater than to_fit
+    //Returns new size of a array which is guaranteed to be greater than to_fit
     inline isize calculate_stack_growth(isize curr_size, isize to_fit, isize growth_num, isize growth_den, isize grow_lin)
     {
         //with default values for small sizes grows fatser than classic factor of 2 for big slower
@@ -306,43 +306,43 @@ namespace jot
 
      
     template<class T>
-    bool reserve_failing(Array<T>* stack, isize to_size) noexcept
+    bool reserve_failing(Array<T>* array, isize to_size) noexcept
     {
-        if (stack->_capacity >= to_size)
+        if (array->_capacity >= to_size)
             return true;
             
-        return set_capacity_failing(stack, to_size);
+        return set_capacity_failing(array, to_size);
     }
     
     template<class T>
-    void set_capacity(Array<T>* stack, isize new_capacity)
+    void set_capacity(Array<T>* array, isize new_capacity)
     {
-        if(set_capacity_failing(stack, new_capacity) == false)
+        if(set_capacity_failing(array, new_capacity) == false)
         {
-            const char* alloc_name = stack->_allocator->get_stats().name;
+            const char* alloc_name = array->_allocator->get_stats().name;
             PANIC(panic_cformat, "Array<T> allocation failed! "
                 "Attempted to allocated %t bytes from allocator %s"
                 "Array: {size: %t, capacity: %t} sizeof(T): %z",
                 new_capacity*sizeof(T), alloc_name ? alloc_name : "<No alloc name>", 
-                stack->_size, stack->_capacity, sizeof(T));
+                array->_size, array->_capacity, sizeof(T));
         }
     }
 
     template<class T>
-    void reserve(Array<T>* stack, isize to_capacity)
+    void reserve(Array<T>* array, isize to_capacity)
     {
-        if (stack->_capacity < to_capacity)
-            set_capacity(stack, to_capacity);
+        if (array->_capacity < to_capacity)
+            set_capacity(array, to_capacity);
     }
 
     template<class T>
-    void grow(Array<T>* stack, isize to_fit)
+    void grow(Array<T>* array, isize to_fit)
     {
-        if (stack->_capacity >= to_fit)
+        if (array->_capacity >= to_fit)
             return;
         
-		isize new_capacity = calculate_stack_growth(stack->_capacity, to_fit);
-        set_capacity(stack, new_capacity);
+		isize new_capacity = calculate_stack_growth(array->_capacity, to_fit);
+        set_capacity(array, new_capacity);
     }
 
     template<class T>
@@ -370,13 +370,13 @@ namespace jot
                 new(&capacity_slice[i]) T(from[i]);
         }
 
-        stack_internal::destruct_items(to->_data, from.size, to->_size);
+        array_internal::destruct_items(to->_data, from.size, to->_size);
 
         to->_size = from.size;
         if(to->_capacity == 0)
-            stack_internal::set_data_to_termination(to);
+            array_internal::set_data_to_termination(to);
         else
-            stack_internal::null_terminate(to);
+            array_internal::null_terminate(to);
 
         assert(is_invariant(*to));
     }
@@ -407,50 +407,46 @@ namespace jot
     }
     
     template<class T>
-    bool is_empty(Array<T> const& stack) noexcept
+    bool is_empty(Array<T> const& array) noexcept
     {
-        assert(is_invariant(stack));
-        return stack._size == 0;
+        return array._size == 0;
     }
     
     template<class T>
-    void push(Array<T>* stack, typename Array<T>::T what)
+    void push(Array<T>* array, typename Array<T>::T what)
     {
-        assert(is_invariant(*stack));
-
-        grow(stack, stack->_size + 1);
+        grow(array, array->_size + 1);
         
-        T* ptr = stack->_data + stack->_size;
-        new(ptr) T((T&&) what);
-        stack->_size++;
+        new(array->_data + array->_size) T((T&&) what);
+        array->_size++;
         
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
+        array_internal::null_terminate(array);
+        assert(is_invariant(*array));
     }
 
     template<class T> 
-    T pop(Array<T>* stack) noexcept
+    T pop(Array<T>* array) noexcept
     {
-        assert(is_invariant(*stack));
-        assert(stack->_size != 0);
+        assert(is_invariant(*array));
+        assert(array->_size != 0);
 
-        stack->_size--;
+        array->_size--;
 
-        T ret = (T&&) (stack->_data[stack->_size]);
-        stack->_data[stack->_size].~T();
+        T ret = (T&&) (array->_data[array->_size]);
+        array->_data[array->_size].~T();
         
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
+        array_internal::null_terminate(array);
+        assert(is_invariant(*array));
         return ret;
     }
 
     template <class T>
-    void push_multiple(Array<T>* stack, Slice<const typename Array<T>::T> inserted)
+    void push_multiple(Array<T>* array, Slice<const typename Array<T>::T> inserted)
     {
-        grow(stack, stack->_size + inserted.size);
+        grow(array, array->_size + inserted.size);
         
         bool is_by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
-        T* base = stack->_data + stack->_size;
+        T* base = array->_data + array->_size;
 
         if(is_by_byte)
             memmove(base, inserted.data, (size_t) inserted.size * sizeof(T));
@@ -460,18 +456,18 @@ namespace jot
                 new(base + i) T(inserted.data[i]);
         }
 
-        stack->_size += inserted.size;
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
+        array->_size += inserted.size;
+        array_internal::null_terminate(array);
+        assert(is_invariant(*array));
     }
     
     template <class T>
-    void push_multiple_move(Array<T>* stack, Slice<typename Array<T>::T> inserted)
+    void push_multiple_move(Array<T>* array, Slice<typename Array<T>::T> inserted)
     {
-        grow(stack, stack->_size + inserted.size);
+        grow(array, array->_size + inserted.size);
         
         bool is_by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
-        T* base = stack->_data + stack->_size;
+        T* base = array->_data + array->_size;
 
         if(is_by_byte)
             memmove(base, inserted.data, (size_t) inserted.size * sizeof(T));
@@ -481,128 +477,128 @@ namespace jot
                 new(base + i) T((T&&) inserted.data[i]);
         }
 
-        stack->_size += inserted.size;
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
+        array->_size += inserted.size;
+        array_internal::null_terminate(array);
+        assert(is_invariant(*array));
     }
 
     template<class T> 
-    void pop_multiple(Array<T>* stack, isize count) noexcept
+    void pop_multiple(Array<T>* array, isize count) noexcept
     {
-        assert(count <= size(*stack));
-        stack_internal::destruct_items(stack->_data, stack->_size - count, stack->_size);
+        assert(count <= size(*array));
+        array_internal::destruct_items(array->_data, array->_size - count, array->_size);
 
-        stack->_size -= count;
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
+        array->_size -= count;
+        array_internal::null_terminate(array);
+        assert(is_invariant(*array));
     }
     
     template<class T> 
-    void clear(Array<T>* stack) noexcept
+    void clear(Array<T>* array) noexcept
     {
-        pop_multiple(stack, stack->_size);
+        pop_multiple(array, array->_size);
     }
 
     template <class T>
-    void resize(Array<T>* stack, isize to, typename Array<T>::T const& fill_with) noexcept
+    void resize(Array<T>* array, isize to, typename Array<T>::T const& fill_with) noexcept
     {
-        assert(is_invariant(*stack));
+        assert(is_invariant(*array));
         assert(0 <= to);
 
-        reserve(stack, to);
+        reserve(array, to);
         
-        for (isize i = stack->_size; i < to; i++)
-            new(stack->_data + i) T(fill_with);
+        for (isize i = array->_size; i < to; i++)
+            new(array->_data + i) T(fill_with);
 
-        stack_internal::destruct_items(stack->_data, to, stack->_size);
+        array_internal::destruct_items(array->_data, to, array->_size);
         
-        stack->_size = to;
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
+        array->_size = to;
+        array_internal::null_terminate(array);
+        assert(is_invariant(*array));
     }
 
     template<class T> 
-    void resize_for_overwrite(Array<T>* stack, isize to)
+    void resize_for_overwrite(Array<T>* array, isize to)
     {
         bool is_by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
         if(is_by_byte)
-            return resize(stack, to);
+            return resize(array, to);
         else
         {
-            stack->_size = to;
-            stack_internal::null_terminate(stack);
-            assert(is_invariant(*stack));
-            reserve(stack, to);
+            array->_size = to;
+            array_internal::null_terminate(array);
+            assert(is_invariant(*array));
+            reserve(array, to);
         }
     }
 
     template<class T> 
-    void insert(Array<T>* stack, isize at, typename Array<T>::T what)
+    void insert(Array<T>* array, isize at, typename Array<T>::T what)
     {
-        assert(0 <= at && at <= stack->_size);
-        if(at >= size(*stack))
-            return push(stack, (T&&) what);
+        assert(0 <= at && at <= array->_size);
+        if(at >= size(*array))
+            return push(array, (T&&) what);
             
-        grow(stack, stack->_size + 1);
+        grow(array, array->_size + 1);
 
-        new(last(stack) + 1) T((T&&) *last(stack));
+        new(last(array) + 1) T((T&&) *last(array));
 
-        Slice<T> move_from = slice_range(slice(stack), at, stack->_size - 1);
-        Slice<T> move_to = slice_range(slice(stack), at + 1, stack->_size);
+        Slice<T> move_from = slice_range(slice(array), at, array->_size - 1);
+        Slice<T> move_to = slice_range(slice(array), at + 1, array->_size);
         move_items(move_to, move_from);
 
-        stack->_data[at] = (T&&) what;
-        stack->_size += 1;
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
+        array->_data[at] = (T&&) what;
+        array->_size += 1;
+        array_internal::null_terminate(array);
+        assert(is_invariant(*array));
     }
 
     template<class T> 
-    T remove(Array<T>* stack, isize at) noexcept
+    T remove(Array<T>* array, isize at) noexcept
     {
-        assert(0 <= at && at < stack->_size);
-        assert(stack->_size > 0);
+        assert(0 <= at && at < array->_size);
+        assert(array->_size > 0);
         
-        T removed = (T&&) stack->_data[at];
+        T removed = (T&&) array->_data[at];
         
-        Slice<T> move_from = slice_range(slice(stack), at + 1, stack->_size);
-        Slice<T> move_to = slice_range(slice(stack), at, stack->_size - 1);
+        Slice<T> move_from = slice_range(slice(array), at + 1, array->_size);
+        Slice<T> move_to = slice_range(slice(array), at, array->_size - 1);
         move_items(move_to, move_from);
 
-        T* last_ = last(stack);
+        T* last_ = last(array);
         last_->~T();
-        stack->_size -= 1;
-        stack_internal::null_terminate(stack);
-        assert(is_invariant(*stack));
+        array->_size -= 1;
+        array_internal::null_terminate(array);
+        assert(is_invariant(*array));
         return removed;
     }
 
     template<class T> 
-    T unordered_remove(Array<T>* stack, isize at) noexcept
+    T unordered_remove(Array<T>* array, isize at) noexcept
     {
-        assert(0 <= at && at < stack->_size);
-        assert(stack->_size > 0);
+        assert(0 <= at && at < array->_size);
+        assert(array->_size > 0);
 
-        swap(&stack->_data[at], last(stack));
-        return pop(stack);
+        swap(&array->_data[at], last(array));
+        return pop(array);
     }
 
     template<class T>
-    void unordered_insert(Array<T>* stack, isize at, typename Array<T>::T what)
+    void unordered_insert(Array<T>* array, isize at, typename Array<T>::T what)
     {
-        assert(0 <= at && at <= stack->_size);
+        assert(0 <= at && at <= array->_size);
 
-        push(stack, (T&&) what);
-        swap(&stack->_data[at], last(stack));
+        push(array, (T&&) what);
+        swap(&array->_data[at], last(array));
     }
 }
 
 namespace std 
 {
     template<class T> 
-    size_t size(jot::Array<T> const& stack) noexcept
+    size_t size(jot::Array<T> const& array) noexcept
     {
-        return jot::size(stack);
+        return jot::size(array);
     }
 
     template<class T> 
