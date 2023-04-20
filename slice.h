@@ -249,49 +249,4 @@ namespace jot
     {
         return copy_items<T>(to, (Slice<const T>) from);
     }
-
-    //this is technically unrelated to slice but since slice is a 
-    // centerpoint of this entire library it makes sense to put it here
-    constexpr isize max(isize a, isize b)
-    {
-        return a > b ? a : b;
-    }
-
-    constexpr isize min(isize a, isize b)
-    {
-        return a < b ? a : b;
-    }
-
-    constexpr isize clamp(isize val, isize lo, isize hi)
-    {
-        return max(lo, min(val, hi));
-    }
-
-    constexpr isize div_round_up(isize value, isize to_multiple_of)
-    {
-        return (value + to_multiple_of - 1) / to_multiple_of;
-    }
-
-    template <typename T> constexpr 
-    T && move(T* val) noexcept 
-    { 
-        return (T &&) *val; 
-    };
-
-    template <typename T> constexpr 
-    void swap(T* a, T* b) noexcept 
-    { 
-        T copy = (T&&) *a;
-        *a = (T&&) *b;
-        *b = (T&&) copy;
-    };
-}
-
-namespace std
-{
-    template<typename T> constexpr 
-    size_t size(jot::Slice<T> const& slice)   noexcept {return (size_t) slice.size;}
-
-    template<typename T> constexpr 
-    auto data(jot::Slice<T> const& slice)   noexcept {return slice.data;}
 }

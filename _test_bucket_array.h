@@ -12,13 +12,12 @@
 #include "format.h"
 #include "time.h"
 #include "benchmark.h"
-#include "defines.h"
 
 namespace jot
 {
     template <> struct Formattable<Bench_Result>
     {
-        nodisc static
+        static
         void format(String_Builder* appender, Bench_Result result) noexcept
         {
             format_into(appender, "{ ", result.mean_ms, "ms [", result.deviation_ms, "] (", result.iters, ") }");
@@ -243,19 +242,47 @@ namespace jot::tests::bucket_array
     }
 }
 
+#define TEST_STD true
+
 namespace jot::benchmarks
 {
+ 
+    #if 0
+    uint64_t get_random_int(void* state)
+    {
+        ::std::uniform_int_distribution<unsigned long long> uniform_dist(0);
+        gen(*(std::mt19937*));
+    }
+
+
+    void shuffle(int *array, size_t n, void* random) {    
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        int usec = tv.tv_usec;
+        srand48(usec);
+
+
+        if (n > 1) {
+            size_t i;
+            for (i = n - 1; i > 0; i--) {
+                size_t j = (unsigned int) (drand48()*(i+1));
+                int t = array[j];
+                array[j] = array[i];
+                array[i] = t;
+            }
+        }
+    }
+    #endif
+
     static
-    void benchmark_bucket_array_vs_hash_table()
+    void benchmark_cotainer_add()
     {
         const auto bench_adds = [&](u64 batch_size)
         {
             constexpr isize GIVEN_TIME = 500;
             constexpr Bucket_Array_Growth growth = {256, 0, 3, 2};
             println("\nADD ", batch_size);
-        
-            bool test_std = true;
-
+                    
             Bench_Result res_add_array = benchmark(GIVEN_TIME, [&]{
                 Array<u64> array;
                 for(u64 i = 0; i < batch_size; i++)
@@ -271,7 +298,7 @@ namespace jot::benchmarks
                 Hash_Table<u32, u64, int_hash<u32>> hash_table;
                 for(u64 i = 0; i < batch_size; i++)
                 {
-                    set(&hash_table, cast(u32) i, i);
+                    set(&hash_table, (u32) i, i);
                     do_no_optimize(hash_table);
                     read_write_barrier();
                 }
@@ -282,7 +309,7 @@ namespace jot::benchmarks
                 Bucket_Array<u64> bucket_array(8);
                 for(u64 i = 0; i < batch_size; i++)
                 {
-                    cast(void) insert_bucket_index(&bucket_array, i, growth);
+                    (void) insert_bucket_index(&bucket_array, i, growth);
                     do_no_optimize(bucket_array);
                     read_write_barrier();
                 }
@@ -292,7 +319,7 @@ namespace jot::benchmarks
             Bench_Result res_add_vector;
             Bench_Result res_add_unordered_map;
 
-            if(test_std)
+            if(TEST_STD)
             {
                 res_add_vector = benchmark(GIVEN_TIME, [&]{
                     std::vector<u64> vec;
@@ -309,7 +336,7 @@ namespace jot::benchmarks
                     std::unordered_map<u32, u64> map;
                     for(u64 i = 0; i < batch_size; i++)
                     {
-                        map.insert_or_assign(cast(u32) i, i);
+                        map.insert_or_assign((u32) i, i);
                         do_no_optimize(map);
                         read_write_barrier();
                     }
@@ -317,7 +344,7 @@ namespace jot::benchmarks
                 });
             }
 
-            if(test_std)
+            if(TEST_STD)
             {
                 println("vector:       ", res_add_vector);
                 println("unordered_map:", res_add_unordered_map);
@@ -328,14 +355,24 @@ namespace jot::benchmarks
             println("bucket_array: ", res_add_bucket_array);
         };
         
+        bench_adds(1000);
+        println("=== ignore above ===\n");
+        bench_adds(10);
+        bench_adds(100);
+        bench_adds(1000);
+        bench_adds(10000);
+        bench_adds(100000);
+    }
+    
+    static
+    void benchmark_cotainer_remove()
+    {
         const auto bench_remove = [&](u64 batch_size)
         {
             constexpr isize GIVEN_TIME = 500;
             constexpr Bucket_Array_Growth growth = {256, 0, 3, 2};
             println("\nREMOVE ", batch_size);
         
-            bool test_std = true;
-
             Array<u64> array;
             Hash_Table<u32, u64, int_hash<u32>> hash_table;
             Bucket_Array<u64> bucket_array(8);
@@ -364,13 +401,13 @@ namespace jot::benchmarks
                 if(size(hash_table) == 0)
                 {
                     for(u64 i = 0; i < batch_size; i++)
-                        set(&hash_table, cast(u32) i, i);
+                        set(&hash_table, (u32) i, i);
                 
                     removed_i = size(hash_table);
                     return false;
                 }
 
-                remove(&hash_table, cast(u32) --removed_i);
+                remove(&hash_table, (u32) --removed_i);
                 do_no_optimize(hash_table);
                 read_write_barrier();
                 return true;
@@ -380,13 +417,13 @@ namespace jot::benchmarks
                 if(size(hash_table) == 0)
                 {
                     for(u64 i = 0; i < batch_size; i++)
-                        set(&hash_table, cast(u32) i, i);
+                        set(&hash_table, (u32) i, i);
                 
                     removed_i = size(hash_table);
                     return false;
                 }
 
-                mark_removed(&hash_table, cast(u32) --removed_i);
+                mark_removed(&hash_table, (u32) --removed_i);
                 do_no_optimize(hash_table);
                 read_write_barrier();
                 return true;
@@ -396,7 +433,7 @@ namespace jot::benchmarks
                 if(size(bucket_array) == 0)
                 {
                     for(u64 i = 0; i < batch_size; i++)
-                        cast(void) insert_bucket_index(&bucket_array, i, growth);
+                        (void) insert_bucket_index(&bucket_array, i, growth);
                 
                     removed_i = size(bucket_array);
                     return false;
@@ -411,7 +448,7 @@ namespace jot::benchmarks
             Bench_Result res_remove_vector;
             Bench_Result res_remove_unordered_map;
 
-            if(test_std)
+            if(TEST_STD)
             {
                 res_remove_vector = benchmark(GIVEN_TIME, [&]{
                     if(vec.size() == 0)
@@ -433,20 +470,20 @@ namespace jot::benchmarks
                     if(map.size() == 0)
                     {
                         for(u64 i = 0; i < batch_size; i++)
-                            map.insert_or_assign(cast(u32) i, i);
+                            map.insert_or_assign((u32) i, i);
                 
                         removed_i = map.size();
                         return false;
                     }
 
-                    map.extract(cast(u32) --removed_i);
+                    map.extract((u32) --removed_i);
                     do_no_optimize(hash_table);
                     read_write_barrier();
                     return true;
                 });
             }
 
-            if(test_std)
+            if(TEST_STD)
             {
             println("vector:            ", res_remove_vector);
             println("unordered_map:     ", res_remove_unordered_map);
@@ -458,14 +495,6 @@ namespace jot::benchmarks
             println("bucket_array:      ", res_remove_bucket_array);
         };
         
-        bench_adds(1000);
-        println("=== ignore above ===\n");
-        bench_adds(10);
-        bench_adds(100);
-        bench_adds(1000);
-        bench_adds(10000);
-        bench_adds(100000);
-
         bench_remove(1000);
         println("=== ignore above ===\n");
         bench_remove(10);
@@ -473,8 +502,176 @@ namespace jot::benchmarks
         bench_remove(1000);
         bench_remove(10000);
         bench_remove(100000);
-
     }
+
+    /*
+    static
+    void benchmark_container_find()
+    {
+        
+        using Seed = std::random_device::result_type;
+
+        if(print) println("test_stress()");
+
+        std::random_device rd;
+        
+        constexpr isize OP_INSERT = 0;
+        constexpr isize OP_REMOVE = 1;
+
+        std::uniform_int_distribution<unsigned> uniform_dist(0);
+
+        std::mt19937 gen;
+
+
+
+        const auto bench_remove = [&](u64 batch_size)
+        {
+            Array<isize> indices;
+            resize_for_overwrite(&indices, batch_size);
+            for(isize i = 0; i < batch_size; i++)
+                indices[i] = uniform_dist(gen) % batch_size;  
+
+            constexpr isize GIVEN_TIME = 500;
+            println("\nFIND ", batch_size);
+        
+            Array<u64> array;
+            Hash_Table<u32, u64, int_hash<u32>> hash_table;
+            Bucket_Array<u64> bucket_array(8);
+            std::vector<u64> vec;
+            std::unordered_map<u32, u64> map;
+
+            for(isize i = 0; i < batch_size; i++)
+            {
+                set(&hash_table, (u32) i, i);
+                (void) insert_bucket_index(&bucket_array, (u64) i);
+                vec.push_back(i);
+                map.insert_or_assign((u32) i, i);
+                push(&array, i);
+            
+            }
+
+            Bench_Result res_remove_array = benchmark(GIVEN_TIME, [&]{
+                if(size(array) == 0)
+                {
+                    for(u64 i = 0; i < batch_size; i++)
+                        push(&array, i);
+                
+                    removed_i = size(array);
+                    return false;
+                }
+
+                pop(&array);
+                do_no_optimize(array);
+                read_write_barrier();
+                return true;
+            });
+            
+            Bench_Result res_remove_hash_table = benchmark(GIVEN_TIME, [&]{
+                if(size(hash_table) == 0)
+                {
+                    for(u64 i = 0; i < batch_size; i++)
+                        set(&hash_table, (u32) i, i);
+                
+                    removed_i = size(hash_table);
+                    return false;
+                }
+
+                remove(&hash_table, (u32) --removed_i);
+                do_no_optimize(hash_table);
+                read_write_barrier();
+                return true;
+            });
+            
+            Bench_Result res_remove_mark_hash_table = benchmark(GIVEN_TIME, [&]{
+                if(size(hash_table) == 0)
+                {
+                    for(u64 i = 0; i < batch_size; i++)
+                        set(&hash_table, (u32) i, i);
+                
+                    removed_i = size(hash_table);
+                    return false;
+                }
+
+                mark_removed(&hash_table, (u32) --removed_i);
+                do_no_optimize(hash_table);
+                read_write_barrier();
+                return true;
+            });
+            
+            Bench_Result res_remove_bucket_array = benchmark(GIVEN_TIME, [&]{
+                if(size(bucket_array) == 0)
+                {
+                    for(u64 i = 0; i < batch_size; i++)
+                        (void) insert_bucket_index(&bucket_array, i, growth);
+                
+                    removed_i = size(bucket_array);
+                    return false;
+                }
+
+                remove(&bucket_array, --removed_i);
+                do_no_optimize(bucket_array);
+                read_write_barrier();
+                return true;
+            });
+
+            Bench_Result res_remove_vector;
+            Bench_Result res_remove_unordered_map;
+
+            if(TEST_STD)
+            {
+                res_remove_vector = benchmark(GIVEN_TIME, [&]{
+                    if(vec.size() == 0)
+                    {
+                        for(u64 i = 0; i < batch_size; i++)
+                            vec.push_back(i);
+                
+                        removed_i = vec.size();
+                        return false;
+                    }
+
+                    vec.pop_back();
+                    do_no_optimize(bucket_array);
+                    read_write_barrier();
+                    return true;
+                });
+            
+                res_remove_unordered_map = benchmark(GIVEN_TIME, [&]{
+                    if(map.size() == 0)
+                    {
+                        for(u64 i = 0; i < batch_size; i++)
+                            map.insert_or_assign((u32) i, i);
+                
+                        removed_i = map.size();
+                        return false;
+                    }
+
+                    map.extract((u32) --removed_i);
+                    do_no_optimize(hash_table);
+                    read_write_barrier();
+                    return true;
+                });
+            }
+
+            if(TEST_STD)
+            {
+            println("vector:            ", res_remove_vector);
+            println("unordered_map:     ", res_remove_unordered_map);
+            }
+
+            println("stack:             ", res_remove_array);
+            println("hash_table:        ", res_remove_hash_table);
+            println("hash_table mark:   ", res_remove_mark_hash_table);
+            println("bucket_array:      ", res_remove_bucket_array);
+        };
+        
+        bench_remove(1000);
+        println("=== ignore above ===\n");
+        bench_remove(10);
+        bench_remove(100);
+        bench_remove(1000);
+        bench_remove(10000);
+        bench_remove(100000);
+    }
+    */
 }
 
-#include "undefs.h"

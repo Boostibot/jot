@@ -49,10 +49,13 @@ namespace jot
         Stack_Ring_Allocator(void* buffer, isize buffer_size, Allocator* parent = default_allocator()) 
             : parent(parent) 
         {
+            //Slice<uint8_t> aligned = align_forward(buffer, alignof(Slot));
+
             buffer_from = (uint8_t*) buffer;
             buffer_to = buffer_from + buffer_size ;
 
             last_block_to = buffer_from;
+            remainder_from = buffer_to;
             last_block_from = buffer_from;
         }
         

@@ -5,6 +5,14 @@
 #include "array.h" //remove this dependency
 #include "intrin.h"
 
+#ifdef min
+    #undef min
+#endif
+
+#ifdef max
+    #undef max
+#endif
+
 namespace jot
 {
     // BUCKET ARRAY
@@ -378,6 +386,7 @@ namespace jot
             if(to_bucket->next != NULL_LIST_INDEX)
             {
                 Bucket* next_bucket = &bucket_array->_buckets[to_bucket->next];
+                (void) next_bucket;
                 assert(cmp_uc(next_bucket->used_count, <=, to_bucket->used_count) && "used_count's should be consistent");
             }
 

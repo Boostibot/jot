@@ -1,12 +1,6 @@
 #pragma once
 
 #include "memory.h"
-#include "slice.h"
-#include "panic.h"
-
-#ifndef NODISCARD
-    #define NODISCARD [[nodiscard]]
-#endif
 
 namespace jot
 {
@@ -29,57 +23,46 @@ namespace jot
         Array& operator=(Array && other) noexcept;
         Array& operator=(Array const& other);
         
-        using value_type      = T;
-        using size_type       = size_t;
-        using difference_type = ptrdiff_t;
-        using reference       = T&;
-        using const_reference = const T&;
-        using iterator       = T*;
-        using const_iterator = const T*;
-        
-        constexpr iterator       begin() noexcept       { return _data; }
-        constexpr const_iterator begin() const noexcept { return _data; }
-        constexpr iterator       end() noexcept         { return _data + _size; }
-        constexpr const_iterator end() const noexcept   { return _data + _size; }
-
-        constexpr T const& operator[](isize index) const noexcept  
+        T const& operator[](isize index) const noexcept  
         { 
-            assert(0 <= index && index < _size && "index out of range"); 
-            return _data[index]; 
+            assert(0 <= index && index < _size && "index out of range"); return _data[index]; 
         }
-        constexpr T& operator[](isize index) noexcept 
+
+        T& operator[](isize index) noexcept 
         { 
-            assert(0 <= index && index < _size && "index out of range"); 
-            return _data[index]; 
+            assert(0 <= index && index < _size && "index out of range"); return _data[index]; 
         }
     };
-    
-    ///Calculates new size of a array which is guaranteed to be greater than to_fit
-    inline isize calculate_stack_growth(isize curr_size, isize to_fit, isize growth_num = 3, isize growth_den = 2, isize grow_lin = 8);
 
     ///Getters 
-    template<class T> auto data(Array<T> const& array) noexcept -> const T*          {return array._data;}
-    template<class T> auto data(Array<T>* array) noexcept -> T*                      {return array->_data;}
-    template<class T> auto size(Array<T> const& array) noexcept -> isize             {return array._size;}
-    template<class T> auto size(Array<T>* array) noexcept -> isize                   {return array->_size;}
-    template<class T> auto capacity(Array<T> const& array) noexcept -> isize         {return array._capacity;}
-    template<class T> auto capacity(Array<T>* array) noexcept -> isize               {return array->_capacity;}
-    template<class T> auto allocator(Array<T> const& array) noexcept -> Allocator*   {return array._allocator;}
-    template<class T> auto allocator(Array<T>* array) noexcept -> Allocator*         {return array->_data;}
+    template<class T> const T*   data(Array<T> const& array) noexcept       { return array._data; }
+    template<class T> T*         data(Array<T>* array) noexcept             { return array->_data; }
+    template<class T> isize      size(Array<T> const& array) noexcept       { return array._size; }
+    template<class T> isize      size(Array<T>* array) noexcept             { return array->_size; }
+    template<class T> isize      capacity(Array<T> const& array) noexcept   { return array._capacity; }
+    template<class T> isize      capacity(Array<T>* array) noexcept         { return array->_capacity; }
+    template<class T> Allocator* allocator(Array<T> const& array) noexcept  { return array._allocator; }
+    template<class T> Allocator* allocator(Array<T>* array) noexcept        { return array->_data; }
+
+    ///iterators
+    template<typename T> T*       begin(Array<T>& array) noexcept           { return array._data; }
+    template<typename T> const T* begin(Array<T> const& array) noexcept     { return array._data; }
+    template<typename T> T*       end(Array<T>& array) noexcept             { return array._data + array._size; }
+    template<typename T> const T* end(Array<T> const& array) noexcept       { return array._data + array._size; }
 
     ///Returns a slice containing all items of the array
-    template<class T> auto slice(Array<T> const& array) noexcept -> Slice<const T>   {return {array._data, array._size};}
-    template<class T> auto slice(Array<T>* array) noexcept -> Slice<T>               {return {array->_data, array->_size};}
+    template<class T> Slice<const T> slice(Array<T> const& array) noexcept  { return {array._data, array._size}; }
+    template<class T> Slice<T>       slice(Array<T>* array) noexcept        { return {array->_data, array->_size}; }
 
     ///Get first and last items of a array. Cannot be used on empty array!
     template<class T> T*       last(Array<T>* array) noexcept        { return &(*array)[array->_size - 1]; }
-    template<class T> T const& last(Array<T> const& array) noexcept  { return (array)[array._size - 1];}
-    template<class T> T*       first(Array<T>* array) noexcept       { return &(*array)[0];}
-    template<class T> T const& first(Array<T> const& array) noexcept { return (array)[0];}
+    template<class T> T const& last(Array<T> const& array) noexcept  { return (array)[array._size - 1]; }
+    template<class T> T*       first(Array<T>* array) noexcept       { return &(*array)[0]; }
+    template<class T> T const& first(Array<T> const& array) noexcept { return (array)[0]; }
     
-    ///Returns true i
-    template<class T> auto is_invariant(Array<T> const& array) noexcept -> bool;
-    template<class T> auto is_empty(Array<T> const& array) noexcept -> bool;
+    ///Returns true if the structure state is correct which should be always
+    template<class T> bool is_invariant(Array<T> const& array) noexcept;
+    template<class T> bool is_empty(Array<T> const& array) noexcept;
 
     ///swaps contents of left and right arrays
     template<class T> void swap(Array<T>* left, Array<T>* right) noexcept;
@@ -104,7 +87,7 @@ namespace jot
     template<class T> NODISCARD bool reserve_failing(Array<T>* array, isize to_size) noexcept;
     template<class T> void reserve(Array<T>* array, isize to_size);
 
-    ///Same as reserve expect when reallocation happens grows according to calculate_stack_growth()
+    ///Same as reserve expect when reallocation happens grows 3/2*size + 8
     template<class T> void grow(Array<T>* array, isize to_fit);
 
     ///Sets size of array. If to_size is smaller then array size trims the array. If is greater fills the added space with fill_with
@@ -135,7 +118,8 @@ namespace jot
     ///Removes an item from the array at specified index. Moves the last item into freed up spot. The array most not be empty!
     template<class T>    T unordered_remove(Array<T>* array, isize at) noexcept;
     
-    ///Tells array if this type should be null terminated. Provide specialization for your desired type (see string.h)
+    ///Tells array if this type should be null terminated. Provide specialization for your desired type if you
+    /// want it to be considered a string (see string.h)
     template<class T> static constexpr bool is_string_char = false;
 }
 
@@ -143,8 +127,11 @@ namespace jot
 {
     namespace array_internal 
     {
-        //@TODO: remove static inline
-        static inline const uint8_t NULL_TERMINATION_ARR[8] = {'\0'};
+        inline const uint8_t* null_termination_array()
+        {
+            static const uint8_t NULL_TERMINATION_ARRAY[8] = {'\0'};
+            return NULL_TERMINATION_ARRAY;
+        }
 
         template<class T> 
         void null_terminate(Array<T>* array) noexcept
@@ -157,7 +144,7 @@ namespace jot
         void set_data_to_termination(Array<T>* array)
         {
             if constexpr(is_string_char<T>)
-                array->_data = (T*) (void*) NULL_TERMINATION_ARR;
+                array->_data = (T*) (void*) null_termination_array();
             else
                 array->_data = nullptr;
         }   
@@ -165,10 +152,8 @@ namespace jot
         template<typename T> constexpr 
         void destruct_items(T* data, isize from, isize to) noexcept
         {
-            bool byte_destruct = JOT_IS_TRIVIALLY_DESTRUCTIBLE(T);
-            if(byte_destruct == false)
-                for(isize i = from; i < to; i++)
-                    data[i].~T();
+            for(isize i = from; i < to; i++)
+                data[i].~T();
         }
     }
     
@@ -201,16 +186,10 @@ namespace jot
         if(new_data != array->_data)
         {
             T* new_data_t = (T*) new_data; 
-            bool byte_trasnfer = JOT_IS_REALLOCATABLE(T);
-            if(byte_trasnfer)
-                memmove(new_data, array->_data, (size_t) to_size * sizeof(T));
-            else
+            for(isize i = 0; i < to_size; i++)
             {
-                for(isize i = 0; i < to_size; i++)
-                {
-                    new(new_data_t + i) T((T&&) array->_data[i]);
-                    array->_data[i].~T();
-                }
+                new(new_data_t + i) T((T&&) array->_data[i]);
+                array->_data[i].~T();
             }
         }
 
@@ -292,18 +271,6 @@ namespace jot
 
         return size_inv && capa_inv && data_inv && espcape_inv;
     }
-    
-    //Returns new size of a array which is guaranteed to be greater than to_fit
-    inline isize calculate_stack_growth(isize curr_size, isize to_fit, isize growth_num, isize growth_den, isize grow_lin)
-    {
-        //with default values for small sizes grows fatser than classic factor of 2 for big slower
-        isize size = curr_size;
-        while(size < to_fit)
-            size = size * growth_num / growth_den + grow_lin; 
-
-        return size;
-    }
-
      
     template<class T>
     bool reserve_failing(Array<T>* array, isize to_size) noexcept
@@ -319,11 +286,13 @@ namespace jot
     {
         if(set_capacity_failing(array, new_capacity) == false)
         {
-            const char* alloc_name = array->_allocator->get_stats().name;
-            PANIC(panic_cformat, "Array<T> allocation failed! "
-                "Attempted to allocated %t bytes from allocator %s"
+            const char* alloc_name = array->_allocator->get_stats().name; 
+            memory_globals::out_of_memory_hadler()(GET_LINE_INFO(),
+                "Array<T> memory allocation failed! "
+                "Attempted to allocated %t bytes from allocator %p name %s"
                 "Array: {size: %t, capacity: %t} sizeof(T): %z",
-                new_capacity*sizeof(T), alloc_name ? alloc_name : "<No alloc name>", 
+                new_capacity*sizeof(T), array->_allocator, 
+                alloc_name ? alloc_name : "<No alloc name>", 
                 array->_size, array->_capacity, sizeof(T));
         }
     }
@@ -341,7 +310,11 @@ namespace jot
         if (array->_capacity >= to_fit)
             return;
         
-		isize new_capacity = calculate_stack_growth(array->_capacity, to_fit);
+        //for small sizes grows fatser than classic factor of 2 for big slower
+        isize new_capacity = array->_size;
+        while(new_capacity < to_fit)
+            new_capacity = new_capacity * 3/2 + 8; 
+
         set_capacity(array, new_capacity);
     }
 
@@ -351,24 +324,15 @@ namespace jot
         assert(is_invariant(*to));
         reserve(to, from.size);
         
-        Slice<T> capacity_slice = {to->_data, to->_capacity};
-        //if is byte copyable just copy the contents all in one go
-        bool by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
-        if(by_byte)
-            memmove(capacity_slice.data, from.data, (size_t) from.size * sizeof(T));
-        //else copy then copy construct the rest
-        else
-        {
-            isize copy_to = to->_size;
-            if(copy_to > from.size)
-                copy_to = from.size;
+        isize copy_to = to->_size;
+        if(copy_to > from.size)
+            copy_to = from.size;
 
-            for(isize i = 0; i < copy_to; i++)
-                capacity_slice[i] = from[i];
+        for(isize i = 0; i < copy_to; i++)
+            to->_data[i] = from[i];
 
-            for(isize i = copy_to; i < from.size; i++)
-                new(&capacity_slice[i]) T(from[i]);
-        }
+        for(isize i = copy_to; i < from.size; i++)
+            new(&to->_data[i]) T(from[i]);
 
         array_internal::destruct_items(to->_data, from.size, to->_size);
 
@@ -417,7 +381,7 @@ namespace jot
     {
         grow(array, array->_size + 1);
         
-        new(array->_data + array->_size) T((T&&) what);
+        new (array->_data + array->_size) T(((T&&) (what)));
         array->_size++;
         
         array_internal::null_terminate(array);
@@ -445,16 +409,9 @@ namespace jot
     {
         grow(array, array->_size + inserted.size);
         
-        bool is_by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
         T* base = array->_data + array->_size;
-
-        if(is_by_byte)
-            memmove(base, inserted.data, (size_t) inserted.size * sizeof(T));
-        else
-        {
-            for(isize i = 0; i < inserted.size; i++)
-                new(base + i) T(inserted.data[i]);
-        }
+        for(isize i = 0; i < inserted.size; i++)
+            new(base + i) T(inserted.data[i]);
 
         array->_size += inserted.size;
         array_internal::null_terminate(array);
@@ -466,16 +423,9 @@ namespace jot
     {
         grow(array, array->_size + inserted.size);
         
-        bool is_by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
         T* base = array->_data + array->_size;
-
-        if(is_by_byte)
-            memmove(base, inserted.data, (size_t) inserted.size * sizeof(T));
-        else
-        {
-            for(isize i = 0; i < inserted.size; i++)
-                new(base + i) T((T&&) inserted.data[i]);
-        }
+        for(isize i = 0; i < inserted.size; i++)
+            new(base + i) T((T&&) inserted.data[i]);
 
         array->_size += inserted.size;
         array_internal::null_terminate(array);
@@ -520,16 +470,10 @@ namespace jot
     template<class T> 
     void resize_for_overwrite(Array<T>* array, isize to)
     {
-        bool is_by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
-        if(is_by_byte)
-            return resize(array, to);
-        else
-        {
-            array->_size = to;
-            array_internal::null_terminate(array);
-            assert(is_invariant(*array));
-            reserve(array, to);
-        }
+        array->_size = to;
+        array_internal::null_terminate(array);
+        assert(is_invariant(*array));
+        reserve(array, to);
     }
 
     template<class T> 
@@ -541,11 +485,11 @@ namespace jot
             
         grow(array, array->_size + 1);
 
-        new(last(array) + 1) T((T&&) *last(array));
+        T* created = &array->_data[array->_size];
+        new(created) T((T&&) *(created - 1));
 
-        Slice<T> move_from = slice_range(slice(array), at, array->_size - 1);
-        Slice<T> move_to = slice_range(slice(array), at + 1, array->_size);
-        move_items(move_to, move_from);
+        for(isize i = array->_size - 1; i-- > at + 1; )
+            array->_data[i] = (T&&) array->_data[i - 1];
 
         array->_data[at] = (T&&) what;
         array->_size += 1;
@@ -561,13 +505,11 @@ namespace jot
         
         T removed = (T&&) array->_data[at];
         
-        Slice<T> move_from = slice_range(slice(array), at + 1, array->_size);
-        Slice<T> move_to = slice_range(slice(array), at, array->_size - 1);
-        move_items(move_to, move_from);
-
-        T* last_ = last(array);
-        last_->~T();
+        for(isize i = at; i < array->_size - 1; i++)
+            array->_data[i] = (T&&) array->_data[i + 1];
+        
         array->_size -= 1;
+        array->_data[array->_size].~T();
         array_internal::null_terminate(array);
         assert(is_invariant(*array));
         return removed;
@@ -595,12 +537,6 @@ namespace jot
 
 namespace std 
 {
-    template<class T> 
-    size_t size(jot::Array<T> const& array) noexcept
-    {
-        return jot::size(array);
-    }
-
     template<class T> 
     void swap(jot::Array<T>& stack1, jot::Array<T>& stack2)
     {

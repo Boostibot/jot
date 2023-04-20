@@ -77,12 +77,13 @@ namespace jot
         bool deallocate(void* allocated, isize old_size, isize align, Line_Info) noexcept override
         {
             assert(is_power_of_two(align));
+            bytes_alloced -= old_size;
+
             uint8_t* ptr = (uint8_t*) allocated;
             if(ptr != last_allocation || ptr + old_size != available_from)
                 return true;
 
             available_from = (uint8_t*) allocated;
-            bytes_alloced -= old_size;
             assert(bytes_alloced >= 0);
 
             return true;
@@ -124,8 +125,8 @@ namespace jot
             assert(is_invariant());
             isize passed_bytes = 0;
             
-            Chain<Block> used = used_chain();
-            Block* current = used.first;
+
+            Block* current = blocks.first;
             Block* prev = nullptr;
             while(current != nullptr)
             {
@@ -139,8 +140,8 @@ namespace jot
                     parent->deallocate(prev, total_block_size, ARENA_BLOCK_ALIGN, GET_LINE_INFO());
             }
 
-            assert(prev == used.last && "must be a valid chain!");
-            assert(passed_bytes == bytes_used);
+            assert(prev == blocks.last && "must be a valid chain!");
+            assert(passed_bytes >= bytes_used);
         }
 
         void add_external_block(void* buffer, isize buffer_size)
@@ -231,19 +232,20 @@ namespace jot
                     effective_size += align;
 
                 isize required_size = max(effective_size, chunk_size);
-                Block* block = (Block*) parent->allocate(required_size, ARENA_BLOCK_ALIGN, GET_LINE_INFO());
-                if(block == nullptr)
+                obtained = (Block*) parent->allocate(required_size, ARENA_BLOCK_ALIGN, GET_LINE_INFO());
+                if(obtained == nullptr)
                     return false;
 
-                *block = Block{};
-                block->was_alloced = true;
-                block->size = (uint32_t) required_size - sizeof(Block);
+                *obtained = Block{};
+                obtained->was_alloced = true;
+                obtained->size = (uint32_t) required_size - sizeof(Block);
 
                 used_blocks ++;
                 bytes_used += required_size;
                 max_bytes_used = max(max_bytes_used, bytes_used);
                 max_used_blocks = max(max_used_blocks, used_blocks);
                 chunk_size = chunk_grow(chunk_size);
+                assert(obtained != nullptr);
             }
             
             assert(obtained != nullptr);

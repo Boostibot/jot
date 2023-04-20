@@ -58,7 +58,8 @@ namespace jot::tests::memory
         test(stats.max_bytes_used >= stats.bytes_used);
         test(stats.max_bytes_allocated >= stats.bytes_allocated);
 
-        test(stats.bytes_used >= stats.bytes_allocated || stats.bytes_used == stats.NOT_TRACKED);
+        Allocator::Stats def_stats;
+        test(stats.bytes_used >= stats.bytes_allocated || stats.bytes_used == def_stats.bytes_used);
     }
     
     static
@@ -102,11 +103,11 @@ namespace jot::tests::memory
 
             test_stats_plausibility(&stack_ring);
             test(deallocate_slice(&stack_ring, second, 256, GET_LINE_INFO()));
-
-            bool s1 = resize_slice(&stack_ring, &first, 8, 25, GET_LINE_INFO());
+            
+            bool s1 = resize_slice(&stack_ring, &first, 25, 8, GET_LINE_INFO());
             test(s1 == true);
             
-            bool s2 = resize_slice(&stack_ring, &first, 8, 40 + 256, GET_LINE_INFO());
+            bool s2 = resize_slice(&stack_ring, &first, 40 + 256, 8, GET_LINE_INFO());
             test(s2 == false); 
 
             test(deallocate_slice(&stack_ring, first, 8, GET_LINE_INFO()));
@@ -421,7 +422,7 @@ namespace jot::tests::memory
             test_allocs_resize_last(tested);
         };
         
-        for(int i = 0; i < 5; i ++)
+        for(int i = 0; i < 10; i ++)
         {
             set_up_test(10, {4, 8}, {0, 5}, TOUCH);
             test_single(memory_globals::malloc_allocator());
@@ -440,9 +441,14 @@ namespace jot::tests::memory
     static
     void test_memory()
     {
+        isize alloced_before = default_allocator()->get_stats().bytes_allocated;
+        
         test_align();
         test_aligned_malloc();
         test_stack_ring();
         stress_test();
+
+        isize alloced_after = default_allocator()->get_stats().bytes_allocated;
+        test(alloced_before == alloced_after);
     }
 }

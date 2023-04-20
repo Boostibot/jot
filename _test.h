@@ -1,5 +1,6 @@
 #pragma once
 
+#include "panic.h"
 #include "types.h"
 #include "static_array.h"
 #include "string.h"
