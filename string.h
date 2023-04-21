@@ -19,6 +19,8 @@ namespace jot
     template<> constexpr bool is_string_char<char16_t> = true;
     template<> constexpr bool is_string_char<char32_t> = true;
 
+
+
     #define CHAR_T char
     #include "string_type_text.h"
     

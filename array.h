@@ -470,10 +470,10 @@ namespace jot
     template<class T> 
     void resize_for_overwrite(Array<T>* array, isize to)
     {
-        array->_size = to;
-        array_internal::null_terminate(array);
         assert(is_invariant(*array));
         reserve(array, to);
+        array->_size = to;
+        array_internal::null_terminate(array);
     }
 
     template<class T> 

@@ -414,7 +414,7 @@ namespace jot::tests::hash_table
         static constexpr isize OP_REHASH = 5;
         static constexpr isize OP_MULTIADD = 6;
 
-        std::discrete_distribution<unsigned> op_distribution({50, 15, 15, 5, 5, 15, 40});
+        std::discrete_distribution<unsigned> op_distribution({50, 15, 15, 2, 3, 15, 40});
         std::uniform_int_distribution<unsigned> index_distribution(0);
 
         isize max_size = 500;
@@ -520,11 +520,8 @@ namespace jot::tests::hash_table
                             break;
 
                         case OP_RESERVE_ENTRIES: 
-                            reserve_entries(&table, index % max_size);
-                            break;
-                        
                         case OP_RESERVE_JUMP_TABLE: 
-                            reserve_jump_table(&table, index % max_size);
+                            reserve(&table, index % max_size);
                             break;
                             
                         case OP_REHASH: 
