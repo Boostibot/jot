@@ -76,12 +76,11 @@
 #define INTRIN_NO_TRAP
 #endif 
 
-#define cast(a) (a)
 static bool _fallback_intrin__find_first_set_64(size_t* out, uint64_t search_in)
 {
     if(search_in == 0)
     {
-        *out = cast(size_t) -1;
+        *out = (size_t) -1;
         return false;
     }
 
@@ -104,19 +103,19 @@ static bool intrin__find_first_set_32(size_t* out, uint32_t search_in)
         && !defined(INTRIN_NO_FIND_FIRST_SET) 
 
         unsigned long index = 0;
-        bool ret = _BitScanForward(&index, cast(unsigned) search_in) != 0;
-        *out = cast(size_t) index;
+        bool ret = _BitScanForward(&index, (unsigned) search_in) != 0;
+        *out = (size_t) index;
         return ret;
     #elif (defined(INTRIN_COMPILER__GNUC) || defined(INTRIN_COMPILER__CLANG)) \
         && !defined(INTRIN_NO_FIND_FIRST_SET) 
 
-        int index = __builtin_ffsl(cast(unsigned long) search_in);
-        *out = cast(size_t) index - 1;
+        int index = __builtin_ffsl((unsigned long) search_in);
+        *out = (size_t) index - 1;
         return index != 0;
     #else
         //i am not going to write this two times because of single or 
         // which the compiler will hopefully optimize away
-        return _fallback_intrin__find_first_set_64(out, cast(uint64_t) search_in);
+        return _fallback_intrin__find_first_set_64(out, (uint64_t) search_in);
     #endif
 }
 
@@ -126,19 +125,19 @@ static bool intrin__find_first_set_64(size_t* out, uint64_t search_in)
         && !defined(INTRIN_NO_FIND_FIRST_SET) 
 
         unsigned long index = 0;
-        bool ret = _BitScanForward64(&index, cast(unsigned long long) search_in) != 0;
-        *out = cast(size_t) index;
+        bool ret = _BitScanForward64(&index, (unsigned long long) search_in) != 0;
+        *out = (size_t) index;
         return ret;
     #elif (defined(INTRIN_COMPILER__GNUC) || defined(INTRIN_COMPILER__CLANG)) \
         && !defined(INTRIN_NO_FIND_FIRST_SET) 
 
-        int index = __builtin_ffsll(cast(unsigned long long) search_in);
-        *out = cast(size_t) index - 1;
+        int index = __builtin_ffsll((unsigned long long) search_in);
+        *out = (size_t) index - 1;
         return index != 0;
     #else
         //i am not going to write this two times because of single or 
         // which the compiler will hopefully optimize away
-        return _fallback_intrin__find_first_set_64(out, cast(uint64_t) search_in);
+        return _fallback_intrin__find_first_set_64(out, (uint64_t) search_in);
     #endif
 }
 //ctz <=> forward
@@ -149,17 +148,17 @@ static size_t intrin__pop_count_32(uint32_t val)
     #if defined(INTRIN_COMPILER__MSVC) \
         && !defined(INTRIN_NO_POPCOUNT) 
 
-        return cast(size_t) __popcnt(cast(unsigned int) val);
+        return (size_t) __popcnt((unsigned int) val);
     #elif (defined(INTRIN_COMPILER__GNUC) || defined(INTRIN_COMPILER__CLANG)) \
         && !defined(INTRIN_NO_POPCOUNT) 
 
-        return cast(size_t) __builtin_popcountl(cast(unsigned long) val);
+        return (size_t) __builtin_popcountl((unsigned long) val);
     #else
-        uint32_t i = cast(uint32_t) val;
+        uint32_t i = (uint32_t) val;
         i = i - ((i >> 1) & 0x55555555);                    // add pairs of bits
         i = (i & 0x33333333) + ((i >> 2) & 0x33333333);     // quads
         i = (i + (i >> 4)) & 0x0F0F0F0F;                    // groups of 8
-        return cast(size_t) (i * 0x01010101) >> 24;         // horizontal sum of bytes
+        return (size_t) (i * 0x01010101) >> 24;         // horizontal sum of bytes
     #endif
 }
 
@@ -168,14 +167,14 @@ static size_t intrin__pop_count_64(uint64_t val)
     #if defined(INTRIN_COMPILER__MSVC) \
         && !defined(INTRIN_NO_POPCOUNT) 
 
-        return cast(size_t) __popcnt64(cast(unsigned long long) val);
+        return (size_t) __popcnt64((unsigned long long) val);
     #elif (defined(INTRIN_COMPILER__GNUC) || defined(INTRIN_COMPILER__CLANG)) \
         && !defined(INTRIN_NO_POPCOUNT) 
 
-        return cast(size_t) __builtin_popcountll(cast(unsigned long long) val);
+        return (size_t) __builtin_popcountll((unsigned long long) val);
     #else
-        uint32_t val1 = cast(uint32_t) val;
-        uint32_t val2 = cast(uint32_t) (val >> 32);
+        uint32_t val1 = (uint32_t) val;
+        uint32_t val2 = (uint32_t) (val >> 32);
         size_t count1 = intrin__pop_count_32(val1);
         size_t count2 = intrin__pop_count_32(val2);
 
@@ -228,16 +227,7 @@ static void intrin__unreachable(void)
     #endif
 }
 
-#if 0
-    #if defined(INTRIN_COMPILER__MSVC)
-    #elif defined(INTRIN_COMPILER__GNUC) || defined(INTRIN_COMPILER__CLANG)
-    #else
-    #endif
-#endif
-
-#undef cast
-
-#if INTRIN_EXAMPLE
+#ifdef INTRIN_EXAMPLE
 #include <cstdio>
 
 int main()
@@ -257,4 +247,14 @@ int main()
 }
 #endif
 
+#ifdef min
+    #undef min
 #endif
+
+#ifdef max
+    #undef max
+#endif
+
+#endif
+
+

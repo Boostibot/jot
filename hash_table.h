@@ -267,12 +267,14 @@ namespace jot
         {
             assert(is_invariant(*table));
 
-            isize required_min_size = div_round_up(table->_entries_size, sizeof(uint32_t));
+            #ifndef NDEBUG
+            isize required_min_size = div_round_up(table->_entries_size, (isize) sizeof(uint32_t));
             bool is_shrinking_ammount_allowed = to_size >= required_min_size && to_size >= table->_entries_size;
             bool is_resulting_size_allowed = is_power_of_two(to_size);
 
             assert(is_shrinking_ammount_allowed && is_resulting_size_allowed && 
                 "must be big enough (no more shrinking than by factor of 4 at a time) and power of two");
+            #endif
 
             isize alloc_size = to_size * (isize) sizeof(uint32_t);
             void* allocation_result = table->_allocator->allocate(alloc_size, HASH_TABLE_LINKER_ALIGN, GET_LINE_INFO());
@@ -447,7 +449,7 @@ namespace jot
 
         return found;
     }
-   
+
     template <class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
     Hash_Found find_found_entry(Hash_Table<Key, Value, hash, equals> const& table, isize entry_i, uint64_t hashed) noexcept
     {
@@ -593,7 +595,7 @@ namespace jot
     {
         isize rehash_to = growth.jump_table_base_size;
 
-        isize required_min_size = div_round_up(table->_entries_size, sizeof(uint32_t)); //cannot shrink below this
+        isize required_min_size = div_round_up(table->_entries_size, (isize) sizeof(uint32_t)); //cannot shrink below this
         isize normed = max(to_size, required_min_size);
         normed = max(normed, table->_entries_size);
         while(rehash_to < normed)
@@ -606,7 +608,7 @@ namespace jot
     void rehash(Hash_Table<Key, Value, hash, equals>* table, isize to_size, uint64_t seed, Hash_Table_Growth growth = {})
     {
         if(rehash_failing(table, to_size, seed, growth) == false)
-            hash_table_internal::panic_out_of_memory(*table, GET_LINE_INFO(), to_size * sizeof(uint32_t), "rehash");
+            hash_table_internal::panic_out_of_memory(*table, GET_LINE_INFO(), to_size * (isize) sizeof(uint32_t), "rehash");
     }
 
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals> 
@@ -624,7 +626,7 @@ namespace jot
             rehash(table, jump_table_size, table->_seed, growth);
 
         if(reserve_entries_failing(table, to_fit, growth) == false)
-            hash_table_internal::panic_out_of_memory(*table, GET_LINE_INFO(), to_fit * sizeof(Key), "reserve");
+            hash_table_internal::panic_out_of_memory(*table, GET_LINE_INFO(), to_fit * (isize) sizeof(Key), "reserve");
     }
 
 
@@ -686,7 +688,7 @@ namespace jot
                 rehash_to = growth.jump_table_base_size;
 
             if(hash_table_internal::unsafe_rehash(table, rehash_to, table->_seed) == false)
-                hash_table_internal::panic_out_of_memory(*table, GET_LINE_INFO(), rehash_to*sizeof(uint32_t), "grow_if_overfull");
+                hash_table_internal::panic_out_of_memory(*table, GET_LINE_INFO(), rehash_to * (isize) sizeof(uint32_t), "grow_if_overfull");
         }
     }
     
@@ -716,7 +718,7 @@ namespace jot
 
             isize size = (isize) table->_entries_size;
             if(reserve_entries_failing(table, size + 1, growth) == false)
-                hash_table_internal::panic_out_of_memory(*table, GET_LINE_INFO(), (size + 1) * sizeof(Key), "push_new");
+                hash_table_internal::panic_out_of_memory(*table, GET_LINE_INFO(), (size + 1) * (isize) sizeof(Key), "push_new");
 
             new (&table->_keys[size]) Key(move(&key));
             new (&table->_values[size]) Value(move(&value));

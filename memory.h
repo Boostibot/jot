@@ -170,7 +170,7 @@ namespace jot
     {
         using Out_Of_Memory_handler_Function = void(*)(Line_Info callee, const char* cformat, isize requested_size, Allocator* requested_from, ...);
         
-        inline void default_out_of_memory_handler(Line_Info, const char*, isize, Allocator*, ...)
+        static void default_out_of_memory_handler(Line_Info, const char*, isize, Allocator*, ...)
         {
             assert("Out of memory!");
             *(const char* volatile*) 0 = "JOT_PANIC triggered! ";

@@ -7,13 +7,13 @@
 #define _CRT_SECURE_NO_WARNINGS_GLOBALS
 #pragma warning(disable : 4996)
 
-#include <cstdio>
-#include <cassert>
+#include <stdio.h>
+#include <assert.h>
+#include <locale.h>
+#include <stddef.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <clocale>
-#include <cstddef>
 
 #include "unistd.h"
 
@@ -25,8 +25,6 @@ using isize = ptrdiff_t;
 namespace jot 
 {
     using File_Descriptor = int;
-    using File_Flag = int;
-    using File_Mode = mode_t;
     using File_Stats = Stat64;
 
     //A thin wrapper around the posix file interface
@@ -35,88 +33,67 @@ namespace jot
     {
         File_Descriptor descriptor = -1;
         File() {}
-        File(File_Descriptor from) : descriptor(from) {}
+        explicit File(File_Descriptor from) : descriptor(from) {}
+        File(File && other) noexcept;
         File(File const&) = delete;
 
-        ~File() {
-            if(descriptor == -1)
-                return;
-
-            ::close(descriptor);
-        }
+        ~File() noexcept;
     };
-
 
     //Shared flags
-    namespace Flags {
-        enum : File_Flag {
-            READ = O_RDONLY,
-            WRITE = O_WRONLY,
-            READ_WRITE = O_RDWR,
+    enum class File_Open_Mode 
+    {
+        READ = O_RDONLY,
+        WRITE = O_WRONLY,
+        READ_WRITE = O_RDWR,
 
-            APPEND = O_APPEND,
-            CREATE = O_CREAT,
-            EXCLUSIVE = O_EXCL,
-            TRUNCATE = O_TRUNC,
-        };
+        APPEND = O_APPEND,
+        CREATE = O_CREAT,
+        EXCLUSIVE = O_EXCL,
+        TRUNCATE = O_TRUNC,
+
+        WINDOWS_TEXT       = O_TEXT,
+        WINDOWS_BINARY     = O_BINARY,
+        WINDOWS_RAW        = O_BINARY,
+        WINDOWS_TEMPORARY  = O_TEMPORARY,
+        WINDOWS_NOINHERIT  = O_NOINHERIT,
+        WINDOWS_SEQUENTIAL = O_SEQUENTIAL,
+        WINDOWS_RANDOM     = O_RANDOM,
+        
+        LINUX_DSYNC = O_DSYNC,
+        LINUX_NOCTTY = O_NOCTTY,
+        LINUX_NONBLOCK = O_NONBLOCK,
+        LINUX_RSYNC = O_RSYNC,
+        LINUX_SYNC = O_SYNC,
     };
 
-    namespace Windows_Flags {
-        enum : File_Flag {
-            TEXT       = O_TEXT,
-            BINARY     = O_BINARY,
-            RAW        = O_BINARY,
-            TEMPORARY  = O_TEMPORARY,
-            NOINHERIT  = O_NOINHERIT,
-            SEQUENTIAL = O_SEQUENTIAL,
-            RANDOM     = O_RANDOM,
-        };
+    enum class File_Permission_Mode 
+    {
+        IRWXU = 00700, //user (file owner) has read, write, and execute permission
+        IRUSR = 00400, //user has read permission
+        IWUSR = 00200, //user has write permission
+        IXUSR = 00100, //user has execute permission
+        IRWXG = 00070, //group has read, write, and execute permission
+        IRGRP = 00040, //group has read permission
+        IWGRP = 00020, //group has write permission
+        IXGRP = 00010, //group has execute permission
+        IRWXO = 00007, //others have read, write, and execute permission
+        IROTH = 00004, //others have read permission
+        IWOTH = 00002, //others have write permission
+        IXOTH = 00001, //others have execute permission
+
+        //??windows
+        IFMT   = 0xF000, // File type mask
+        IFDIR  = 0x4000, // Directory
+        IFCHR  = 0x2000, // Character special
+        IFIFO  = 0x1000, // Pipe
+        IFREG  = 0x8000, // Regular
+        IREAD  = 0x0100, // Read permission, owner
+        IWRITE = 0x0080, // Write permission, owner
+        IEXEC  = 0x0040, // Execute/search permission, owner
     };
 
-    namespace Linux_Flags {
-        enum : File_Flag {
-            DSYNC = O_DSYNC,
-            NOCTTY = O_NOCTTY,
-            NONBLOCK = O_NONBLOCK,
-            RSYNC = O_RSYNC,
-            SYNC = O_SYNC,
-        };
-    };
-
-    namespace All_Flags {
-        using namespace Flags;           
-        using namespace Windows_Flags;           
-        using namespace Linux_Flags;           
-    };
-
-    namespace enum_detail {
-        enum File_Open_Mode : File_Mode {
-            IRWXU = 00700, //user (file owner) has read, write, and execute permission
-            IRUSR = 00400, //user has read permission
-            IWUSR = 00200, //user has write permission
-            IXUSR = 00100, //user has execute permission
-            IRWXG = 00070, //group has read, write, and execute permission
-            IRGRP = 00040, //group has read permission
-            IWGRP = 00020, //group has write permission
-            IXGRP = 00010, //group has execute permission
-            IRWXO = 00007, //others have read, write, and execute permission
-            IROTH = 00004, //others have read permission
-            IWOTH = 00002, //others have write permission
-            IXOTH = 00001, //others have execute permission
-
-            //??windows
-            IFMT   = 0xF000, // File type mask
-            IFDIR  = 0x4000, // Directory
-            IFCHR  = 0x2000, // Character special
-            IFIFO  = 0x1000, // Pipe
-            IFREG  = 0x8000, // Regular
-            IREAD  = 0x0100, // Read permission, owner
-            IWRITE = 0x0080, // Write permission, owner
-            IEXEC  = 0x0040, // Execute/search permission, owner
-        };
-    }
-
-    enum class Access_Permission : int {
+    enum class File_Access_Permission : int {
         READ = R_OK,
         WRITE = W_OK,
         EXECUTE = X_OK,
@@ -130,98 +107,147 @@ namespace jot
         Current = SEEK_END,
     };
 
-    using File_Open_Mode = enum_detail::File_Open_Mode;
-
-    static const File_Mode DEFAULT_OPEN_MODE = 0644;
+    static const File_Permission_Mode DEFAULT_OPEN_MODE = (File_Permission_Mode) 0644;
 
     //this is a wild guess cause the standard only says more than 32767B but on probably all systems
-    // the following should hold: 
+    // the following should hold on all systems see: https://stackoverflow.com/a/29723318
     static const isize MAX_READ_WRITE_CHUNK = (1 << 30) - 1;
-    // see: https://stackoverflow.com/a/29723318
         
-    inline File open(const char* filename, File_Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY, File_Mode pmode = DEFAULT_OPEN_MODE) noexcept
+    static File_Open_Mode operator |(File_Open_Mode a, File_Open_Mode b) 
     {
-        return File(::open(filename, oflag | Windows_Flags::BINARY, pmode));
+        return (File_Open_Mode) ((int) a | (int) b);
+    }
+    static File_Permission_Mode operator |(File_Permission_Mode a, File_Permission_Mode b) 
+    {
+        return (File_Permission_Mode) ((int) a | (int) b);
+    }
+    
+    namespace file_globals
+    {
+        //Rewires all open/close operations so that they save their descriptors into its internal buffer 
+        // intstead of the default global one. Calls close on all yet not closed descriptors in destructor.
+        //Is used for sanboxing big parts of a code where we use longjump and thus cannot trust destructors.
+        struct File_Guard_Swap;
+
+        inline isize* descriptors_size_ptr()
+        {
+            thread_local static isize size = 0;
+            return &size;
+        }
+
+        inline File_Descriptor** descriptors_ptr()
+        {
+            thread_local static File_Descriptor* descriptors_ptr = nullptr;
+            return &descriptors_ptr;
+        }
+
+        inline File_Descriptor* descriptors()
+        {
+            return *descriptors_ptr();
+        }
+
+        //returns index of descriptor or -1 if not found or -2 if no guard is set
+        static isize find_descriptor(isize value);
     }
 
-    inline File create(const char* filename, File_Flag oflag = Flags::READ_WRITE | Windows_Flags::BINARY | Flags::CREATE, File_Mode pmode = DEFAULT_OPEN_MODE) noexcept
+    static File open(const char* filename, File_Open_Mode oflag = File_Open_Mode::READ_WRITE | File_Open_Mode::WINDOWS_BINARY, File_Permission_Mode pmode = DEFAULT_OPEN_MODE) noexcept
+    {
+        isize open_i = file_globals::find_descriptor(-1);
+        if(open_i == -1)
+            return File{-1};
+
+        File_Descriptor descriptor = ::open(filename, (int) oflag, (mode_t) (int) pmode);
+        if(descriptor < 0)
+            return File{-1};
+            
+        if(open_i >= 0) 
+            file_globals::descriptors()[open_i] = descriptor;
+            
+        return File{descriptor};
+    }
+
+    static File create(const char* filename, File_Open_Mode oflag = File_Open_Mode::READ_WRITE | File_Open_Mode::WINDOWS_BINARY | File_Open_Mode::CREATE, File_Permission_Mode pmode = DEFAULT_OPEN_MODE) noexcept
     {
         return open(filename, oflag, pmode);
     }
 
-    inline bool close(File fd) noexcept
+    static bool close(File file) noexcept
     {
-        if(fd.descriptor == -1)
+        if(file.descriptor < 0)
             return true;
-
-        bool state = ::close(fd.descriptor) == 0;
-        fd.descriptor = -1;
+        
+        isize used_i = file_globals::find_descriptor(file.descriptor);
+        if(used_i >= 0)
+            file_globals::descriptors()[used_i] = -1;
+            
+        bool state = ::close(file.descriptor) == 0;
+        file.descriptor = -1;
         return state;
     }
 
-    inline bool has_access(const char* path, Access_Permission permission) noexcept
+    static bool has_access(const char* path, File_Access_Permission permission) noexcept
     {
         return ::access(path, (int) permission) != -1;
     }
 
-    inline File copy(File const& fd) noexcept
+    static File copy(File const& file) noexcept
     {
-        return File(::dup(fd.descriptor));
+        return File(::dup(file.descriptor));
     }
 
-    inline bool copy(File const& fd, File* to) noexcept
+    static bool copy(File const& file, File* to) noexcept
     {
-        return ::dup2(fd.descriptor, to->descriptor) == 0;
+        return ::dup2(file.descriptor, to->descriptor) == 0;
     }
 
-    //Truncates file specified by fd to specified size in bytes
-    inline bool truncate(File* fd, long size) noexcept
+    //Truncates file specified by file to specified size in bytes
+    static bool truncate(File* file, long size) noexcept
     {
-        return ::ftruncate(fd->descriptor, (long) size) == 0;
+        return ::ftruncate(file->descriptor, (long) size) == 0;
     }
 
     //deletes a name and possibly the file it refers to
     // the file remains in existance untill all other processes
     // closed the file only then it is deleted.
-    inline bool unlink(const char* filename) noexcept
+    static bool unlink(const char* filename) noexcept
     {
         return ::unlink(filename) == 0;
     }
 
-    inline File from_c_file(FILE* stream) noexcept
+    static File to_file(FILE* stream) noexcept
     {
         return File(::fileno(stream));
     }
 
-    inline FILE* to_c_file(File fd, const char* mode) noexcept
+    static FILE* to_c_file(File file, const char* mode) noexcept
     {
-        return ::fdopen(fd.descriptor, mode);
+        return ::fdopen(file.descriptor, mode);
     }
 
     //Fills buffer with the current dir const char*. If it is too small mallocs it instead
     // returns a pointer to the potentionally alloced destination. This needs to be freed
     // Might also fail and return NULL instead.
-    inline const char* fill_or_alloc_current_dir_cstring(char *buffer, int maxlen) noexcept
+    static const char* fill_or_alloc_current_dir_cstring(char *buffer, int maxlen) noexcept
     {
         return ::getcwd(buffer, maxlen);
     }
 
-    inline bool change_dir(const char* dirname) noexcept
+    static bool change_dir(const char* dirname) noexcept
     {
         return ::chdir(dirname) == 0;
     }
 
-    inline bool is_open(File const& fd) noexcept
+    static bool is_open(File const& file) noexcept
     {
-        return fd.descriptor != -1;
+        return file.descriptor >= 0;
     }
 
-    inline bool is_character_device(File const& fd) noexcept
+    static bool is_character_device(File const& file) noexcept
     {
-        return is_open(fd) && ::isatty(fd.descriptor) != 0;
+        return is_open(file) && ::isatty(file.descriptor) != 0;
     }
 
-    inline isize seek(File* fd, isize offset, Seek_From from = Seek_From::Begin) noexcept
+    static isize seek(File* file, isize offset, Seek_From from = Seek_From::Begin) noexcept
     {
         if(from == Seek_From::Begin)
             assert(offset >= 0 && "cannot seek before start");
@@ -230,27 +256,41 @@ namespace jot
             assert(offset <= 0 && "cannot seek past end");
         
         off64_t cast_offset = (off64_t) offset;
-        return (isize) ::lseek64(fd->descriptor, cast_offset, (int) from);
+        return (isize) ::lseek64(file->descriptor, cast_offset, (int) from);
     } 
 
-    inline isize tell(File const& fd) noexcept
+    static isize tell(File const& file) noexcept
     {
-        return (isize) ::tell64(fd.descriptor);
+        return (isize) ::tell64(file.descriptor);
     }
 
-    inline bool make_dir(const char* dirname) noexcept
+    static bool make_dir(const char* dirname) noexcept
     {
         return ::mkdir(dirname) == 0;
     }
 
-    inline bool remove_dir(const char* dirname) noexcept
+    static bool remove_dir(const char* dirname) noexcept
     {
         return ::rmdir(dirname) == 0;
     }
 
-    inline bool rename(const char* old, const char* new_name) noexcept
+    static bool rename(const char* old, const char* new_name) noexcept
     {
         return ::rename(old, new_name) == 0;
+    }
+    
+    static File_Stats get_stats(File const& file) noexcept
+    {
+        File_Stats stat = {0};
+        ::fstat64(file.descriptor, &stat);
+        return stat;
+    }
+
+    static File_Stats get_stats(const char* path) noexcept
+    {
+        File_Stats stat = {0};
+        ::stat64(path, &stat);
+        return stat;
     }
 
     struct File_IO_Result
@@ -275,14 +315,14 @@ namespace jot
     // 2 - read some buffer_size and end was encountered => ok & eof
     // 3 - read some buffer_size and error was encountered => !ok & errno_code
     // 4 - file was closed => !ok & file_closed
-    inline File_IO_Result partial_read(File* fd, void* buffer, isize buffer_size) noexcept
+    static File_IO_Result partial_read(File* file, void* buffer, isize buffer_size) noexcept
     {
         assert(buffer_size >= 0 && "size must be valid");
         assert(buffer != NULL && "buffer must be valid");
 
         File_IO_Result result;
         result.ok = true;
-        if(is_open(*fd) == false)
+        if(is_open(*file) == false)
         {
             result.file_closed = true;
             result.ok = false;
@@ -296,7 +336,7 @@ namespace jot
                 unsigned single_read = (unsigned) min(remaining, MAX_READ_WRITE_CHUNK);
                 void* read_to = (char*) buffer + result.processed_size;
 
-                int res = ::read(fd->descriptor, read_to, single_read);
+                int res = ::read(file->descriptor, read_to, single_read);
                 if(res == 0) 
                 {
                     result.eof = true;
@@ -328,13 +368,13 @@ namespace jot
     // 3 - read some buffer_size and end was not encountered => !ok & errno_code
     // 4 - read some buffer_size and end was encountered => ok & eof
     // 5 - file was closed => !ok & file_closed
-    inline File_IO_Result read(File* fd, void* buffer, isize buffer_size) noexcept
+    static File_IO_Result read(File* file, void* buffer, isize buffer_size) noexcept
     {
         File_IO_Result result;
         isize processed_size = 0;
         while(true)
         {
-            result = partial_read(fd, buffer, buffer_size);
+            result = partial_read(file, buffer, buffer_size);
             if(result.continue_io_loop == false)
                 break;
 
@@ -353,14 +393,14 @@ namespace jot
     // 2 - read some buffer_size and error was encountered => !ok & errno_code
     // 3 - file was closed => !ok & file_closed
     //Note: cannot produce EOF
-    inline File_IO_Result partial_write(File* fd, const void *buffer, isize buffer_size) noexcept
+    static File_IO_Result partial_write(File* file, const void *buffer, isize buffer_size) noexcept
     {
         assert(buffer_size >= 0 && "size must be valid");
         assert(buffer != NULL && "buffer must be valid");
         
         File_IO_Result result;
         result.ok = true;
-        if(is_open(*fd) == false)
+        if(is_open(*file) == false)
         {
             result.file_closed = true;
             result.ok = false;
@@ -373,7 +413,7 @@ namespace jot
                 unsigned single_read = (unsigned) min(remaining, MAX_READ_WRITE_CHUNK);
                 void* read_to = (char*) buffer + result.processed_size;
 
-                int res = ::write(fd->descriptor, read_to, single_read);
+                int res = ::write(file->descriptor, read_to, single_read);
                 if(res < 0)
                 {
                     result.ok = false;
@@ -397,13 +437,13 @@ namespace jot
     // 2 - written some buffer_size and error was encountered => !ok & errno_code
     // 3 - file was closed => !ok & file_closed
     //Note: cannot produce EOF
-    inline File_IO_Result write(File* fd, const void *buffer, isize buffer_size) noexcept
+    static File_IO_Result write(File* file, const void *buffer, isize buffer_size) noexcept
     {   
         File_IO_Result result;
         isize processed_size = 0;
         while(true)
         {
-            result = partial_write(fd, buffer, buffer_size);
+            result = partial_write(file, buffer, buffer_size);
             if(result.continue_io_loop == false)
                 break;
 
@@ -416,23 +456,85 @@ namespace jot
         return result;
     }
 
-    inline File_Stats get_stats(File const& fd) noexcept
+    //====== Cplusplus-y things =======
+    File::File(File&& other) noexcept
     {
-        File_Stats stat = {0};
-        ::fstat64(fd.descriptor, &stat);
-        return stat;
+        File_Descriptor temp = other.descriptor;
+        other.descriptor = descriptor;
+        descriptor = temp;
     }
 
-    inline File_Stats get_stats(const char* path) noexcept
+    File::~File() noexcept
     {
-        File_Stats stat = {0};
-        ::stat64(path, &stat);
-        return stat;
+        if(descriptor < 0)
+            return;
+
+        close((File&&) *this);
+    }
+    
+    namespace file_globals
+    {
+        inline isize* descriptors_size_ptr()
+        {
+            thread_local static isize size = 0;
+            return &size;
+        }
+
+        inline File_Descriptor** descriptors_ptr()
+        {
+            thread_local static File_Descriptor* descriptors_ptr = nullptr;
+            return &descriptors_ptr;
+        }
+
+        static isize find_descriptor(isize value)
+        {
+            isize descriptors_size = *file_globals::descriptors_size_ptr();
+            File_Descriptor* descriptors = *file_globals::descriptors_ptr();
+            if(descriptors_size <= 0 || descriptors == nullptr)
+                return -2;
+
+            for(isize i = 0; i < descriptors_size; i++)
+                if(descriptors[i] == value)
+                    return i;
+
+            return -1;
+        }
+
+        //@TODO: make better
+        struct File_Guard_Swap
+        {
+            File_Descriptor* new_descriptors = nullptr;
+            File_Descriptor* old_descriptors = nullptr;
+            isize new_descriptors_size = 0;
+            isize old_descriptors_size = 0;
+
+            File_Guard_Swap(File_Descriptor* new_descriptor_array, isize new_descriptor_array_size) 
+            {
+                new_descriptors = new_descriptor_array;
+                new_descriptors_size = new_descriptor_array_size;
+                old_descriptors = *descriptors_ptr();
+                old_descriptors_size = *descriptors_size_ptr();
+
+                for(isize i = 0; i < new_descriptors_size; i++)
+                    new_descriptors[i] = -1;
+
+                *descriptors_ptr() = new_descriptors;
+            }
+
+            ~File_Guard_Swap()
+            {
+                for(isize i = 0; i < new_descriptors_size; i++)
+                    close(File(new_descriptors[i]));
+
+                *descriptors_ptr() = old_descriptors;
+                *descriptors_size_ptr() = old_descriptors_size;
+            }
+        };
     }
     
     #ifndef SET_UTF8_LOCALE
     #define SET_UTF8_LOCALE
-    inline bool set_utf8_locale(bool english = false)
+    static bool set_utf8_locale(bool english = false)
     {
         if(english)
             return setlocale(LC_ALL, "en_US.UTF-8") != NULL;
@@ -446,6 +548,5 @@ namespace jot
     #endif // !SET_UTF8_LOCALE
 }
 
-#undef 
 #undef min
 #undef max

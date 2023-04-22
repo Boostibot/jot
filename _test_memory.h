@@ -120,7 +120,7 @@ namespace jot::tests::memory
             Slice<uint8_t> a1 = allocate_slice(&stack_ring, 64, 8, GET_LINE_INFO());
             Slice<uint8_t> a2 = allocate_slice(&stack_ring, 64, 8, GET_LINE_INFO());
             Slice<uint8_t> a3 = allocate_slice(&stack_ring, 64, 8, GET_LINE_INFO());
-            test(a1.data != nullptr && a2.data != nullptr && a2.data != nullptr);
+            test(a1.data != nullptr && a2.data != nullptr && a3.data != nullptr);
 
             test_stats_plausibility(&stack_ring);
             
@@ -141,7 +141,7 @@ namespace jot::tests::memory
     }
     
     static
-    void stress_test()
+    void stress_test(bool print)
     {
         struct IRange 
         {
@@ -412,9 +412,17 @@ namespace jot::tests::memory
 
             arena.reset();
         };
-
-        const auto test_single = [&](Allocator* tested)
+        
+        if(print) println("  test_stress()");
+        const auto test_single = [&](isize i, Allocator* tested)
         {
+            if(print)
+            {
+                cstring name = tested->get_stats().name;
+                name = name ? name : "<No allocator name>";
+                println("    i: {} {}\t batch: {}\t", i, name, block_size);
+            }
+
             test_allocs_fifo(tested);
             test_allocs_lifo(tested);
             test_allocs_temp(tested);
@@ -425,28 +433,37 @@ namespace jot::tests::memory
         for(int i = 0; i < 10; i ++)
         {
             set_up_test(10, {4, 8}, {0, 5}, TOUCH);
-            test_single(memory_globals::malloc_allocator());
-            test_single(&arena);
-            test_single(&stack_ring);
-            test_single(&stack);
+            test_single(i, &malloc);
+            test_single(i, &arena);
+            test_single(i, &stack_ring);
+            test_single(i, &stack);
         
             set_up_test(200, {1, 10}, {0, 10}, TOUCH);
-            test_single(memory_globals::malloc_allocator());
-            test_single(&arena);
-            test_single(&stack_ring);
-            test_single(&stack);
+            test_single(i, &malloc);
+            test_single(i, &arena);
+            test_single(i, &stack_ring);
+            test_single(i, &stack);
         }
     }
     
     static
-    void test_memory()
+    void test_memory(u32 flags)
     {
+        bool print = !(flags & Test_Flags::SILENT);
         isize alloced_before = default_allocator()->get_stats().bytes_allocated;
         
+        if(print) println("\ntest_memory()");
+        if(print) println("  test_align()");
         test_align();
+        
+        if(print) println("  test_aligned_malloc()");
         test_aligned_malloc();
+        
+        if(print) println("  test_stack_ring()");
         test_stack_ring();
-        stress_test();
+        
+        if(flags & Test_Flags::STRESS)
+            stress_test(print);
 
         isize alloced_after = default_allocator()->get_stats().bytes_allocated;
         test(alloced_before == alloced_after);

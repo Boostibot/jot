@@ -228,9 +228,8 @@ namespace jot
                 if(last_slot->size & USED_BIT)
                     return;
                     
-                isize buffer_size = bytes_used();
-                assert(((isize) last_slot->prev_offset < buffer_size));
-                assert(((isize) last_slot->size < buffer_size));
+                assert((isize) last_slot->prev_offset < bytes_used());
+                assert((isize) last_slot->size < bytes_used());
 
                 last_block_from = ((uint8_t*) last_slot) - last_slot->prev_offset * SIZE_MULT;
                 last_block_to = (uint8_t*) last_slot;

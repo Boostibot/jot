@@ -14,8 +14,8 @@ namespace jot::tests::array
     {
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
         isize mem_after = default_allocator()->get_stats().bytes_allocated;
-        i64 before = trackers_alive();
-        i64 after = trackers_alive();
+        isize before = trackers_alive();
+        isize after = trackers_alive();
         {
             Array<T> arr;
 
@@ -125,18 +125,17 @@ namespace jot::tests::array
     template<typename T>
     void test_copy(Static_Array<T, 6> vals)
     {
-        using Array = Array<T>;
-        i64 before = trackers_alive();
+        isize before = trackers_alive();
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
         isize mem_after = default_allocator()->get_stats().bytes_allocated;
         {
-            Array arr;
+            Array<T> arr;
             push(&arr, dup(vals[0]));
             push(&arr, dup(vals[1]));
             push(&arr, dup(vals[2]));
             push(&arr, dup(vals[2]));
             
-            Array copied = arr;
+            Array<T> copied = arr;
             test(size(copied) == 4);
             test(capacity(copied) >= 4);
 
@@ -160,12 +159,12 @@ namespace jot::tests::array
             test(arr[4] == vals[1]);
 
             //from zero filling up
-            Array copied2 = arr;
+            Array<T> copied2 = arr;
             test(copied2[0] == vals[0]);
             test(copied2[3] == vals[2]);
             test(copied2[4] == vals[1]);
             
-            Array copied3 = arr;
+            Array<T> copied3 = arr;
             push(&copied3, dup(vals[0]));
             push(&copied3, dup(vals[1]));
             push(&copied3, dup(vals[0]));
@@ -188,8 +187,8 @@ namespace jot::tests::array
 
         {
             //copying to zero elems
-            Array empty;
-            Array arr;
+            Array<T> empty;
+            Array<T> arr;
             push(&arr, dup(vals[0]));
             push(&arr, dup(vals[1]));
             push(&arr, dup(vals[2]));
@@ -201,13 +200,13 @@ namespace jot::tests::array
         }
         
         {
-            Array empty;
-            Array arr;
+            Array<T> empty;
+            Array<T> arr;
             
             arr = empty;
             test(size(arr) == 0);
         }
-        i64 after = trackers_alive();
+        isize after = trackers_alive();
         test(before == after);
         mem_after = default_allocator()->get_stats().bytes_allocated;
         test(mem_before == mem_after);
@@ -216,14 +215,13 @@ namespace jot::tests::array
     template<typename T>
     void test_reserve(Static_Array<T, 6> vals)
     {
-        using Array = Array<T>;
-        i64 before = trackers_alive();
-        i64 after = trackers_alive();
+        isize before = trackers_alive();
+        isize after = trackers_alive();
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
         isize mem_after = default_allocator()->get_stats().bytes_allocated;
 
         {
-            Array empty;
+            Array<T> empty;
             reserve(&empty, 5);
 
             test(capacity(empty) >= 5);
@@ -247,7 +245,7 @@ namespace jot::tests::array
         test(mem_before == mem_after);
 
         {
-            Array arr;
+            Array<T> arr;
             push(&arr, dup(vals[0]));
             push(&arr, dup(vals[0]));
             push(&arr, dup(vals[0]));
@@ -315,13 +313,12 @@ namespace jot::tests::array
     template<typename T>
     void test_resize(Static_Array<T, 6> vals)
     {
-        using Array = Array<T>;
-        i64 before = trackers_alive();
+        isize before = trackers_alive();
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
         isize mem_after = default_allocator()->get_stats().bytes_allocated;
 
         {
-            Array arr;
+            Array<T> arr;
             resize(&arr, 5, vals[0]);
             test(size(arr) == 5);
             test(arr[0] == vals[0]);
@@ -339,7 +336,7 @@ namespace jot::tests::array
         }
 
         {
-            Array arr;
+            Array<T> arr;
             resize(&arr, 7, vals[0]);
 
             test(capacity(arr) >= 7);
@@ -375,7 +372,7 @@ namespace jot::tests::array
             test(arr[3] == vals[0]);
             test(arr[6] == vals[0]);
         }
-        i64 after = trackers_alive();
+        isize after = trackers_alive();
         test(before == after);
         mem_after = default_allocator()->get_stats().bytes_allocated;
         test(mem_before == mem_after);
@@ -384,13 +381,12 @@ namespace jot::tests::array
     template<typename T>
     void test_insert_remove(Static_Array<T, 6> vals)
     {
-        using Array = Array<T>;
-        i64 before = trackers_alive();
+        isize before = trackers_alive();
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
         isize mem_after = default_allocator()->get_stats().bytes_allocated;
 
         {
-            Array arr;
+            Array<T> arr;
             resize(&arr, 5, vals[0]);
 
             insert(&arr, 2, dup(vals[1]));
@@ -447,7 +443,7 @@ namespace jot::tests::array
         test(mem_before == mem_after);
         //unordered insert remove
         {
-            Array arr;
+            Array<T> arr;
             auto dupped = dup(vals);
             push_multiple_move(&arr, slice(&dupped));
             test(size(arr) == 6);
@@ -482,7 +478,7 @@ namespace jot::tests::array
             test(mem_before == mem_after);
 
         {
-            Array empty;
+            Array<T> empty;
             insert(&empty, 0, dup(vals[0]));
             test(capacity(empty) >= 1);
             test(size(empty) == 1);
@@ -502,7 +498,7 @@ namespace jot::tests::array
             test(capacity(empty) >= 2);
             test(size(empty) == 0);
         }
-        i64 after = trackers_alive();
+        isize after = trackers_alive();
         test(before == after);
         mem_after = default_allocator()->get_stats().bytes_allocated;
         test(mem_before == mem_after);
@@ -514,7 +510,7 @@ namespace jot::tests::array
         using Track = Tracker<isize>;
         std::mt19937 gen;
 
-        if(print) println("test_stress()");
+        if(print) println("  test_stress()");
 
         constexpr isize OP_PUSH1 = 0;
         constexpr isize OP_PUSH2 = 1;
@@ -534,7 +530,7 @@ namespace jot::tests::array
 
         isize max_size = 1000;
         const auto test_batch = [&](isize block_size, isize k){
-            i64 before = trackers_alive();
+            isize before = trackers_alive();
             isize mem_before = default_allocator()->get_stats().bytes_allocated;
 
             {
@@ -626,10 +622,10 @@ namespace jot::tests::array
                     test(is_invariant(arr));
                 }
                 
-                if(print) println("  i: {}\t batch: {}\t final_size: {}", k, block_size, size(arr));
+                if(print) println("    i: {}\t batch: {}\t final_size: {}", k, block_size, size(arr));
             }
             
-            i64 after = trackers_alive();
+            isize after = trackers_alive();
             isize mem_after = default_allocator()->get_stats().bytes_allocated;
             test(before == after);
             test(mem_before == mem_after);

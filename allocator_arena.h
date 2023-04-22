@@ -76,6 +76,7 @@ namespace jot
         virtual 
         bool deallocate(void* allocated, isize old_size, isize align, Line_Info) noexcept override
         {
+            (void) align;
             assert(is_power_of_two(align));
             bytes_alloced -= old_size;
 
@@ -92,6 +93,7 @@ namespace jot
         NODISCARD virtual
         bool resize(void* allocated, isize old_size, isize new_size, isize align, Line_Info) noexcept override
         {
+            (void) align;
             assert(is_power_of_two(align));
             uint8_t* used_to = available_from + new_size;
             if(allocated != last_allocation || used_to > available_to)
@@ -199,30 +201,26 @@ namespace jot
         bool find_or_add_block(isize size, isize align) noexcept
         {
             assert(is_invariant());
-            Block* obtained = nullptr;
 
             //Tries to find an open block that would fit size and align
             Chain<Block> free = free_chain();
-            Block* before = nullptr;
-            Block* found = nullptr;
+            Block* before = current_block;
+            Block* obtained = nullptr;
 
             for(Block* curr = free.first; curr; before = curr, curr = curr->next)
             {
                 uint8_t* block_data = data(curr);
                 void* aligned = align_forward(block_data, align);
-                isize aligned_size = ptrdiff(aligned, block_data + curr->size);
+                isize aligned_size = ptrdiff(block_data + curr->size, aligned);
                 if(aligned_size >= size)
                 {
-                    found = curr;
+                    obtained = extract_node(&blocks, before, curr);
                     break;
                 }
             }
             
             //If found extract it
-            if(found != nullptr)
-                obtained = extract_node(&blocks, before, found);
-            //Else allocate it
-            else
+            if(obtained == nullptr)
             {
                 if(parent == nullptr)
                     return false;
@@ -249,6 +247,7 @@ namespace jot
             }
             
             assert(obtained != nullptr);
+            assert(obtained != current_block);
 
             //Add it to the end and set statistics
             insert_node(&blocks, current_block, obtained);

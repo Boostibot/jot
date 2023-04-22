@@ -394,8 +394,7 @@ namespace jot::tests::hash_table
         test(before == after);
     }
 
-    template<bool do_cast>
-    void test_stress()
+    void test_stress(bool print)
     {
         using Val = Tracker<i32>;
         using Key = Tracker<i32>;
@@ -443,9 +442,11 @@ namespace jot::tests::hash_table
 
             return max(count, 0);
         };
+        
+        if(print) println("  test_stress()");
 
         std::mt19937 gen;
-        const auto test_batch = [&](isize block_size, u32 do_ops){
+        const auto test_batch = [&](isize block_size, isize j, u32 do_ops){
             i64 before = trackers_alive();
 
             {
@@ -580,6 +581,7 @@ namespace jot::tests::hash_table
 
                     test(is_invariant(table));
                 }
+                if(print) println("    i: {}\t batch: {}\t final_size: {}", j, block_size, size(table));
             }
 
             i64 after = trackers_alive();
@@ -592,21 +594,21 @@ namespace jot::tests::hash_table
         {
             //we test 10 batch size 2x more often becasue 
             // such small size makes edge cases more likely
-            test_batch(10,  DO_REMOVE);
-            test_batch(10,  DO_REMOVE);
-            test_batch(40,  DO_REMOVE);
-            test_batch(160, DO_REMOVE);
-            test_batch(640, DO_REMOVE);
+            test_batch(10,  i, DO_REMOVE);
+            test_batch(10,  i, DO_REMOVE);
+            test_batch(40,  i, DO_REMOVE);
+            test_batch(160, i, DO_REMOVE);
+            test_batch(640, i, DO_REMOVE);
 
-            test_batch(10,  DO_REMOVE | DO_MARK_REMOVED);
-            test_batch(10,  DO_REMOVE | DO_MARK_REMOVED);
-            test_batch(40,  DO_REMOVE | DO_MARK_REMOVED);
-            test_batch(160, DO_REMOVE | DO_MARK_REMOVED);
-            test_batch(640, DO_REMOVE | DO_MARK_REMOVED);
+            test_batch(10,  i, DO_REMOVE | DO_MARK_REMOVED);
+            test_batch(10,  i, DO_REMOVE | DO_MARK_REMOVED);
+            test_batch(40,  i, DO_REMOVE | DO_MARK_REMOVED);
+            test_batch(160, i, DO_REMOVE | DO_MARK_REMOVED);
+            test_batch(640, i, DO_REMOVE | DO_MARK_REMOVED);
             
-            test_batch(640, DO_MULTIADD | DO_MARK_REMOVED);
-            test_batch(640, DO_MULTIADD | DO_REMOVE);
-            test_batch(640, DO_MULTIADD | DO_REMOVE | DO_MARK_REMOVED);
+            test_batch(640, i, DO_MULTIADD | DO_MARK_REMOVED);
+            test_batch(640, i, DO_MULTIADD | DO_REMOVE);
+            test_batch(640, i, DO_MULTIADD | DO_REMOVE | DO_MARK_REMOVED);
         }
     }
     
@@ -675,10 +677,7 @@ namespace jot::tests::hash_table
             if(print) println("  test_table_remove() type: Hash_Table<Trc, Trc, test_tracker_hash>");
             
             if(flags & Test_Flags::STRESS)
-            {
-                test_stress<false>();
-                test_stress<true>();
-            }
+                test_stress(print);
         }
         
         isize memory_after = default_allocator()->get_stats().bytes_allocated;

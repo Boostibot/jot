@@ -3,7 +3,7 @@
 #include <random>
 
 #include "_test.h"
-#include "simple_bucket_array.h"
+#include "bucket_array.h"
 
 namespace jot::tests::bucket_array
 {
@@ -65,10 +65,18 @@ namespace jot::tests::bucket_array
             isize i13 = insert(&arr, dup(values[9]));
             isize i14 = insert(&arr, dup(values[9]));
             isize i15 = insert(&arr, dup(values[9]));
+
             test(size(arr) == 14);
             
+            test(get(arr, i6) == values[6]);
             test(get(arr, i7) == values[7]);
+            test(get(arr, i8) == values[8]);
+            test(get(arr, i9) == values[9]);
             test(get(arr, i10) == values[9]);
+            test(get(arr, i11) == values[9]);
+            test(get(arr, i12) == values[9]);
+            test(get(arr, i13) == values[9]);
+            test(get(arr, i14) == values[9]);
             test(get(arr, i15) == values[9]);
             
             cap = capacity(arr);
@@ -100,7 +108,7 @@ namespace jot::tests::bucket_array
     {
         using Seed = std::random_device::result_type;
 
-        if(print) println("test_stress()");
+        if(print) println("  test_stress()");
 
         std::random_device rd;
         
@@ -175,7 +183,7 @@ namespace jot::tests::bucket_array
                     }
                 }
             
-                if(print) println("  i: {}\t batch: {}\t final_size: {}", j, block_size, size(bucket_array));
+                if(print) println("    i: {}\t batch: {}\t final_size: {}", j, block_size, size(bucket_array));
             }
 
             i64 trackers_after = trackers_alive();

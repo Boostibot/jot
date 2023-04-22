@@ -287,11 +287,12 @@ namespace jot
         if(set_capacity_failing(array, new_capacity) == false)
         {
             const char* alloc_name = array->_allocator->get_stats().name; 
+            isize requested = new_capacity* (isize) sizeof(T);
             memory_globals::out_of_memory_hadler()(GET_LINE_INFO(),
                 "Array<T> memory allocation failed! "
                 "Attempted to allocated %t bytes from allocator %p name %s"
                 "Array: {size: %t, capacity: %t} sizeof(T): %z",
-                new_capacity*sizeof(T), array->_allocator, 
+                requested, array->_allocator, 
                 alloc_name ? alloc_name : "<No alloc name>", 
                 array->_size, array->_capacity, sizeof(T));
         }
