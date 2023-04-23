@@ -101,31 +101,6 @@ namespace jot
     {
         return own(String(string), scratch_allocator());
     }
-    
-    ////Panic for String_Builder
-    //struct String_Builder_Panic : Panic
-    //{
-    //    String_Builder message;
-    //    
-    //    //"<This is an uninit panic message member! "
-    //    //"This is probably because you are catching Panic by value and displaying its what() message. "
-    //    //"Catch Panic const& instead and try again>"
-    //    String_Builder_Panic(Line_Info line_info, String_Builder message) 
-    //        : Panic(line_info, "String_Builder_Panic"), message(move(&message)) {}
-
-    //    virtual const char* what() const noexcept 
-    //    {
-    //        return data(message);
-    //    }
-
-    //    virtual ~String_Builder_Panic() noexcept {}
-    //};
-    //
-    //static
-    //String_Builder_Panic make_panic(Line_Info line_info, String_Builder message) noexcept
-    //{
-    //    return String_Builder_Panic(line_info, move(&message));
-    //}
 }
 
 namespace jot
