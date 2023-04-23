@@ -1,7 +1,7 @@
 #pragma once
 
+#include <stdint.h>
 #include "slice.h"
-#define nodisc [[nodiscard]]
 
 //if defined checks the integrity (if the list is conected)
 // on every mutating function
@@ -57,20 +57,20 @@ namespace jot
         uint32_t last = NULL_LIST_INDEX;
     };
         
-    template<typename Node> nodisc constexpr
+    template<typename Node> constexpr
     bool is_isolated(uint32_t node, Slice<Node> arr) noexcept
     {
         const Node* bucket = &arr[node];
         return bucket->prev == NULL_LIST_INDEX && bucket->next == NULL_LIST_INDEX;
     }
         
-    template<typename Node> nodisc constexpr
+    template<typename Node> constexpr
     bool is_isolated(uint32_t first, uint32_t last, Slice<Node> arr) noexcept
     {
         return arr[first].prev == NULL_LIST_INDEX && arr[last].next == NULL_LIST_INDEX;
     }
     
-    template<typename Node> nodisc constexpr
+    template<typename Node> constexpr
     bool is_connected(uint32_t first, uint32_t last, Slice<Node> arr) noexcept
     {
         uint32_t current = first;
@@ -85,7 +85,7 @@ namespace jot
         return prev == last;
     }
     
-    template<typename Node> nodisc constexpr
+    template<typename Node> constexpr
     bool _check_is_connected(uint32_t first, uint32_t last, Slice<Node> arr) noexcept
     {
         #ifdef INTRUSIVE_INDEX_LIST_PEDANTIC
@@ -201,7 +201,4 @@ namespace jot
             
         assert(_check_is_connected(to->first, to->last, arr));
     }
-
 }
-
-#undef nodisc

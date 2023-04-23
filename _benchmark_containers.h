@@ -292,7 +292,7 @@ namespace jot::benchmarks
                 if(removed_i == 0)
                 {
                     for(isize i = 0; i < batch_size; i++)
-                        added_keys[i] = insert(&slot_array, i);
+                        added_keys[i] = (isize) insert(&slot_array, i);
                 
                     shuffle(slice(&added_keys), &gen);
                 
@@ -301,7 +301,7 @@ namespace jot::benchmarks
                 }
             
                 isize removed = added_keys[--removed_i];
-                remove(&slot_array, (uint32_t) removed);
+                remove(&slot_array, (Slot) removed);
                 do_no_optimize(slot_array);
                 read_write_barrier();
                 return true;
@@ -710,7 +710,7 @@ namespace jot::benchmarks
                 Slot_Array<isize> slot_array;
                 for(isize i = 0; i < batch_size; i++)
                 {
-                    uint32_t added = insert(&slot_array, counter++);
+                    Slot added = insert(&slot_array, counter++);
                     (void) insert(&slot_array, counter++);
                     remove(&slot_array, added);
                 }
@@ -922,7 +922,7 @@ namespace jot::benchmarks
                     
                     isize from = i % 2 == 0 ? 0 : section_size; 
                     for(isize j = 0; j < section_size; j++)
-                        remove(&slot_array, (uint32_t) key_array[j + from]);
+                        remove(&slot_array, (Slot) key_array[j + from]);
 
                     counter += 2;
                 }

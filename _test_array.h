@@ -19,33 +19,33 @@ namespace jot::tests::array
         {
             Array<T> arr;
 
-            test(size(arr) == 0);
-            test(capacity(arr) == 0);
+            TEST(size(arr) == 0);
+            TEST(capacity(arr) == 0);
 
             push(&arr, dup(vals[0]));
             
-            test(size(arr) == 1);
+            TEST(size(arr) == 1);
             push(&arr, dup(vals[1]));
 
-            test(size(arr) == 2);
-            test(capacity(arr) >= 2);
+            TEST(size(arr) == 2);
+            TEST(capacity(arr) >= 2);
 
-            test(pop(&arr) == vals[1]);
-            test(pop(&arr) == vals[0]);
+            TEST(pop(&arr) == vals[1]);
+            TEST(pop(&arr) == vals[0]);
 
-            test(size(arr) == 0);
-            test(capacity(arr) >= 2);
+            TEST(size(arr) == 0);
+            TEST(capacity(arr) >= 2);
 
             push(&arr, dup(vals[2]));
             push(&arr, dup(vals[1]));
             push(&arr, dup(vals[0]));
 
-            test(size(arr) == 3);
-            test(capacity(arr) >= 3);
+            TEST(size(arr) == 3);
+            TEST(capacity(arr) >= 3);
             
-            test(arr[0] == vals[2]);
-            test(arr[1] == vals[1]);
-            test(arr[2] == vals[0]);
+            TEST(arr[0] == vals[2]);
+            TEST(arr[1] == vals[1]);
+            TEST(arr[2] == vals[0]);
 
             push(&arr, dup(vals[2]));
             push(&arr, dup(vals[1]));
@@ -54,31 +54,31 @@ namespace jot::tests::array
             push(&arr, dup(vals[1]));
             push(&arr, dup(vals[0]));
 
-            test(size(arr) == 9);
-            test(capacity(arr) >= 9);
+            TEST(size(arr) == 9);
+            TEST(capacity(arr) >= 9);
 
-            test(arr[0] == vals[2]);
-            test(arr[1] == vals[1]);
-            test(arr[2] == vals[0]);
+            TEST(arr[0] == vals[2]);
+            TEST(arr[1] == vals[1]);
+            TEST(arr[2] == vals[0]);
             
-            test(arr[6] == vals[2]);
-            test(arr[7] == vals[1]);
-            test(arr[8] == vals[0]);
+            TEST(arr[6] == vals[2]);
+            TEST(arr[7] == vals[1]);
+            TEST(arr[8] == vals[0]);
             
-            test(pop(&arr) == vals[0]);
-            test(pop(&arr) == vals[1]);
-            test(pop(&arr) == vals[2]);
+            TEST(pop(&arr) == vals[0]);
+            TEST(pop(&arr) == vals[1]);
+            TEST(pop(&arr) == vals[2]);
 
-            test(size(arr) == 6);
-            test(arr[0] == vals[2]);
-            test(arr[1] == vals[1]);
-            test(arr[2] == vals[0]);
+            TEST(size(arr) == 6);
+            TEST(arr[0] == vals[2]);
+            TEST(arr[1] == vals[1]);
+            TEST(arr[2] == vals[0]);
         }
 
         after = trackers_alive();
         mem_after = default_allocator()->get_stats().bytes_allocated;
-        test(before == after);
-        test(mem_before == mem_after);
+        TEST(before == after);
+        TEST(mem_before == mem_after);
         
         {
             Array<T> arr;
@@ -87,39 +87,39 @@ namespace jot::tests::array
             grow(&arr, 6);
 
             push_multiple_move(&arr, slice(&dupped));
-            test(size(arr) == 6);
-            test(arr[0] == vals[0]);
-            test(arr[3] == vals[3]);
-            test(arr[4] == vals[4]);
-            test(arr[5] == vals[5]);
+            TEST(size(arr) == 6);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[3] == vals[3]);
+            TEST(arr[4] == vals[4]);
+            TEST(arr[5] == vals[5]);
 
             pop_multiple(&arr, 2);
-            test(size(arr) == 4);
-            test(arr[0] == vals[0]);
-            test(arr[1] == vals[1]);
-            test(arr[3] == vals[3]);
+            TEST(size(arr) == 4);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[1] == vals[1]);
+            TEST(arr[3] == vals[3]);
             
             pop_multiple(&arr, 3);
-            test(size(arr) == 1);
-            test(arr[0] == vals[0]);
+            TEST(size(arr) == 1);
+            TEST(arr[0] == vals[0]);
 
             dupped = dup(vals);
             push_multiple_move(&arr, slice(&dupped));
-            test(size(arr) == 7);
+            TEST(size(arr) == 7);
             
-            test(arr[0] == vals[0]);
-            test(arr[1] == vals[0]);
-            test(arr[4] == vals[3]);
-            test(arr[5] == vals[4]);
-            test(arr[6] == vals[5]);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[1] == vals[0]);
+            TEST(arr[4] == vals[3]);
+            TEST(arr[5] == vals[4]);
+            TEST(arr[6] == vals[5]);
 
             pop_multiple(&arr, 7);
-            test(size(arr) == 0);
+            TEST(size(arr) == 0);
         }
         after = trackers_alive();
         mem_after = default_allocator()->get_stats().bytes_allocated;
-        test(before == after);
-        test(mem_before == mem_after);
+        TEST(before == after);
+        TEST(mem_before == mem_after);
     }
 
     template<typename T>
@@ -136,33 +136,33 @@ namespace jot::tests::array
             push(&arr, dup(vals[2]));
             
             Array<T> copied = arr;
-            test(size(copied) == 4);
-            test(capacity(copied) >= 4);
+            TEST(size(copied) == 4);
+            TEST(capacity(copied) >= 4);
 
-            test(copied[0] == vals[0]);
-            test(copied[3] == vals[2]);
+            TEST(copied[0] == vals[0]);
+            TEST(copied[3] == vals[2]);
 
-            test(arr[1] == vals[1]);
-            test(arr[3] == vals[2]);
+            TEST(arr[1] == vals[1]);
+            TEST(arr[3] == vals[2]);
             
             push(&arr, dup(vals[1]));
-            test(size(arr) == 5);
-            test(size(copied) == 4);
+            TEST(size(arr) == 5);
+            TEST(size(copied) == 4);
             
             copied = arr;
-            test(size(copied) == 5);
+            TEST(size(copied) == 5);
 
-            test(copied[0] == vals[0]);
-            test(copied[4] == vals[1]);
+            TEST(copied[0] == vals[0]);
+            TEST(copied[4] == vals[1]);
 
-            test(arr[0] == vals[0]);
-            test(arr[4] == vals[1]);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[4] == vals[1]);
 
             //from zero filling up
             Array<T> copied2 = arr;
-            test(copied2[0] == vals[0]);
-            test(copied2[3] == vals[2]);
-            test(copied2[4] == vals[1]);
+            TEST(copied2[0] == vals[0]);
+            TEST(copied2[3] == vals[2]);
+            TEST(copied2[4] == vals[1]);
             
             Array<T> copied3 = arr;
             push(&copied3, dup(vals[0]));
@@ -170,11 +170,11 @@ namespace jot::tests::array
             push(&copied3, dup(vals[0]));
             push(&copied3, dup(vals[1]));
 
-            test(size(copied3) == 9);
+            TEST(size(copied3) == 9);
             
             //copieding to less elems with bigger capacity
             copied3 = arr;
-            test(size(copied3) == 5);
+            TEST(size(copied3) == 5);
 
             //copieding to more elems with bigger capacity
             pop(&copied3);
@@ -182,7 +182,7 @@ namespace jot::tests::array
             pop(&copied3);
 
             copied3 = arr;
-            test(size(copied3) == 5);
+            TEST(size(copied3) == 5);
         }
 
         {
@@ -193,10 +193,10 @@ namespace jot::tests::array
             push(&arr, dup(vals[1]));
             push(&arr, dup(vals[2]));
             push(&arr, dup(vals[2]));
-            test(size(arr) == 4);
+            TEST(size(arr) == 4);
             
             arr = empty;
-            test(size(arr) == 0);
+            TEST(size(arr) == 0);
         }
         
         {
@@ -204,12 +204,12 @@ namespace jot::tests::array
             Array<T> arr;
             
             arr = empty;
-            test(size(arr) == 0);
+            TEST(size(arr) == 0);
         }
         isize after = trackers_alive();
-        test(before == after);
+        TEST(before == after);
         mem_after = default_allocator()->get_stats().bytes_allocated;
-        test(mem_before == mem_after);
+        TEST(mem_before == mem_after);
     }
 
     template<typename T>
@@ -224,88 +224,88 @@ namespace jot::tests::array
             Array<T> empty;
             reserve(&empty, 5);
 
-            test(capacity(empty) >= 5);
-            test(size(empty) == 0);
+            TEST(capacity(empty) >= 5);
+            TEST(size(empty) == 0);
             reserve(&empty, 13);
-            test(capacity(empty) >= 13);
-            test(size(empty) == 0);
+            TEST(capacity(empty) >= 13);
+            TEST(size(empty) == 0);
             
             
             push(&empty, dup(vals[0]));
             push(&empty, dup(vals[0]));
             push(&empty, dup(vals[0]));
 
-            test(capacity(empty) >= 13);
-            test(size(empty) == 3);
+            TEST(capacity(empty) >= 13);
+            TEST(size(empty) == 3);
         }
 
         after = trackers_alive();
-        test(before == after);
+        TEST(before == after);
         mem_after = default_allocator()->get_stats().bytes_allocated;
-        test(mem_before == mem_after);
+        TEST(mem_before == mem_after);
 
         {
             Array<T> arr;
             push(&arr, dup(vals[0]));
             push(&arr, dup(vals[0]));
             push(&arr, dup(vals[0]));
-            test(capacity(arr) >= 3);
-            test(size(arr) == 3);
+            TEST(capacity(arr) >= 3);
+            TEST(size(arr) == 3);
 
             reserve(&arr, 7);
-            test(capacity(arr) >= 7);
-            test(size(arr) == 3);
+            TEST(capacity(arr) >= 7);
+            TEST(size(arr) == 3);
 
             
             pop(&arr);
             reserve(&arr, 2);
-            test(capacity(arr) >= 7);
-            test(size(arr) == 2);
+            TEST(capacity(arr) >= 7);
+            TEST(size(arr) == 2);
             
             push(&arr, dup(vals[1]));
             push(&arr, dup(vals[2]));
             push(&arr, dup(vals[3]));
             push(&arr, dup(vals[4]));
             push(&arr, dup(vals[5]));
-            test(size(arr) == 7);
-            test(capacity(arr) >= 7);
+            TEST(size(arr) == 7);
+            TEST(capacity(arr) >= 7);
             
-            test(arr[2] == vals[1]);
-            test(arr[3] == vals[2]);
-            test(arr[4] == vals[3]);
+            TEST(arr[2] == vals[1]);
+            TEST(arr[3] == vals[2]);
+            TEST(arr[4] == vals[3]);
 
             set_capacity(&arr, 15);
 
-            test(arr[2] == vals[1]);
-            test(arr[3] == vals[2]);
-            test(arr[4] == vals[3]);
-            test(arr[5] == vals[4]);
-            test(arr[6] == vals[5]);
+            TEST(arr[2] == vals[1]);
+            TEST(arr[3] == vals[2]);
+            TEST(arr[4] == vals[3]);
+            TEST(arr[5] == vals[4]);
+            TEST(arr[6] == vals[5]);
 
-            test(size(arr) == 7);
-            test(capacity(arr) == 15);
+            TEST(size(arr) == 7);
+            TEST(capacity(arr) == 15);
             
             set_capacity(&arr, 5);
             
-            test(arr[0] == vals[0]);
-            test(arr[1] == vals[0]);
-            test(arr[2] == vals[1]);
-            test(arr[3] == vals[2]);
-            test(arr[4] == vals[3]);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[1] == vals[0]);
+            TEST(arr[2] == vals[1]);
+            TEST(arr[3] == vals[2]);
+            TEST(arr[4] == vals[3]);
             
-            test(size(arr) == 5);
-            test(capacity(arr) == 5);
+            TEST(size(arr) == 5);
+            TEST(capacity(arr) == 5);
 
             
             set_capacity(&arr, 0);
-            test(size(arr) == 0);
-            test(capacity(arr) == 0);
+            TEST(size(arr) == 0);
+            TEST(capacity(arr) == 0);
         }
 
         after = trackers_alive();
-        test(before == after);
+        TEST(before == after);
         mem_after = default_allocator()->get_stats().bytes_allocated;
-        test(mem_before == mem_after);
+        TEST(mem_before == mem_after);
     }
 
     
@@ -320,62 +320,62 @@ namespace jot::tests::array
         {
             Array<T> arr;
             resize(&arr, 5, vals[0]);
-            test(size(arr) == 5);
-            test(arr[0] == vals[0]);
-            test(arr[2] == vals[0]);
-            test(arr[4] == vals[0]);
+            TEST(size(arr) == 5);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[2] == vals[0]);
+            TEST(arr[4] == vals[0]);
 
             resize(&arr, 16);
-            test(arr[0] == vals[0]);
-            test(arr[2] == vals[0]);
-            test(arr[4] == vals[0]);
-            test(arr[5] == T());
-            test(arr[9] == T());
-            test(arr[11] == T());
-            test(arr[15] == T());
+            TEST(arr[0] == vals[0]);
+            TEST(arr[2] == vals[0]);
+            TEST(arr[4] == vals[0]);
+            TEST(arr[5] == T());
+            TEST(arr[9] == T());
+            TEST(arr[11] == T());
+            TEST(arr[15] == T());
         }
 
         {
             Array<T> arr;
             resize(&arr, 7, vals[0]);
 
-            test(capacity(arr) >= 7);
-            test(size(arr) == 7);
-            test(arr[0] == vals[0]);
-            test(arr[4] == vals[0]);
-            test(arr[6] == vals[0]);
+            TEST(capacity(arr) >= 7);
+            TEST(size(arr) == 7);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[4] == vals[0]);
+            TEST(arr[6] == vals[0]);
 
             //growing
             resize(&arr, 11, vals[1]);
             resize(&arr, 12, vals[2]);
-            test(capacity(arr) >= 12);
-            test(size(arr) == 12);
-            test(arr[7] == vals[1]);
-            test(arr[9] == vals[1]);
-            test(arr[10] == vals[1]);
-            test(arr[11] == vals[2]);
+            TEST(capacity(arr) >= 12);
+            TEST(size(arr) == 12);
+            TEST(arr[7] == vals[1]);
+            TEST(arr[9] == vals[1]);
+            TEST(arr[10] == vals[1]);
+            TEST(arr[11] == vals[2]);
 
             //shrinking
             resize(&arr, 11, vals[1]);
-            test(capacity(arr) >= 12);
-            test(size(arr) == 11);
-            test(arr[0] == vals[0]);
-            test(arr[6] == vals[0]);
-            test(arr[10] == vals[1]);
+            TEST(capacity(arr) >= 12);
+            TEST(size(arr) == 11);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[6] == vals[0]);
+            TEST(arr[10] == vals[1]);
 
             push(&arr, dup(vals[2]));
 
             resize(&arr, 7, vals[1]);
-            test(capacity(arr) >= 12);
-            test(size(arr) == 7);
-            test(arr[1] == vals[0]);
-            test(arr[3] == vals[0]);
-            test(arr[6] == vals[0]);
+            TEST(capacity(arr) >= 12);
+            TEST(size(arr) == 7);
+            TEST(arr[1] == vals[0]);
+            TEST(arr[3] == vals[0]);
+            TEST(arr[6] == vals[0]);
         }
         isize after = trackers_alive();
-        test(before == after);
+        TEST(before == after);
         mem_after = default_allocator()->get_stats().bytes_allocated;
-        test(mem_before == mem_after);
+        TEST(mem_before == mem_after);
     }
 
     template<typename T>
@@ -390,118 +390,118 @@ namespace jot::tests::array
             resize(&arr, 5, vals[0]);
 
             insert(&arr, 2, dup(vals[1]));
-            test(capacity(arr) >= 6);
-            test(size(arr) == 6);
+            TEST(capacity(arr) >= 6);
+            TEST(size(arr) == 6);
 
  
-            test(arr[0] == vals[0]);
-            test(arr[1] == vals[0]);
-            test(arr[2] == vals[1]);
-            test(arr[3] == vals[0]);
-            test(arr[5] == vals[0]);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[1] == vals[0]);
+            TEST(arr[2] == vals[1]);
+            TEST(arr[3] == vals[0]);
+            TEST(arr[5] == vals[0]);
 
             insert(&arr, 2, dup(vals[2]));
-            test(capacity(arr) >= 7);
-            test(size(arr) == 7);
-            test(arr[0] == vals[0]);
-            test(arr[1] == vals[0]);
-            test(arr[2] == vals[2]);
-            test(arr[3] == vals[1]);
-            test(arr[4] == vals[0]);
-            test(arr[6] == vals[0]);
+            TEST(capacity(arr) >= 7);
+            TEST(size(arr) == 7);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[1] == vals[0]);
+            TEST(arr[2] == vals[2]);
+            TEST(arr[3] == vals[1]);
+            TEST(arr[4] == vals[0]);
+            TEST(arr[6] == vals[0]);
 
-            test(remove(&arr, 2) == vals[2]);
-            test(capacity(arr) >= 7);
-            test(size(arr) == 6);
-            test(arr[0] == vals[0]);
-            test(arr[1] == vals[0]);
-            test(arr[2] == vals[1]);
-            test(arr[3] == vals[0]);
-            test(arr[5] == vals[0]);
+            TEST(remove(&arr, 2) == vals[2]);
+            TEST(capacity(arr) >= 7);
+            TEST(size(arr) == 6);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[1] == vals[0]);
+            TEST(arr[2] == vals[1]);
+            TEST(arr[3] == vals[0]);
+            TEST(arr[5] == vals[0]);
 
-            test(remove(&arr, 0) == vals[0]);
-            test(capacity(arr) >= 7);
-            test(size(arr) == 5);
-            test(arr[0] == vals[0]);
-            test(arr[1] == vals[1]);
-            test(arr[2] == vals[0]);
-            test(arr[4] == vals[0]);
+            TEST(remove(&arr, 0) == vals[0]);
+            TEST(capacity(arr) >= 7);
+            TEST(size(arr) == 5);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[1] == vals[1]);
+            TEST(arr[2] == vals[0]);
+            TEST(arr[4] == vals[0]);
             
             insert(&arr, size(arr), dup(vals[3]));
             insert(&arr, size(arr), dup(vals[4]));
-            test(size(arr) == 7);
-            test(arr[2] == vals[0]);
-            test(arr[4] == vals[0]);
-            test(arr[5] == vals[3]);
-            test(arr[6] == vals[4]);
+            TEST(size(arr) == 7);
+            TEST(arr[2] == vals[0]);
+            TEST(arr[4] == vals[0]);
+            TEST(arr[5] == vals[3]);
+            TEST(arr[6] == vals[4]);
 
-            test(remove(&arr, size(arr) - 2) == vals[3]);
-            test(remove(&arr, size(arr) - 1) == vals[4]);
+            TEST(remove(&arr, size(arr) - 2) == vals[3]);
+            TEST(remove(&arr, size(arr) - 1) == vals[4]);
         }
 
         mem_after = default_allocator()->get_stats().bytes_allocated;
-        test(mem_before == mem_after);
+        TEST(mem_before == mem_after);
         //unordered insert remove
         {
             Array<T> arr;
             auto dupped = dup(vals);
             push_multiple_move(&arr, slice(&dupped));
-            test(size(arr) == 6);
+            TEST(size(arr) == 6);
 
-            test(unordered_remove(&arr, 3) == vals[3]);
-            test(size(arr) == 5);
-            test(arr[0] == vals[0]);
-            test(arr[2] == vals[2]);
-            test(arr[3] == vals[5]);
-            test(arr[4] == vals[4]);
+            TEST(unordered_remove(&arr, 3) == vals[3]);
+            TEST(size(arr) == 5);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[2] == vals[2]);
+            TEST(arr[3] == vals[5]);
+            TEST(arr[4] == vals[4]);
 
-            test(unordered_remove(&arr, 4) == vals[4]);
-            test(size(arr) == 4);
-            test(arr[0] == vals[0]);
-            test(arr[2] == vals[2]);
-            test(arr[3] == vals[5]);
+            TEST(unordered_remove(&arr, 4) == vals[4]);
+            TEST(size(arr) == 4);
+            TEST(arr[0] == vals[0]);
+            TEST(arr[2] == vals[2]);
+            TEST(arr[3] == vals[5]);
 
             unordered_insert(&arr, 0, dup(vals[5]));
-            test(size(arr) == 5);
-            test(arr[0] == vals[5]);
-            test(arr[1] == vals[1]);
-            test(arr[2] == vals[2]);
-            test(arr[3] == vals[5]);
-            test(arr[4] == vals[0]);
+            TEST(size(arr) == 5);
+            TEST(arr[0] == vals[5]);
+            TEST(arr[1] == vals[1]);
+            TEST(arr[2] == vals[2]);
+            TEST(arr[3] == vals[5]);
+            TEST(arr[4] == vals[0]);
             
             unordered_insert(&arr, 5, dup(vals[3]));
-            test(size(arr) == 6);
-            test(arr[3] == vals[5]);
-            test(arr[4] == vals[0]);
-            test(arr[5] == vals[3]);
+            TEST(size(arr) == 6);
+            TEST(arr[3] == vals[5]);
+            TEST(arr[4] == vals[0]);
+            TEST(arr[5] == vals[3]);
         }
-            test(mem_before == mem_after);
+            TEST(mem_before == mem_after);
 
         {
             Array<T> empty;
             insert(&empty, 0, dup(vals[0]));
-            test(capacity(empty) >= 1);
-            test(size(empty) == 1);
-            test(last(empty) == vals[0]);
+            TEST(capacity(empty) >= 1);
+            TEST(size(empty) == 1);
+            TEST(last(empty) == vals[0]);
 
             insert(&empty, 1, dup(vals[1]));
-            test(capacity(empty) >= 2);
-            test(size(empty) == 2);
-            test(last(empty) == vals[1]);
+            TEST(capacity(empty) >= 2);
+            TEST(size(empty) == 2);
+            TEST(last(empty) == vals[1]);
 
             remove(&empty, 1);
-            test(capacity(empty) >= 2);
-            test(size(empty) == 1);
-            test(last(empty) == vals[0]);
+            TEST(capacity(empty) >= 2);
+            TEST(size(empty) == 1);
+            TEST(last(empty) == vals[0]);
 
             remove(&empty, 0);
-            test(capacity(empty) >= 2);
-            test(size(empty) == 0);
+            TEST(capacity(empty) >= 2);
+            TEST(size(empty) == 0);
         }
         isize after = trackers_alive();
-        test(before == after);
+        TEST(before == after);
         mem_after = default_allocator()->get_stats().bytes_allocated;
-        test(mem_before == mem_after);
+        TEST(mem_before == mem_after);
     }
     
     static
@@ -619,7 +619,7 @@ namespace jot::tests::array
                         default: break;
                     }
 
-                    test(is_invariant(arr));
+                    TEST(is_invariant(arr));
                 }
                 
                 if(print) println("    i: {}\t batch: {}\t final_size: {}", k, block_size, size(arr));
@@ -627,8 +627,8 @@ namespace jot::tests::array
             
             isize after = trackers_alive();
             isize mem_after = default_allocator()->get_stats().bytes_allocated;
-            test(before == after);
-            test(mem_before == mem_after);
+            TEST(before == after);
+            TEST(mem_before == mem_after);
         };
 
         for(isize i = 0; i < 100; i++)

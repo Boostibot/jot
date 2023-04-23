@@ -1,6 +1,6 @@
 #pragma once
-#include "types.h"
 #include "array.h"
+#include "slice.h"
 
 namespace jot
 {
@@ -14,30 +14,43 @@ namespace jot
         return size;
     };
 
-    template<> constexpr bool is_string_char<char> = true;
-    template<> constexpr bool is_string_char<wchar_t> = true;
-    template<> constexpr bool is_string_char<char16_t> = true;
-    template<> constexpr bool is_string_char<char32_t> = true;
+    #define DEFINE_STRING_TYPE(CHAR_T)                                                          \
+        template<> constexpr bool is_string_char<CHAR_T> = true;                                \
+        template<> struct Slice<const CHAR_T>                                                   \
+        {                                                                                       \
+            const CHAR_T* data = nullptr;                                                       \
+            isize size = 0;                                                                     \
+                                                                                                \
+            constexpr Slice() noexcept = default;                                               \
+            constexpr Slice(const CHAR_T* data, isize size) noexcept                            \
+                : data(data), size(size) {}                                                     \
+                                                                                                \
+            constexpr Slice(const CHAR_T* str) noexcept                                         \
+                : data(str), size(strlen(str)) {}                                               \
+                                                                                                \
+            constexpr CHAR_T const& operator[](isize index) const noexcept                      \
+            {                                                                                   \
+                assert(0 <= index && index < size && "index out of range"); return data[index]; \
+            }                                                                                   \
+        };                                                                                      \
+                                                                                                \
+        bool operator ==(Slice<const CHAR_T> const& a, Slice<const CHAR_T> const& b) noexcept   \
+        {                                                                                       \
+            return are_bytes_equal(a, b);                                                       \
+        }                                                                                       \
+                                                                                                \
+        bool operator !=(Slice<const CHAR_T> const& a, Slice<const CHAR_T> const& b) noexcept   \
+        {                                                                                       \
+            return are_bytes_equal(a, b) == false;                                              \
+        }                                                                                       \
 
-
-
-    #define CHAR_T char
-    #include "string_type_text.h"
-    
-    #define CHAR_T wchar_t
-    #include "string_type_text.h"
-    
-    #define CHAR_T char16_t
-    #include "string_type_text.h"
-    
-    #define CHAR_T char32_t
-    #include "string_type_text.h"
+    DEFINE_STRING_TYPE(char);
+    DEFINE_STRING_TYPE(wchar_t);
+    DEFINE_STRING_TYPE(char16_t);
+    DEFINE_STRING_TYPE(char32_t);
     
     #ifdef __cpp_char8_t
-    #define CHAR_T char8_t
-    #include "string_type_text.h";
-    
-    template<> static constexpr bool is_string_char<char8_t> = true;
+    DEFINE_STRING_TYPE(char8_t);
     #endif
 
     using String = Slice<const char>;
@@ -71,9 +84,8 @@ namespace jot
         return join(parts);
     }
 
-    inline String_Builder concat(
-        String a1, String a2, String a3, String a4 = "", String a5 = "", 
-        String a6 = "", String a7 = "", String a8 = "", String a9 = "", String a10 = "")
+    inline String_Builder concat(String a1, String a2, String a3, String a4 = "", String a5 = "", 
+                                 String a6 = "", String a7 = "", String a8 = "", String a9 = "", String a10 = "")
     {
         String strings[] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10};
         Slice<const String> parts = {strings, 10};

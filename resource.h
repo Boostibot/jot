@@ -18,10 +18,7 @@ namespace jot
     {
         T val = def_value();
         
-        Resource() noexcept
-            : val(def_value()) {}
-        {};
-
+        Resource() noexcept {};
         Resource(T val) noexcept
             : val(move(&val)) {}
 

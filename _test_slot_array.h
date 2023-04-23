@@ -15,80 +15,80 @@ namespace jot::tests::slot_array
         isize memory_before = default_allocator()->get_stats().bytes_allocated;
         {
             Slot_Array<T> array;
-            test(size(array) == 0);
-            test(capacity(array) == 0);
+            TEST(size(array) == 0);
+            TEST(capacity(array) == 0);
 
-            uint32_t id0 = insert(&array, dup(elems[0]));
-            uint32_t id1 = insert(&array, dup(elems[1]));
-            uint32_t id2 = insert(&array, dup(elems[2]));
+            Slot slot0 = insert(&array, dup(elems[0]));
+            Slot slot1 = insert(&array, dup(elems[1]));
+            Slot slot2 = insert(&array, dup(elems[2]));
 
-            test(size(array) == 3);
-            test(capacity(array) >= 3);
+            TEST(size(array) == 3);
+            TEST(capacity(array) >= 3);
 
-            test(get(array, id0) == elems[0]);
-            test(get(array, id1) == elems[1]);
-            test(get(array, id2) == elems[2]);
+            TEST(get(array, slot0) == elems[0]);
+            TEST(get(array, slot1) == elems[1]);
+            TEST(get(array, slot2) == elems[2]);
         
-            test(remove(&array, id1) == elems[1]);
+            TEST(remove(&array, slot1) == elems[1]);
         
-            test(size(array) == 2);
-            test(capacity(array) >= 3);
-            test(get(array, id0) == elems[0]);
-            test(get(array, id2) == elems[2]);
+            TEST(size(array) == 2);
+            TEST(capacity(array) >= 3);
+            TEST(get(array, slot0) == elems[0]);
+            TEST(get(array, slot2) == elems[2]);
 
-            id1 = insert(&array, dup(elems[9]));
-            test(size(array) == 3);
-            test(capacity(array) >= 3);
-            test(get(array, id1) == elems[9]);
+            slot1 = insert(&array, dup(elems[9]));
+            TEST(size(array) == 3);
+            TEST(capacity(array) >= 3);
+            TEST(get(array, slot1) == elems[9]);
         
-            uint32_t id3 = insert(&array, dup(elems[3]));
-            uint32_t id4 = insert(&array, dup(elems[4]));
-            uint32_t id5 = insert(&array, dup(elems[5]));
-            uint32_t id6 = insert(&array, dup(elems[6]));
-            uint32_t id7 = insert(&array, dup(elems[7]));
-            uint32_t id8 = insert(&array, dup(elems[8]));
+            Slot slot3 = insert(&array, dup(elems[3]));
+            Slot slot4 = insert(&array, dup(elems[4]));
+            Slot slot5 = insert(&array, dup(elems[5]));
+            Slot slot6 = insert(&array, dup(elems[6]));
+            Slot slot7 = insert(&array, dup(elems[7]));
+            Slot slot8 = insert(&array, dup(elems[8]));
         
-            test(size(array) == 9);
-            test(capacity(array) >= 9);
+            TEST(size(array) == 9);
+            TEST(capacity(array) >= 9);
         
-            test(get(array, id0) == elems[0]);
-            test(get(array, id1) == elems[9]);
-            test(get(array, id2) == elems[2]);
-            test(get(array, id3) == elems[3]);
-            test(get(array, id4) == elems[4]);
-            test(get(array, id5) == elems[5]);
-            test(get(array, id6) == elems[6]);
-            test(get(array, id7) == elems[7]);
-            test(get(array, id8) == elems[8]);
+            TEST(get(array, slot0) == elems[0]);
+            TEST(get(array, slot1) == elems[9]);
+            TEST(get(array, slot2) == elems[2]);
+            TEST(get(array, slot3) == elems[3]);
+            TEST(get(array, slot4) == elems[4]);
+            TEST(get(array, slot5) == elems[5]);
+            TEST(get(array, slot6) == elems[6]);
+            TEST(get(array, slot7) == elems[7]);
+            TEST(get(array, slot8) == elems[8]);
         
-            test(remove(&array, id8) == elems[8]);
-            test(remove(&array, id6) == elems[6]);
-            test(remove(&array, id4) == elems[4]);
+            TEST(remove(&array, slot8) == elems[8]);
+            TEST(remove(&array, slot6) == elems[6]);
+            TEST(remove(&array, slot4) == elems[4]);
         
-            test(size(array) == 6);
-            test(capacity(array) >= 9);
-            test(get(array, id0) == elems[0]);
-            test(get(array, id7) == elems[7]);
-            test(get(array, id5) == elems[5]);
+            TEST(size(array) == 6);
+            TEST(capacity(array) >= 9);
+            TEST(get(array, slot0) == elems[0]);
+            TEST(get(array, slot7) == elems[7]);
+            TEST(get(array, slot5) == elems[5]);
         
-            test(remove(&array, id0) == elems[0]);
-            test(remove(&array, id1) == elems[9]);
-            test(remove(&array, id2) == elems[2]);
-            test(remove(&array, id3) == elems[3]);
-            test(remove(&array, id5) == elems[5]);
-            test(remove(&array, id7) == elems[7]);
+            TEST(remove(&array, slot0) == elems[0]);
+            TEST(remove(&array, slot1) == elems[9]);
+            TEST(remove(&array, slot2) == elems[2]);
+            TEST(remove(&array, slot3) == elems[3]);
+            TEST(remove(&array, slot5) == elems[5]);
+            TEST(remove(&array, slot7) == elems[7]);
         
-            test(size(array) == 0);
-            test(capacity(array) >= 9);
+            TEST(size(array) == 0);
+            TEST(capacity(array) >= 9);
 
-            id5 = insert(&array, dup(elems[5]));
-            test(get(array, id5) == elems[5]);
+            slot5 = insert(&array, dup(elems[5]));
+            TEST(get(array, slot5) == elems[5]);
         }
         isize trackers_after = trackers_alive();
         isize memory_after = default_allocator()->get_stats().bytes_allocated;
 
-        test(trackers_before == trackers_after);
-        test(memory_before == memory_after);
+        TEST(trackers_before == trackers_after);
+        TEST(memory_before == memory_after);
     }
     
     static
@@ -112,7 +112,7 @@ namespace jot::tests::slot_array
             isize memory_before = default_allocator()->get_stats().bytes_allocated;
 
             {
-                Hash_Table<isize, uint32_t, int_hash<isize>> truth;
+                Hash_Table<isize, Slot, int_hash<isize>> truth;
                 Slot_Array<isize> slot_array;
 
                 reserve(&truth, block_size);
@@ -125,14 +125,14 @@ namespace jot::tests::slot_array
                     switch(op)
                     {
                         case OP_INSERT: {
-                            uint32_t id = insert(&slot_array, i);
-                            set(&truth, i, id);
+                            Slot slot = insert(&slot_array, i);
+                            set(&truth, i, slot);
                             break;
                         }
 
                         case OP_REMOVE: {
                             Slice<const isize> truth_vals = keys(truth);
-                            Slice<uint32_t> truth_indices = values(&truth);
+                            Slice<Slot> truth_indices = values(&truth);
                             if(truth_indices.size == 0)
                             {   
                                 skipped = true;
@@ -140,11 +140,11 @@ namespace jot::tests::slot_array
                             }
 
                             isize selected_index = (isize) index_distribution(gen) % truth_indices.size;
-                            uint32_t removed_id = truth_indices[selected_index];
+                            Slot removed_slot = truth_indices[selected_index];
                             isize removed_value = truth_vals[selected_index];
 
-                            isize just_removed = remove(&slot_array, removed_id);
-                            test(just_removed == removed_value);
+                            isize just_removed = remove(&slot_array, removed_slot);
+                            TEST(just_removed == removed_value);
                             remove(&truth, removed_value);
                             break;
                         }
@@ -159,15 +159,15 @@ namespace jot::tests::slot_array
                     }
 
                     Slice<const isize> truth_vals = keys(truth);
-                    Slice<uint32_t> truth_indices = values(&truth);
+                    Slice<Slot> truth_indices = values(&truth);
                     isize used_size = size(slot_array);
-                    test(used_size == truth_vals.size);
+                    TEST(used_size == truth_vals.size);
 
                     for(isize k = 0; k < truth_indices.size; k++)
                     {
-                        uint32_t id = truth_indices[k];
-                        isize retrieved = get(slot_array, id);
-                        test(retrieved == truth_vals[k]);
+                        Slot slot = truth_indices[k];
+                        isize retrieved = get(slot_array, slot);
+                        TEST(retrieved == truth_vals[k]);
                     }
                 }
             
@@ -176,8 +176,8 @@ namespace jot::tests::slot_array
 
             i64 trackers_after = trackers_alive();
             isize memory_after = default_allocator()->get_stats().bytes_allocated;
-            test(trackers_before == trackers_after);
-            test(memory_before == memory_after);
+            TEST(trackers_before == trackers_after);
+            TEST(memory_before == memory_after);
         };
         
         Seed seed = rd();

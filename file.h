@@ -474,18 +474,6 @@ namespace jot
     
     namespace file_globals
     {
-        inline isize* descriptors_size_ptr()
-        {
-            thread_local static isize size = 0;
-            return &size;
-        }
-
-        inline File_Descriptor** descriptors_ptr()
-        {
-            thread_local static File_Descriptor* descriptors_ptr = nullptr;
-            return &descriptors_ptr;
-        }
-
         static isize find_descriptor(isize value)
         {
             isize descriptors_size = *file_globals::descriptors_size_ptr();

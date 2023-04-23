@@ -9,6 +9,9 @@
 
 namespace jot
 {
+    enum Slot : uint32_t {};
+
+    ///Dansely packet array of items accessible through stable handle or array index
     template<typename T>
     struct Slot_Array
     {
@@ -59,23 +62,23 @@ namespace jot
     template<class T> bool reserve_failing(Slot_Array<T>* slot_array, isize to_size) noexcept;
     template<class T> void reserve(Slot_Array<T>* slot_array, isize to_capacity);
     
-    ///Reserves at least to_size slots
+    ///Reserves at least to_size slots using geometric sequence
     template<class T> void grow(Slot_Array<T>* slot_array, isize to_fit);
     
     ///Inserts an item to the array and returns its id
-    template<class T> uint32_t insert(Slot_Array<T>* slot_array, T val);
+    template<class T> Slot insert(Slot_Array<T>* slot_array, T val);
     
     ///Inserts an item from the array give its id
-    template<class T> T remove(Slot_Array<T>* slot_array, uint32_t id) noexcept;
+    template<class T> T remove(Slot_Array<T>* slot_array, Slot id) noexcept;
 
     ///Converts id to element index
-    template<class T> isize to_index(Slot_Array<T> const& slot_array, uint32_t id);
+    template<class T> isize to_index(Slot_Array<T> const& slot_array, Slot slot) noexcept;
     ///Converts element index to id
-    template<class T> uint32_t to_id(Slot_Array<T> const& slot_array, isize index);
+    template<class T> Slot to_slot(Slot_Array<T> const& slot_array, isize index) noexcept;
 
     ///returns an item given its id
-    template<class T> T const& get(Slot_Array<T> const& slot_array, uint32_t id) noexcept;
-    template<class T> T* get(Slot_Array<T>* slot_array, uint32_t id) noexcept;
+    template<class T> T const& get(Slot_Array<T> const& slot_array, Slot id) noexcept;
+    template<class T> T* get(Slot_Array<T>* slot_array, Slot id) noexcept;
 
     ///Returns true if the structure is correct which should be always
     template<class T> bool is_invariant(Slot_Array<T> const& slot_array) noexcept;
@@ -85,6 +88,85 @@ namespace jot
 {
     namespace slot_array_internal
     {
+        //This structure is rather confusing but incredibly simple and performant. 
+        // It assigns a unique stable handle to each item while still being densely packed. 
+        // To do this we keep 3 extra arrays of links.
+        //
+        // Firstly consider and array of item indicies. We use ~~~ as index -1 considered null
+        //   indeces: [0,  1, ~~~,  2, ~~~, ~~~, ~~~, 3]
+        //             |   |        |                 |
+        //             |   o----o   o--o     o--------o
+        //             V        V      V     V
+        //    items: [item1, item2, item3, item4 ]
+        //
+        // If we want to add a new item to this structure we:
+        //   1) push new item to items array
+        //   2) find empty index in the indicies array and set it to point to the newly added item
+        //
+        // If we want to be able to perform this in constant time we keep an additional free list array to accelerate the search
+        //  
+        //                      0   1  2    3   4    5     6   7
+        //       next (free): [~~, ~~, 4, ~~~,  5,   6,  ~~~, ~~]
+        //  
+        //         free_list: 2
+        // free_list (graph):    -----o o------o o--o o--o o-- -1
+        //                            | |      | |  | |  | |
+        //           indeces: [0,  1, ~~~,  2, ~~~, ~~~, ~~~, 3]
+        //                     |   |        |                 |
+        //                     |   o----o   o--o     o--------o
+        //                     V        V      V     V
+        //            items: [item1, item2, item3, item4 ]
+        //
+        // Now if we want to add a new item we just go to the free_list slot instead of searching.
+        //
+        // Now consider removal. To remove an item from the items array and still keep it packed in cosnatnt time
+        // we need to swap it with the last item and then pop it. If we still want to keep all links valid however we
+        // need to:
+        //   1) find the removed item slot (=: remv_slot)
+        //   2) find last item slot        (=: last_slot)
+        //   3) add remv_slot to start of the free list
+        //   4) set remv_slot item index to -1
+        //   5) set last_slot item index to removed item
+        //   6) swap and pop the item
+        //
+        //Again to do this in linear time we need a way of retrieving the last item slot given the last item index.
+        // so we add one final array which does exactly that:
+        //
+        //                      0   1  2    3   4    5     6   7
+        //       next (free): [~~, ~~, 4, ~~~,  5,   6,  ~~~, ~~]
+        // 
+        //         free_list: 2
+        // free_list (graph):    -----o o------o o--o o--o o-- -1
+        //                            | |      | |  | |  | |
+        //           indeces: [0,  1, ~~~,  2, ~~~, ~~~, ~~~, 3]
+        //                     |   |        |                 |
+        //                     |   o----o   o--o     o--------o
+        //                     V        V      V     V
+        //            items: [item1, item2, item3, item4 ]
+        //                     ||     ||     ||     ||      (|| means that they always share the same index)
+        //           owners: [ 0,     1,     3,     7 ]     
+        //
+        // so if we wanted to get slot of item4 we would do owners[3]. The resulting index is 7 which means if we did 
+        // indeces[7] we would get item index 3 which is exactly item4. This is to say that together owners and 
+        // indeces make a closed loop for each item index.
+        //
+        // Addition of this final array somewhat complicates the functions so far but not too substantionally.
+        //
+        // To optimize performence of all those independent array reads we splat them all together in a strided manner:
+        // this means istead of idences, owner and next arrays we have: 
+        //
+        // slots[index0, owner0, next0,  index1, owner1, next1,  index2, owner2, next2, ...]
+        // 
+        // Note that we cannot reallu use structs for this because structs would probably pad the resulting structure
+        // with additional 4 bytes which would be wasted!
+        //
+        // This results in us having to do: 
+        //   2 memory reads per slot lookup
+        //   2 memory reads per insertion
+        //   5 memory reads per insertion (removed item, removed slot, swapped item, swapped slot, last owner lookup)
+        // The deletion seems scary but in practice it is extremely fast. Only about 3x slower than array pop
+        // this is A LOT faster than removal from bucket array or hash map and about 10x faster than from std::unordered_map!
+
         enum 
         {
             ITEM = 0,
@@ -239,7 +321,7 @@ namespace jot
     }
 
     template<class T>
-    uint32_t insert(Slot_Array<T>* slot_array, T val)
+    Slot insert(Slot_Array<T>* slot_array, T val)
     {
         assert(is_invariant(*slot_array));
         grow(slot_array, slot_array->_size + 1);
@@ -264,35 +346,36 @@ namespace jot
 
         slot_array->_size++;
         assert(is_invariant(*slot_array));
-        return added_slot_i;
+        return (Slot) added_slot_i;
     }
     
 
     template<class T>
-    T remove(Slot_Array<T>* slot_array, uint32_t id) noexcept
+    T remove(Slot_Array<T>* slot_array, Slot handle) noexcept
     {
         assert(is_invariant(*slot_array));
         #define slot_at(i) (slot_array->_slots + 3*i)
         
         using namespace slot_array_internal;
+        uint32_t removed_slot_i = (uint32_t) handle;
         uint32_t last_item_i = slot_array->_size - 1;
         uint32_t excange_slot_i = slot_at(last_item_i)[OWNER];
 
-        assert(id < slot_array->_capacity);
+        assert(removed_slot_i < slot_array->_capacity);
         assert(excange_slot_i < slot_array->_capacity);
 
-        uint32_t removed_item_i = slot_at(id)[ITEM];
+        uint32_t removed_item_i = slot_at(removed_slot_i)[ITEM];
 
         assert(last_item_i == slot_at(excange_slot_i)[ITEM]);
         slot_at(excange_slot_i)[ITEM] = removed_item_i;
         slot_at(removed_item_i)[OWNER] = excange_slot_i;
-        slot_at(id)[ITEM] = (uint32_t) -1;
-        slot_at(id)[NEXT] = slot_array->_free_list;
+        slot_at(removed_slot_i)[ITEM] = (uint32_t) -1;
+        slot_at(removed_slot_i)[NEXT] = slot_array->_free_list;
 
         T removed = (T&&) slot_array->_data[removed_item_i];
         slot_array->_data[removed_item_i] = (T&&) slot_array->_data[last_item_i];
         slot_array->_data[last_item_i].~T();
-        slot_array->_free_list = id;
+        slot_array->_free_list = removed_slot_i;
         slot_array->_size--;
 
         assert(is_invariant(*slot_array));
@@ -303,27 +386,27 @@ namespace jot
     
     
     template<class T>
-    isize to_index(Slot_Array<T> const& slot_array, uint32_t id)
+    isize to_index(Slot_Array<T> const& slot_array, Slot handle) noexcept
     {
         using namespace slot_array_internal;
-        assert(id < slot_array._capacity && "id out of bounds!");
-        uint32_t* slot = slot_array._slots + SLOT_SIZE*id;
+        assert((uint32_t) handle < slot_array._capacity && "id out of bounds!");
+        uint32_t* slot = slot_array._slots + SLOT_SIZE*((uint32_t) handle);
 
         return (isize) slot[ITEM];
     }
     
     template<class T>
-    uint32_t to_id(Slot_Array<T> const& slot_array, isize index)
+    Slot to_slot(Slot_Array<T> const& slot_array, isize index) noexcept
     {
         using namespace slot_array_internal;
         assert(index < slot_array->_size && "index out of bounds!");
         uint32_t* slot = slot_array->_slots + SLOT_SIZE*index;
 
-        return slot[OWNER];
+        return (Slot) slot[OWNER];
     }
     
     template<class T>
-    T const& get(Slot_Array<T> const& slot_array, uint32_t id) noexcept
+    T const& get(Slot_Array<T> const& slot_array, Slot id) noexcept
     {
         isize index = to_index(slot_array, id);
         assert(index < slot_array._size && "invlaid id!");
@@ -331,7 +414,7 @@ namespace jot
     }
     
     template<class T>
-    T* get(Slot_Array<T>* slot_array, uint32_t id) noexcept
+    T* get(Slot_Array<T>* slot_array, Slot id) noexcept
     {
         isize index = to_index(*slot_array, id);
         assert(index < slot_array->_size && "invlaid id!");

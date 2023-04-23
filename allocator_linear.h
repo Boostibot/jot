@@ -38,7 +38,7 @@ namespace jot
             uint8_t* aligned_to = aligned_from + size;
 
             if(aligned_to > buffer_to) 
-                return parent->allocate(size, size, callee);
+                return parent->allocate(size, align, callee);
 
             current_alloced += size;
             if(max_alloced < current_alloced)

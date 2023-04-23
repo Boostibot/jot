@@ -1,6 +1,3 @@
-#define nodisc [[nodiscard]]
-#define cast(...) (__VA_ARGS__)
-
 #if defined(__GNUC__) || defined(__clang__)
     #define RESTRICT __restrict__
     #define FORCE_INLINE __attribute__((always_inline))

@@ -17,12 +17,12 @@ namespace jot::tests::memory
         uint8_t dummy = 0;
         uint8_t* aligned = (uint8_t*) align_forward(&dummy, 32);
         usize ptr_num = (usize) aligned;
-        test(ptr_num/32*32 == ptr_num);
+        TEST(ptr_num/32*32 == ptr_num);
 
-        test(align_forward(aligned + 1, 4) == align_backward(aligned + 7, 4));
-        test(align_forward(aligned + 1, 8) == align_backward(aligned + 15, 8));
-        test(align_forward(aligned + 3, 16) == align_backward(aligned + 27, 16));
-        test(align_forward(aligned + 13, 16) == align_backward(aligned + 17, 16));
+        TEST(align_forward(aligned + 1, 4) == align_backward(aligned + 7, 4));
+        TEST(align_forward(aligned + 1, 8) == align_backward(aligned + 15, 8));
+        TEST(align_forward(aligned + 3, 16) == align_backward(aligned + 27, 16));
+        TEST(align_forward(aligned + 13, 16) == align_backward(aligned + 17, 16));
     }
 
     static
@@ -42,7 +42,7 @@ namespace jot::tests::memory
             isize size = random(gen) % max_size;
 
             void* res = aligned_malloc(size, align);
-            test(res != nullptr);
+            TEST(res != nullptr);
         
             memset(res, 0, (size_t) size);
 
@@ -55,11 +55,11 @@ namespace jot::tests::memory
     {
         Allocator::Stats stats = alloc->get_stats();
 
-        test(stats.max_bytes_used >= stats.bytes_used);
-        test(stats.max_bytes_allocated >= stats.bytes_allocated);
+        TEST(stats.max_bytes_used >= stats.bytes_used);
+        TEST(stats.max_bytes_allocated >= stats.bytes_allocated);
 
         Allocator::Stats def_stats;
-        test(stats.bytes_used >= stats.bytes_allocated || stats.bytes_used == def_stats.bytes_used);
+        TEST(stats.bytes_used >= stats.bytes_allocated || stats.bytes_used == def_stats.bytes_used);
     }
     
     static
@@ -102,16 +102,16 @@ namespace jot::tests::memory
             Slice<uint8_t> third = allocate_slice(&stack_ring, 30, 8, GET_LINE_INFO());
 
             test_stats_plausibility(&stack_ring);
-            test(deallocate_slice(&stack_ring, second, 256, GET_LINE_INFO()));
+            TEST(deallocate_slice(&stack_ring, second, 256, GET_LINE_INFO()));
             
             bool s1 = resize_slice(&stack_ring, &first, 25, 8, GET_LINE_INFO());
-            test(s1 == true);
+            TEST(s1 == true);
             
             bool s2 = resize_slice(&stack_ring, &first, 40 + 256, 8, GET_LINE_INFO());
-            test(s2 == false); 
+            TEST(s2 == false); 
 
-            test(deallocate_slice(&stack_ring, first, 8, GET_LINE_INFO()));
-            test(deallocate_slice(&stack_ring, third, 8, GET_LINE_INFO()));
+            TEST(deallocate_slice(&stack_ring, first, 8, GET_LINE_INFO()));
+            TEST(deallocate_slice(&stack_ring, third, 8, GET_LINE_INFO()));
             test_stats_plausibility(&stack_ring);
         }
 
@@ -120,22 +120,22 @@ namespace jot::tests::memory
             Slice<uint8_t> a1 = allocate_slice(&stack_ring, 64, 8, GET_LINE_INFO());
             Slice<uint8_t> a2 = allocate_slice(&stack_ring, 64, 8, GET_LINE_INFO());
             Slice<uint8_t> a3 = allocate_slice(&stack_ring, 64, 8, GET_LINE_INFO());
-            test(a1.data != nullptr && a2.data != nullptr && a3.data != nullptr);
+            TEST(a1.data != nullptr && a2.data != nullptr && a3.data != nullptr);
 
             test_stats_plausibility(&stack_ring);
             
-            test(deallocate_slice(&stack_ring, a1, 8, GET_LINE_INFO()));
-            test(deallocate_slice(&stack_ring, a2, 8, GET_LINE_INFO()));
+            TEST(deallocate_slice(&stack_ring, a1, 8, GET_LINE_INFO()));
+            TEST(deallocate_slice(&stack_ring, a2, 8, GET_LINE_INFO()));
 
             Slice<uint8_t> a4 = allocate_slice(&stack_ring, 64, 8, GET_LINE_INFO());
             Slice<uint8_t> a5 = allocate_slice(&stack_ring, 64, 8, GET_LINE_INFO());
-            test(a4.data != nullptr && a5.data != nullptr);
+            TEST(a4.data != nullptr && a5.data != nullptr);
 
-            test(stack_ring.allocate(64, 8, GET_LINE_INFO()) == nullptr);
+            TEST(stack_ring.allocate(64, 8, GET_LINE_INFO()) == nullptr);
             
-            test(deallocate_slice(&stack_ring, a3, 8, GET_LINE_INFO()));
-            test(deallocate_slice(&stack_ring, a4, 8, GET_LINE_INFO()));
-            test(deallocate_slice(&stack_ring, a5, 8, GET_LINE_INFO()));
+            TEST(deallocate_slice(&stack_ring, a3, 8, GET_LINE_INFO()));
+            TEST(deallocate_slice(&stack_ring, a4, 8, GET_LINE_INFO()));
+            TEST(deallocate_slice(&stack_ring, a5, 8, GET_LINE_INFO()));
             test_stats_plausibility(&stack_ring);
         }
     }
@@ -232,17 +232,17 @@ namespace jot::tests::memory
             for(isize i = 0; i < block_size; i++)
             {
                 alloc_array[i] = tested->allocate(size_array[i], align_array[i], GET_LINE_INFO());
-                test(alloc_array[i] != nullptr);
+                TEST(alloc_array[i] != nullptr);
 
                 if(touch == TOUCH)
                     memset(alloc_array[i], 255, (size_t) size_array[i]);
             }
 
             for(isize i = 0; i < block_size; i++)
-                test(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
+                TEST(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
             
             isize alloced_after = tested->get_stats().bytes_allocated;
-            test(alloced_before == alloced_after);
+            TEST(alloced_before == alloced_after);
 
             test_stats_plausibility(tested);
 
@@ -257,17 +257,17 @@ namespace jot::tests::memory
             for(isize i = 0; i < block_size; i++)
             {
                 alloc_array[i] = tested->allocate(size_array[i], align_array[i], GET_LINE_INFO());
-                test(alloc_array[i] != nullptr);
+                TEST(alloc_array[i] != nullptr);
 
                 if(touch == TOUCH)
                     memset(alloc_array[i], 255, (size_t) size_array[i]);
             }
 
             for(isize i = block_size; i-- > 0;)
-                test(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
+                TEST(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
                 
             isize alloced_after = tested->get_stats().bytes_allocated;
-            test(alloced_before == alloced_after);
+            TEST(alloced_before == alloced_after);
             test_stats_plausibility(tested);
             arena.reset();
         };   
@@ -279,12 +279,12 @@ namespace jot::tests::memory
             for(isize i = 0; i < block_size; i++)
             {
                 alloc_array[i] = tested->allocate(size_array[i], align_array[i], GET_LINE_INFO());
-                test(alloc_array[i] != nullptr);
+                TEST(alloc_array[i] != nullptr);
 
                 if(touch == TOUCH)
                     memset(alloc_array[i], 255, (size_t) size_array[i]);
                 
-                test(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
+                TEST(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
             }
 
             test_stats_plausibility(tested);
@@ -303,14 +303,14 @@ namespace jot::tests::memory
             for(isize i = 0; i < block_size; i++)
             {
                 alloc_array[i] = tested->allocate(size_array[i], align_array[i], GET_LINE_INFO());
-                test(alloc_array[i] != nullptr);
+                TEST(alloc_array[i] != nullptr);
 
                 if(touch == TOUCH)
                     memset(alloc_array[i], 255, (size_t) size_array[i]);
             }
 
             for(isize i = 0; i < block_size; i += 2)
-                test(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
+                TEST(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
 
             for(isize i = 1; i < block_size; i += 2)
             {
@@ -322,12 +322,12 @@ namespace jot::tests::memory
                 if(tested->resize(old_data, old_size, new_size, align, GET_LINE_INFO()) == false)
                 {
                     uint8_t* new_data = (uint8_t*) tested->allocate(new_size, align, GET_LINE_INFO());
-                    test(new_data != nullptr);
+                    TEST(new_data != nullptr);
 
                     if(touch == TOUCH)
                         memcpy(new_data, old_data, (size_t) old_size);
                         
-                    test(tested->deallocate(old_data, old_size, align, GET_LINE_INFO()));
+                    TEST(tested->deallocate(old_data, old_size, align, GET_LINE_INFO()));
                     old_data = new_data;
                 }
 
@@ -339,10 +339,10 @@ namespace jot::tests::memory
             }
 
             for(isize i = 1; i < block_size; i += 2)
-                test(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
+                TEST(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
             
             isize alloced_after = tested->get_stats().bytes_allocated;
-            test(alloced_before == alloced_after);
+            TEST(alloced_before == alloced_after);
 
             test_stats_plausibility(tested);
             arena.reset();   
@@ -359,7 +359,7 @@ namespace jot::tests::memory
                 isize align = align_array[i];
 
                 uint8_t* old_data = (uint8_t*) tested->allocate(old_size, align, GET_LINE_INFO());
-                test(old_data != nullptr);
+                TEST(old_data != nullptr);
 
                 if(touch == TOUCH)
                     memset(old_data, 255, (size_t) size_array[i]);
@@ -368,16 +368,16 @@ namespace jot::tests::memory
                 if(tested->resize(old_data, old_size, new_size, align, GET_LINE_INFO()) == false)
                 {
                     uint8_t* new_data = (uint8_t*) tested->allocate(new_size, align, GET_LINE_INFO());
-                    test(new_data != nullptr);
+                    TEST(new_data != nullptr);
 
                     if(touch == TOUCH)
                         memcpy(new_data, old_data, (size_t) old_size);
                         
-                    test(tested->deallocate(old_data, old_size, align, GET_LINE_INFO()));
+                    TEST(tested->deallocate(old_data, old_size, align, GET_LINE_INFO()));
                     old_data = new_data;
                 }
                 
-                test(tested->deallocate(old_data, new_size, align, GET_LINE_INFO()));
+                TEST(tested->deallocate(old_data, new_size, align, GET_LINE_INFO()));
             }
 
             test_stats_plausibility(tested);
@@ -390,7 +390,7 @@ namespace jot::tests::memory
             for(isize i = 0; i < block_size; i++)
             {
                 alloc_array[i] = tested->allocate(size_array[i], align_array[i], GET_LINE_INFO());
-                test(alloc_array[i] != nullptr);
+                TEST(alloc_array[i] != nullptr);
 
                 if(touch == TOUCH)
                     memset(alloc_array[i], 255, (size_t) size_array[i]);
@@ -408,7 +408,7 @@ namespace jot::tests::memory
             }
             
             for(isize i = 0; i < block_size; i++)
-                test(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
+                TEST(tested->deallocate(alloc_array[i], size_array[i], align_array[i], GET_LINE_INFO()));
 
             arena.reset();
         };
@@ -466,6 +466,6 @@ namespace jot::tests::memory
             stress_test(print);
 
         isize alloced_after = default_allocator()->get_stats().bytes_allocated;
-        test(alloced_before == alloced_after);
+        TEST(alloced_before == alloced_after);
     }
 }

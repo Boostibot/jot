@@ -1,6 +1,5 @@
 #pragma once
 
-#include "panic.h"
 #include "types.h"
 #include "static_array.h"
 #include "string.h"
@@ -139,8 +138,12 @@ namespace jot::tests
 
         return duped; 
     }
+    
+    #define TEST(cond) \
+        (!(cond)    \
+            ? (println("test failed: "#cond " at: " __FILE__ __FUNCTION__ " line ", __LINE__), *(int*) 0 = 1, (void) 0)    \
+            : (void) 0) \
 
-    #define test(cond) force(cond)
 }
 
 namespace jot

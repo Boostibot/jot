@@ -256,19 +256,21 @@ namespace jot
     template<typename T>
     void format_range_into(String_Builder* into, T const& range)
     {
+        using namespace jot;
+        using namespace std;
         push(into, '[');
-        auto it = range.begin();
-        const auto end = range.end();
-        if(it != end)
+        auto it = begin(range);
+        const auto it_end = end(range);
+        if(it != it_end)
         {
-            format_into_single_infer(into, *it);
+            format_single_into(into, *it);
             ++it;
         }
 
-        for(; it != end; ++it)
+        for(; it != it_end; ++it)
         {
             push_multiple(into, String(", "));
-            format_into_single_infer(into, *it);
+            format_single_into(into, *it);
         }
 
         push(into, ']');

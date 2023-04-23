@@ -1,6 +1,5 @@
 #pragma once
 #include "slice.h"
-#include <array>
 
 namespace jot
 {

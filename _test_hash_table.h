@@ -32,7 +32,7 @@ namespace jot::tests::hash_table
         
         bool do_manual_match = manual == obtained;
         bool do_expected_match = manual == value;
-        test(do_manual_match);
+        TEST(do_manual_match);
         return do_expected_match;
     }
 
@@ -42,7 +42,7 @@ namespace jot::tests::hash_table
         bool manual = find(table, key).entry_index == -1;
         bool obtained = has(table, key) == false;
 
-        test(manual == obtained);
+        TEST(manual == obtained);
         return manual;
     }
         
@@ -53,41 +53,41 @@ namespace jot::tests::hash_table
         {
             Table table;
 
-            test(empty_at(table, 1));
-            test(empty_at(table, 101));
-            test(empty_at(table, 0));
+            TEST(empty_at(table, 1));
+            TEST(empty_at(table, 101));
+            TEST(empty_at(table, 0));
 
             set(&table, 1, 10);
-            test(empty_at(table, 1) == false);
-            test(value_matches_at(table, 1, 10));
-            test(value_matches_at(table, 1, 100) == false);
+            TEST(empty_at(table, 1) == false);
+            TEST(value_matches_at(table, 1, 10));
+            TEST(value_matches_at(table, 1, 100) == false);
             
-            test(empty_at(table, 101));
-            test(empty_at(table, 2));
+            TEST(empty_at(table, 101));
+            TEST(empty_at(table, 2));
 
             set(&table, 3, 30);
             set(&table, 2, 20);
 
-            test(value_matches_at(table, 1, 10));
-            test(empty_at(table, 442120));
-            test(value_matches_at(table, 2, 20));
-            test(empty_at(table, 654351));
-            test(value_matches_at(table, 3, 30));
-            test(empty_at(table, 5));
+            TEST(value_matches_at(table, 1, 10));
+            TEST(empty_at(table, 442120));
+            TEST(value_matches_at(table, 2, 20));
+            TEST(empty_at(table, 654351));
+            TEST(value_matches_at(table, 3, 30));
+            TEST(empty_at(table, 5));
 
             set(&table, 15, 15);
             set(&table, 31, 15);
         
             set(&table, 0, 100);
-            test(value_matches_at(table, 0, 100));
+            TEST(value_matches_at(table, 0, 100));
             set(&table, 0, 1000);
-            test(value_matches_at(table, 0, 1000));
-            test(value_matches_at(table, 0, 100) == false);
-            test(empty_at(table, 5));
+            TEST(value_matches_at(table, 0, 1000));
+            TEST(value_matches_at(table, 0, 100) == false);
+            TEST(empty_at(table, 5));
         }
             
         isize alive_after = trackers_alive();
-        test(alive_before == alive_after);
+        TEST(alive_before == alive_after);
     }
         
     template <typename Table> 
@@ -97,41 +97,41 @@ namespace jot::tests::hash_table
         {
             Table table;
 
-            test(empty_at(table, keys[0]));
-            test(empty_at(table, keys[3]));
-            test(empty_at(table, keys[5]));
+            TEST(empty_at(table, keys[0]));
+            TEST(empty_at(table, keys[3]));
+            TEST(empty_at(table, keys[5]));
 
             set(&table, (keys[0]), (values[0]));
-            test(empty_at(table, keys[0]) == false);
-            test(value_matches_at(table, keys[0], values[0]));
-            test(value_matches_at(table, keys[0], values[1]) == false);
+            TEST(empty_at(table, keys[0]) == false);
+            TEST(value_matches_at(table, keys[0], values[0]));
+            TEST(value_matches_at(table, keys[0], values[1]) == false);
             
-            test(empty_at(table, keys[5]));
-            test(empty_at(table, keys[1]));
+            TEST(empty_at(table, keys[5]));
+            TEST(empty_at(table, keys[1]));
 
             set(&table, (keys[2]), (values[2]));
             set(&table, (keys[1]), (values[1]));
 
-            test(value_matches_at(table, keys[0], values[0]));
-            test(empty_at(table, keys[8]));
-            test(value_matches_at(table, keys[1], values[1]));
-            test(empty_at(table, keys[9]));
-            test(value_matches_at(table, keys[2], values[2]));
-            test(empty_at(table, keys[4]));
+            TEST(value_matches_at(table, keys[0], values[0]));
+            TEST(empty_at(table, keys[8]));
+            TEST(value_matches_at(table, keys[1], values[1]));
+            TEST(empty_at(table, keys[9]));
+            TEST(value_matches_at(table, keys[2], values[2]));
+            TEST(empty_at(table, keys[4]));
 
             set(&table, (keys[5]), (values[5]));
             set(&table, (keys[7]), (values[7]));
         
             set(&table, (keys[0]), (values[8]));
-            test(value_matches_at(table, keys[0], values[8]));
+            TEST(value_matches_at(table, keys[0], values[8]));
             set(&table, (keys[0]), (values[9]));
-            test(value_matches_at(table, keys[0], values[9]));
-            test(value_matches_at(table, keys[0], values[8]) == false);
-            test(empty_at(table, keys[4]));
+            TEST(value_matches_at(table, keys[0], values[9]));
+            TEST(value_matches_at(table, keys[0], values[8]) == false);
+            TEST(empty_at(table, keys[4]));
         }
  
         isize alive_after = trackers_alive();
-        test(alive_before == alive_after);
+        TEST(alive_before == alive_after);
     }
 
     template <typename Table> 
@@ -146,23 +146,23 @@ namespace jot::tests::hash_table
             set(&table, 3, 10);
             set(&table, 4, 10);
 
-            test(value_matches_at(table, 1, 10));
-            test(value_matches_at(table, 2, 10));
-            test(value_matches_at(table, 3, 10));
-            test(value_matches_at(table, 4, 10));
+            TEST(value_matches_at(table, 1, 10));
+            TEST(value_matches_at(table, 2, 10));
+            TEST(value_matches_at(table, 3, 10));
+            TEST(value_matches_at(table, 4, 10));
 
             mark_removed(&table, 2);
-            test(empty_at(table, 2));
-            test(value_matches_at(table, 3, 10));
-            test(value_matches_at(table, 1, 10));
+            TEST(empty_at(table, 2));
+            TEST(value_matches_at(table, 3, 10));
+            TEST(value_matches_at(table, 1, 10));
             
             mark_removed(&table, 3);
-            test(empty_at(table, 3));
-            test(value_matches_at(table, 1, 10));
-            test(value_matches_at(table, 4, 10));
+            TEST(empty_at(table, 3));
+            TEST(value_matches_at(table, 1, 10));
+            TEST(value_matches_at(table, 4, 10));
 
             set(&table, 2, 20);
-            test(value_matches_at(table, 2, 20));
+            TEST(value_matches_at(table, 2, 20));
             
             set(&table, 6, 60);
             set(&table, 7, 70);
@@ -170,8 +170,8 @@ namespace jot::tests::hash_table
             set(&table, 9, 90);
             set(&table, 10, 100);
             
-            test(value_matches_at(table, 9, 90));
-            test(value_matches_at(table, 4, 10));
+            TEST(value_matches_at(table, 9, 90));
+            TEST(value_matches_at(table, 4, 10));
 
             mark_removed(&table, 6);
             mark_removed(&table, 7);
@@ -181,26 +181,26 @@ namespace jot::tests::hash_table
             mark_removed(&table, 10);
             mark_removed(&table, 10);
 
-            test(empty_at(table, 6));
-            test(empty_at(table, 7));
-            test(empty_at(table, 8));
-            test(empty_at(table, 9));
-            test(empty_at(table, 10));
+            TEST(empty_at(table, 6));
+            TEST(empty_at(table, 7));
+            TEST(empty_at(table, 8));
+            TEST(empty_at(table, 9));
+            TEST(empty_at(table, 10));
             
-            test(value_matches_at(table, 1, 10));
-            test(value_matches_at(table, 4, 10));
-            test(empty_at(table, 3));
+            TEST(value_matches_at(table, 1, 10));
+            TEST(value_matches_at(table, 4, 10));
+            TEST(empty_at(table, 3));
 
             set(&table, 10, 100);
-            test(value_matches_at(table, 10, 100));
+            TEST(value_matches_at(table, 10, 100));
             
             mark_removed(&table, 1);
-            test(empty_at(table, 1));
-            test(value_matches_at(table, 4, 10));
+            TEST(empty_at(table, 1));
+            TEST(value_matches_at(table, 4, 10));
         }
             
         isize alive_after = trackers_alive();
-        test(alive_before == alive_after);
+        TEST(alive_before == alive_after);
     }
     
     template <typename Table> 
@@ -258,27 +258,27 @@ namespace jot::tests::hash_table
             set(&table, 3, 30);
             set(&table, 4, 40);
             
-            test(value_matches_at(table, 1, 10));
-            test(value_matches_at(table, 2, 20));
-            test(value_matches_at(table, 3, 30));
-            test(value_matches_at(table, 4, 40));
+            TEST(value_matches_at(table, 1, 10));
+            TEST(value_matches_at(table, 2, 20));
+            TEST(value_matches_at(table, 3, 30));
+            TEST(value_matches_at(table, 4, 40));
 
             auto entry = remove(&table, find(table, 2));
-            test(entry.key == 2 && entry.value == 20);
-            test(empty_at(table, 2));
-            test(value_matches_at(table, 3, 30));
-            test(value_matches_at(table, 1, 10));
+            TEST(entry.key == 2 && entry.value == 20);
+            TEST(empty_at(table, 2));
+            TEST(value_matches_at(table, 3, 30));
+            TEST(value_matches_at(table, 1, 10));
             
-            test(value_matches_at(table, 4, 40));
+            TEST(value_matches_at(table, 4, 40));
 
             entry = remove(&table, find(table, 3));
-            test(entry.key == 3 && entry.value == 30);
-            test(empty_at(table, 3));
-            test(value_matches_at(table, 1, 10));
-            test(value_matches_at(table, 4, 40));
+            TEST(entry.key == 3 && entry.value == 30);
+            TEST(empty_at(table, 3));
+            TEST(value_matches_at(table, 1, 10));
+            TEST(value_matches_at(table, 4, 40));
 
             set(&table, 2, 20);
-            test(value_matches_at(table, 2, 20));
+            TEST(value_matches_at(table, 2, 20));
             
             set(&table, 6, 60);
             set(&table, 7, 70);
@@ -288,50 +288,50 @@ namespace jot::tests::hash_table
 
             set(&table, 10, 100);
             
-            test(value_matches_at(table, 9, 90));
-            test(value_matches_at(table, 4, 40));
+            TEST(value_matches_at(table, 9, 90));
+            TEST(value_matches_at(table, 4, 40));
 
             entry = remove(&table, find(table, 6));
-            test(entry.key == 6 && entry.value == 60);
-            test(remove(&table, 6) == false);
+            TEST(entry.key == 6 && entry.value == 60);
+            TEST(remove(&table, 6) == false);
 
             entry = remove(&table, find(table, 7));
-            test(entry.key == 7 && entry.value == 70);
-            test(remove(&table, 7) == false);
+            TEST(entry.key == 7 && entry.value == 70);
+            TEST(remove(&table, 7) == false);
 
             entry = remove(&table, find(table, 8));
-            test(entry.key == 8 && entry.value == 80);
+            TEST(entry.key == 8 && entry.value == 80);
 
             entry = remove(&table, find(table, 9));
-            test(entry.key == 9 && entry.value == 90);
+            TEST(entry.key == 9 && entry.value == 90);
 
             entry = remove(&table, find(table, 10));
-            test(entry.key == 10 && entry.value == 100);
+            TEST(entry.key == 10 && entry.value == 100);
 
-            test(remove(&table, 7) == false);
-            test(remove(&table, 10) == false);
-            test(remove(&table, 3) == false);
+            TEST(remove(&table, 7) == false);
+            TEST(remove(&table, 10) == false);
+            TEST(remove(&table, 3) == false);
 
-            test(empty_at(table, 6));
-            test(empty_at(table, 7));
-            test(empty_at(table, 8));
-            test(empty_at(table, 9));
-            test(empty_at(table, 10));
+            TEST(empty_at(table, 6));
+            TEST(empty_at(table, 7));
+            TEST(empty_at(table, 8));
+            TEST(empty_at(table, 9));
+            TEST(empty_at(table, 10));
             
-            test(value_matches_at(table, 1, 10));
-            test(value_matches_at(table, 4, 40));
-            test(empty_at(table, 3));
+            TEST(value_matches_at(table, 1, 10));
+            TEST(value_matches_at(table, 4, 40));
+            TEST(empty_at(table, 3));
 
             set(&table, 10, 100);
-            test(value_matches_at(table, 10, 100));
+            TEST(value_matches_at(table, 10, 100));
             
             entry = remove(&table, find(table, 1));
-            test(empty_at(table, 1));
-            test(value_matches_at(table, 4, 40));
+            TEST(empty_at(table, 1));
+            TEST(value_matches_at(table, 4, 40));
         }
             
         isize alive_after = trackers_alive();
-        test(alive_before == alive_after);
+        TEST(alive_before == alive_after);
     }
 
     template <typename Key>     
@@ -391,7 +391,7 @@ namespace jot::tests::hash_table
             set(&table, Key{30}, Val{30});
         }
         i64 after = trackers_alive();
-        test(before == after);
+        TEST(before == after);
     }
 
     void test_stress(bool print)
@@ -503,7 +503,7 @@ namespace jot::tests::hash_table
                                     decr_count_table(&count_table, key);
 
                                 //the key can be not found if we allow OP_MARK_REMOVED
-                                test(was_found || do_mark_removed);
+                                TEST(was_found || do_mark_removed);
                             }
                             break;
 
@@ -554,7 +554,7 @@ namespace jot::tests::hash_table
                         {
                             Key key = count_table_keys[k];
                             i32 generation_size = get(count_table, key, -1);
-                            test(generation_size > 0 && "count must be present");
+                            TEST(generation_size > 0 && "count must be present");
 
                             Hash_Found found = find(table, key);
                             i32 found_generation_size = 0;
@@ -562,30 +562,30 @@ namespace jot::tests::hash_table
                             while(found.entry_index != -1)
                             {
                                 Val value = table_values[found.entry_index];
-                                test(value.val == key.val && "key values must form a pair");
+                                TEST(value.val == key.val && "key values must form a pair");
 
                                 found = multi::find_next(table, key, found);
                                 found_generation_size ++;
                             }
 
-                            test(found_generation_size == generation_size && "there must be exactly generation_size entries and no more");
+                            TEST(found_generation_size == generation_size && "there must be exactly generation_size entries and no more");
                         }
 
                         for(isize k = 0; k < table_keys.size; k++)
                         {
                             Key key = table_keys[k];
                             bool is_found = has(table, key);
-                            test(is_found && "all table keys need to be in count_table (otherwise the above test wouldnt be exhaustive)");
+                            TEST(is_found && "all table keys need to be in count_table (otherwise the above test wouldnt be exhaustive)");
                         }
                     }
 
-                    test(is_invariant(table));
+                    TEST(is_invariant(table));
                 }
                 if(print) println("    i: {}\t batch: {}\t final_size: {}", j, block_size, size(table));
             }
 
             i64 after = trackers_alive();
-            test(before == after);
+            TEST(before == after);
         };
         
         Seed seed = rd();
@@ -681,6 +681,6 @@ namespace jot::tests::hash_table
         }
         
         isize memory_after = default_allocator()->get_stats().bytes_allocated;
-        test(memory_before == memory_after);
+        TEST(memory_before == memory_after);
     }
 }
