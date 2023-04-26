@@ -730,7 +730,7 @@ namespace jot
         }
     }
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-    bool set(Hash_Table<Key, Value, hash, equals>* table, Id<Key> key, Id<Value> value, Hash_Table_Growth growth = {})
+    isize set(Hash_Table<Key, Value, hash, equals>* table, Id<Key> key, Id<Value> value, Hash_Table_Growth growth = {})
     {
         grow_if_overfull(table, growth);
         assert(table->_linker_size != 0);
@@ -749,12 +749,12 @@ namespace jot
             if(equals(table->_keys[link], key))
             {
                 values(table)[link] = move(&value);
-                return true;
+                return i;
             }
         }
 
         hash_table_internal::push_new(table, move(&key), move(&value), start_i, i, growth);
-        return false;
+        return table->_entries_size;
     }
     
     namespace multi
@@ -767,7 +767,7 @@ namespace jot
         }
 
         template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
-        void add_another(Hash_Table<Key, Value, hash, equals>* table, Id<Key> key, Id<Value> value, Hash_Table_Growth growth = {})
+        isize add_another(Hash_Table<Key, Value, hash, equals>* table, Id<Key> key, Id<Value> value, Hash_Table_Growth growth = {})
         {
             assert(is_invariant(*table));
             grow_if_overfull(table, growth);
@@ -785,6 +785,7 @@ namespace jot
             }
 
             hash_table_internal::push_new(table, move(&key), move(&value), start_i, i, growth);
+            return table->_entries_size;
         }
     }
 }

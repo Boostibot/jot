@@ -47,6 +47,11 @@ namespace jot
     //       it possible to drive down the ratio of 'stored data size' / 'total data structure size'
     //       as close to 0 as desired)
 
+    #ifndef JOT_HANDLE
+        #define JOT_HANDLE
+        struct Handle { uint32_t index; };
+    #endif
+
     namespace bucket_array_internal
     {
         static constexpr isize MASK_BITS = (isize) sizeof(uint64_t) * 8;
@@ -71,7 +76,8 @@ namespace jot
             Index_Chain _open_buckets = {}; //1
             isize _total_used = 0;      //1
             isize _total_capacity = 0;  //1
-            isize _max_bucket_block_size = 0;
+            uint32_t _max_bucket_block_size = 0;
+            uint32_t _handle_offset = 10;
         };
         
         struct Bucket_Array_Growth
@@ -151,6 +157,8 @@ namespace jot
             is_invariant(*bucket_array, true);
             Array<Bucket>* buckets = &bucket_array->_buckets;
 
+            //@TODO: Round to the nearest multiple of page size and create an allocator that
+            // allocates straight from the VM
             isize bucket_count = div_round_up(total_block_size, BUCKET_SIZE);
             isize new_block_size = bucket_count * BUCKET_SIZE;
             isize data_size = new_block_size * slot_size;
@@ -180,7 +188,7 @@ namespace jot
                 curr_data += BUCKET_SIZE * slot_size;
             }
 
-            bucket_array->_max_bucket_block_size = max(bucket_array->_max_bucket_block_size, total_block_size);
+            bucket_array->_max_bucket_block_size = (uint32_t) max(bucket_array->_max_bucket_block_size, total_block_size);
             bucket_array->_total_capacity += new_block_size;
                 
             is_invariant(*bucket_array, true);
@@ -437,11 +445,10 @@ namespace jot
         return res;
     }
     
-    inline
-    Bucket_Index to_bucket_index(isize index)
+    template <typename T>
+    Bucket_Index to_bucket_index(Bucket_Array<T> const& bucket_array, Handle handle)
     {
-        assert(index >= 0 && "invalid index!");
-
+        uint32_t index = handle.index - bucket_array._handle_offset;
         Bucket_Index out = {
             index / bucket_array_internal::BUCKET_SIZE,
             index % bucket_array_internal::BUCKET_SIZE
@@ -450,20 +457,20 @@ namespace jot
         return out;
     }
     
-    inline
-    isize from_bucket_index(Bucket_Index index)
+    template <typename T>
+    Handle to_handle(Bucket_Array<T> const& bucket_array, Bucket_Index index)
     {
         assert(0 <= index.bucket_i && "invalid index!");
         assert(0 <= index.slot_i && index.slot_i < bucket_array_internal::BUCKET_SIZE && "invalid index!");
 
         isize out = index.bucket_i * bucket_array_internal::BUCKET_SIZE + index.slot_i;
-        return out;
+        return Handle{(uint32_t) out + bucket_array._handle_offset};
     }
 
     template <typename T>
-    bool is_used(Bucket_Array<T> const& bucket_array, isize index)
+    bool is_used(Bucket_Array<T> const& bucket_array, Handle handle)
     {
-        Bucket_Index bucket_index = to_bucket_index(index);
+        Bucket_Index bucket_index = to_bucket_index(bucket_array, handle);
         return is_used(bucket_array, bucket_index);
     }
 
@@ -520,15 +527,15 @@ namespace jot
     }
 
     template <typename T>
-    T* get(Bucket_Array<T>* from, isize index) noexcept
+    T* get(Bucket_Array<T>* from, Handle handle) noexcept
     {
-        return get(from, to_bucket_index(index));
+        return get(from, to_bucket_index(*from, handle));
     }
     
     template <typename T>
-    T const& get(Bucket_Array<T> const& from, isize index) noexcept
+    T const& get(Bucket_Array<T> const& from, Handle handle) noexcept
     {
-        return get(from, to_bucket_index(index));
+        return get(from, to_bucket_index(from, handle));
     }
 
     template <typename T>
@@ -576,7 +583,7 @@ namespace jot
     }
 
     template <typename T>
-    T remove(Bucket_Array<T>* bucket_array, Bucket_Index index) noexcept
+    T remove_bucket_index(Bucket_Array<T>* bucket_array, Bucket_Index index) noexcept
     {
         T* address = get(bucket_array, index);
         bucket_array_internal::prepare_for_remove(bucket_array, index);
@@ -588,17 +595,17 @@ namespace jot
     }
     
     template <typename T>
-    isize insert(Bucket_Array<T>* bucket_array, T val, Bucket_Array_Growth growth = {})
+    Handle insert(Bucket_Array<T>* bucket_array, T val, Bucket_Array_Growth growth = {})
     {
         Bucket_Index index = insert_bucket_index(bucket_array, move(&val), growth);
-        return from_bucket_index(index);
+        return to_handle(*bucket_array, index);
     }
     
     template <typename T>
-    T remove(Bucket_Array<T>* bucket_array, isize index) noexcept
+    T remove(Bucket_Array<T>* bucket_array, Handle handle) noexcept
     {
-        Bucket_Index bucket_index = to_bucket_index(index);
-        return remove(bucket_array, bucket_index);
+        Bucket_Index bucket_index = to_bucket_index(*bucket_array, handle);
+        return remove_bucket_index(bucket_array, bucket_index);
     }
 }
 

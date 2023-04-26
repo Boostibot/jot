@@ -271,7 +271,7 @@ namespace jot::benchmarks
                 if(removed_i == 0)
                 {
                     for(isize i = 0; i < batch_size; i++)
-                        added_keys[i] = insert(&bucket_array, i, DEF_BUCKET_GROWTH);
+                        added_keys[i] = insert(&bucket_array, i, DEF_BUCKET_GROWTH).index;
                 
                     shuffle(slice(&added_keys), &gen);
                 
@@ -280,7 +280,7 @@ namespace jot::benchmarks
                 }
             
                 isize removed = added_keys[--removed_i];
-                remove(&bucket_array, removed);
+                remove(&bucket_array, Handle{(uint32_t) removed});
                 do_no_optimize(bucket_array);
                 read_write_barrier();
                 return true;
@@ -292,7 +292,7 @@ namespace jot::benchmarks
                 if(removed_i == 0)
                 {
                     for(isize i = 0; i < batch_size; i++)
-                        added_keys[i] = (isize) insert(&slot_array, i);
+                        added_keys[i] = (isize) insert(&slot_array, i).index;
                 
                     shuffle(slice(&added_keys), &gen);
                 
@@ -301,7 +301,7 @@ namespace jot::benchmarks
                 }
             
                 isize removed = added_keys[--removed_i];
-                remove(&slot_array, (Slot) removed);
+                remove(&slot_array, Handle{(uint32_t) removed});
                 do_no_optimize(slot_array);
                 read_write_barrier();
                 return true;
@@ -518,8 +518,8 @@ namespace jot::benchmarks
                 set(&hash_table, i, i);
                 map.insert_or_assign(i, i);
                 vec.push_back(i);
-                added_bucket_keys[i] = insert(&bucket_array, i, DEF_BUCKET_GROWTH);
-                added_slot_keys[i] = insert(&slot_array, i);
+                added_bucket_keys[i] = insert(&bucket_array, i, DEF_BUCKET_GROWTH).index;
+                added_slot_keys[i] = insert(&slot_array, i).index;
                 added_keys[i] = i;
             }
             
@@ -562,7 +562,7 @@ namespace jot::benchmarks
             
             i = 0;
             Bench_Result res_bucket_array = benchmark(GIVEN_TIME, [&]{
-                sum += get(bucket_array, added_bucket_keys[i]);
+                sum += get(bucket_array, Handle{(uint32_t) added_bucket_keys[i]});
                 do_no_optimize(hash_table);
                 read_write_barrier();
                 
@@ -575,7 +575,7 @@ namespace jot::benchmarks
             
             i = 0;
             Bench_Result res_slot_array = benchmark(GIVEN_TIME, [&]{
-                sum += get(bucket_array, added_slot_keys[i]);
+                sum += get(slot_array, Handle{(uint32_t) added_slot_keys[i]});
                 do_no_optimize(hash_table);
                 read_write_barrier();
                 
@@ -696,7 +696,7 @@ namespace jot::benchmarks
                 Bucket_Array<isize> bucket_array;
                 for(isize i = 0; i < batch_size; i++)
                 {
-                    isize added = insert(&bucket_array, counter++, DEF_BUCKET_GROWTH);
+                    Handle added = insert(&bucket_array, counter++, DEF_BUCKET_GROWTH);
                     (void) insert(&bucket_array, counter++, DEF_BUCKET_GROWTH);
                     remove(&bucket_array, added);
                 }
@@ -710,7 +710,7 @@ namespace jot::benchmarks
                 Slot_Array<isize> slot_array;
                 for(isize i = 0; i < batch_size; i++)
                 {
-                    Slot added = insert(&slot_array, counter++);
+                    Handle added = insert(&slot_array, counter++);
                     (void) insert(&slot_array, counter++);
                     remove(&slot_array, added);
                 }
@@ -892,14 +892,14 @@ namespace jot::benchmarks
                 for(isize i = 0; i < effective_batch_size; i++)
                 {
                     for(isize j = 0; j < section_size; j++)
-                        key_array[j] = insert(&bucket_array, counter++, DEF_BUCKET_GROWTH);
+                        key_array[j] = insert(&bucket_array, counter++, DEF_BUCKET_GROWTH).index;
                         
                     for(isize j = 0; j < section_size; j++)
-                        key_array[j + section_size] = insert(&bucket_array, counter++, DEF_BUCKET_GROWTH);
+                        key_array[j + section_size] = insert(&bucket_array, counter++, DEF_BUCKET_GROWTH).index;
                     
                     isize from = i % 2 == 0 ? 0 : section_size; 
                     for(isize j = 0; j < section_size; j++)
-                        remove(&bucket_array, key_array[j + from]);
+                        remove(&bucket_array, Handle{(uint32_t) key_array[j + from]});
 
                     counter += 2;
                 }
@@ -915,14 +915,14 @@ namespace jot::benchmarks
                 for(isize i = 0; i < effective_batch_size; i++)
                 {
                     for(isize j = 0; j < section_size; j++)
-                        key_array[j] = insert(&slot_array, counter++);
+                        key_array[j] = insert(&slot_array, counter++).index;
                         
                     for(isize j = 0; j < section_size; j++)
-                        key_array[j + section_size] = insert(&slot_array, counter++);
+                        key_array[j + section_size] = insert(&slot_array, counter++).index;
                     
                     isize from = i % 2 == 0 ? 0 : section_size; 
                     for(isize j = 0; j < section_size; j++)
-                        remove(&slot_array, (Slot) key_array[j + from]);
+                        remove(&slot_array, Handle{(uint32_t) key_array[j + from]});
 
                     counter += 2;
                 }

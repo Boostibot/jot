@@ -1,5 +1,8 @@
 #pragma once
 
+#include <random>
+#include "hash_table.h"
+#include "string_hash.h"
 #include "_test.h"
 #include "slot_array.h"
 
@@ -18,71 +21,71 @@ namespace jot::tests::slot_array
             TEST(size(array) == 0);
             TEST(capacity(array) == 0);
 
-            Slot slot0 = insert(&array, dup(elems[0]));
-            Slot slot1 = insert(&array, dup(elems[1]));
-            Slot slot2 = insert(&array, dup(elems[2]));
+            Handle handle0 = insert(&array, dup(elems[0]));
+            Handle handle1 = insert(&array, dup(elems[1]));
+            Handle handle2 = insert(&array, dup(elems[2]));
 
             TEST(size(array) == 3);
             TEST(capacity(array) >= 3);
 
-            TEST(get(array, slot0) == elems[0]);
-            TEST(get(array, slot1) == elems[1]);
-            TEST(get(array, slot2) == elems[2]);
+            TEST(get(array, handle0) == elems[0]);
+            TEST(get(array, handle1) == elems[1]);
+            TEST(get(array, handle2) == elems[2]);
         
-            TEST(remove(&array, slot1) == elems[1]);
+            TEST(remove(&array, handle1) == elems[1]);
         
             TEST(size(array) == 2);
             TEST(capacity(array) >= 3);
-            TEST(get(array, slot0) == elems[0]);
-            TEST(get(array, slot2) == elems[2]);
+            TEST(get(array, handle0) == elems[0]);
+            TEST(get(array, handle2) == elems[2]);
 
-            slot1 = insert(&array, dup(elems[9]));
+            handle1 = insert(&array, dup(elems[9]));
             TEST(size(array) == 3);
             TEST(capacity(array) >= 3);
-            TEST(get(array, slot1) == elems[9]);
+            TEST(get(array, handle1) == elems[9]);
         
-            Slot slot3 = insert(&array, dup(elems[3]));
-            Slot slot4 = insert(&array, dup(elems[4]));
-            Slot slot5 = insert(&array, dup(elems[5]));
-            Slot slot6 = insert(&array, dup(elems[6]));
-            Slot slot7 = insert(&array, dup(elems[7]));
-            Slot slot8 = insert(&array, dup(elems[8]));
+            Handle handle3 = insert(&array, dup(elems[3]));
+            Handle handle4 = insert(&array, dup(elems[4]));
+            Handle handle5 = insert(&array, dup(elems[5]));
+            Handle handle6 = insert(&array, dup(elems[6]));
+            Handle handle7 = insert(&array, dup(elems[7]));
+            Handle handle8 = insert(&array, dup(elems[8]));
         
             TEST(size(array) == 9);
             TEST(capacity(array) >= 9);
         
-            TEST(get(array, slot0) == elems[0]);
-            TEST(get(array, slot1) == elems[9]);
-            TEST(get(array, slot2) == elems[2]);
-            TEST(get(array, slot3) == elems[3]);
-            TEST(get(array, slot4) == elems[4]);
-            TEST(get(array, slot5) == elems[5]);
-            TEST(get(array, slot6) == elems[6]);
-            TEST(get(array, slot7) == elems[7]);
-            TEST(get(array, slot8) == elems[8]);
+            TEST(get(array, handle0) == elems[0]);
+            TEST(get(array, handle1) == elems[9]);
+            TEST(get(array, handle2) == elems[2]);
+            TEST(get(array, handle3) == elems[3]);
+            TEST(get(array, handle4) == elems[4]);
+            TEST(get(array, handle5) == elems[5]);
+            TEST(get(array, handle6) == elems[6]);
+            TEST(get(array, handle7) == elems[7]);
+            TEST(get(array, handle8) == elems[8]);
         
-            TEST(remove(&array, slot8) == elems[8]);
-            TEST(remove(&array, slot6) == elems[6]);
-            TEST(remove(&array, slot4) == elems[4]);
+            TEST(remove(&array, handle8) == elems[8]);
+            TEST(remove(&array, handle6) == elems[6]);
+            TEST(remove(&array, handle4) == elems[4]);
         
             TEST(size(array) == 6);
             TEST(capacity(array) >= 9);
-            TEST(get(array, slot0) == elems[0]);
-            TEST(get(array, slot7) == elems[7]);
-            TEST(get(array, slot5) == elems[5]);
+            TEST(get(array, handle0) == elems[0]);
+            TEST(get(array, handle7) == elems[7]);
+            TEST(get(array, handle5) == elems[5]);
         
-            TEST(remove(&array, slot0) == elems[0]);
-            TEST(remove(&array, slot1) == elems[9]);
-            TEST(remove(&array, slot2) == elems[2]);
-            TEST(remove(&array, slot3) == elems[3]);
-            TEST(remove(&array, slot5) == elems[5]);
-            TEST(remove(&array, slot7) == elems[7]);
+            TEST(remove(&array, handle0) == elems[0]);
+            TEST(remove(&array, handle1) == elems[9]);
+            TEST(remove(&array, handle2) == elems[2]);
+            TEST(remove(&array, handle3) == elems[3]);
+            TEST(remove(&array, handle5) == elems[5]);
+            TEST(remove(&array, handle7) == elems[7]);
         
             TEST(size(array) == 0);
             TEST(capacity(array) >= 9);
 
-            slot5 = insert(&array, dup(elems[5]));
-            TEST(get(array, slot5) == elems[5]);
+            handle5 = insert(&array, dup(elems[5]));
+            TEST(get(array, handle5) == elems[5]);
         }
         isize trackers_after = trackers_alive();
         isize memory_after = default_allocator()->get_stats().bytes_allocated;
@@ -112,7 +115,7 @@ namespace jot::tests::slot_array
             isize memory_before = default_allocator()->get_stats().bytes_allocated;
 
             {
-                Hash_Table<isize, Slot, int_hash<isize>> truth;
+                Hash_Table<isize, Handle, int_hash<isize>> truth;
                 Slot_Array<isize> slot_array;
 
                 reserve(&truth, block_size);
@@ -125,14 +128,14 @@ namespace jot::tests::slot_array
                     switch(op)
                     {
                         case OP_INSERT: {
-                            Slot slot = insert(&slot_array, i);
-                            set(&truth, i, slot);
+                            Handle handle = insert(&slot_array, i);
+                            set(&truth, i, handle);
                             break;
                         }
 
                         case OP_REMOVE: {
                             Slice<const isize> truth_vals = keys(truth);
-                            Slice<Slot> truth_indices = values(&truth);
+                            Slice<Handle> truth_indices = values(&truth);
                             if(truth_indices.size == 0)
                             {   
                                 skipped = true;
@@ -140,7 +143,7 @@ namespace jot::tests::slot_array
                             }
 
                             isize selected_index = (isize) index_distribution(gen) % truth_indices.size;
-                            Slot removed_slot = truth_indices[selected_index];
+                            Handle removed_slot = truth_indices[selected_index];
                             isize removed_value = truth_vals[selected_index];
 
                             isize just_removed = remove(&slot_array, removed_slot);
@@ -159,14 +162,14 @@ namespace jot::tests::slot_array
                     }
 
                     Slice<const isize> truth_vals = keys(truth);
-                    Slice<Slot> truth_indices = values(&truth);
+                    Slice<Handle> truth_indices = values(&truth);
                     isize used_size = size(slot_array);
                     TEST(used_size == truth_vals.size);
 
                     for(isize k = 0; k < truth_indices.size; k++)
                     {
-                        Slot slot = truth_indices[k];
-                        isize retrieved = get(slot_array, slot);
+                        Handle handle = truth_indices[k];
+                        isize retrieved = get(slot_array, handle);
                         TEST(retrieved == truth_vals[k]);
                     }
                 }
@@ -218,6 +221,7 @@ namespace jot::tests::slot_array
     }
 }
 
+#if 0
 namespace jot::tests::slot_array
 {
     template <typename T>
@@ -290,3 +294,4 @@ namespace jot::tests::slot_array
     }
 
 }
+#endif

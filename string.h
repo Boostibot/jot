@@ -77,14 +77,14 @@ namespace jot
 
     static String_Builder join(Slice<const String> parts, String separator = "", Allocator* alloc = default_allocator());
 
-    inline String_Builder concat(String a1, String a2)
+    inline String_Builder join(String a1, String a2)
     {
         String strings[] = {a1, a2};
         Slice<const String> parts = {strings, 2};
         return join(parts);
     }
 
-    inline String_Builder concat(String a1, String a2, String a3, String a4 = "", String a5 = "", 
+    inline String_Builder join(String a1, String a2, String a3, String a4 = "", String a5 = "", 
                                  String a6 = "", String a7 = "", String a8 = "", String a9 = "", String a10 = "")
     {
         String strings[] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10};

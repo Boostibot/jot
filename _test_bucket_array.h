@@ -18,9 +18,9 @@ namespace jot::tests::bucket_array
             TEST(size(arr) == 0);
             TEST(capacity(arr) == 0);
 
-            isize i0 = insert(&arr, dup(values[0]));
-            isize i1 = insert(&arr, dup(values[1]));
-            isize i2 = insert(&arr, dup(values[2]));
+            Handle i0 = insert(&arr, dup(values[0]));
+            Handle i1 = insert(&arr, dup(values[1]));
+            Handle i2 = insert(&arr, dup(values[2]));
             
             TEST(size(arr) == 3);
             TEST(capacity(arr) >= size(arr));
@@ -33,8 +33,8 @@ namespace jot::tests::bucket_array
             TEST(v1 == values[1]);
             TEST(size(arr) == 2);
 
-            isize i3 = insert(&arr, dup(values[3]));
-            isize i4 = insert(&arr, dup(values[4]));
+            Handle i3 = insert(&arr, dup(values[3]));
+            Handle i4 = insert(&arr, dup(values[4]));
 
             TEST(get(arr, i0) == values[0]);
             TEST(get(arr, i2) == values[2]);
@@ -46,7 +46,7 @@ namespace jot::tests::bucket_array
             TEST(v2 == values[2]);
             TEST(size(arr) == 3);
 
-            isize i5 = insert(&arr, dup(values[5]));
+            Handle i5 = insert(&arr, dup(values[5]));
             isize cap = capacity(arr);
             TEST(get(arr, i0) == values[0]);
             TEST(get(arr, i3) == values[3]);
@@ -55,16 +55,16 @@ namespace jot::tests::bucket_array
             TEST(size(arr) == 4);
             TEST(cap >= size(arr));
             
-            isize i6 = insert(&arr, dup(values[6]));
-            isize i7 = insert(&arr, dup(values[7]));
-            isize i8 = insert(&arr, dup(values[8]));
-            isize i9 = insert(&arr, dup(values[9]));
-            isize i10 = insert(&arr, dup(values[9]));
-            isize i11 = insert(&arr, dup(values[9]));
-            isize i12 = insert(&arr, dup(values[9]));
-            isize i13 = insert(&arr, dup(values[9]));
-            isize i14 = insert(&arr, dup(values[9]));
-            isize i15 = insert(&arr, dup(values[9]));
+            Handle i6 = insert(&arr, dup(values[6]));
+            Handle i7 = insert(&arr, dup(values[7]));
+            Handle i8 = insert(&arr, dup(values[8]));
+            Handle i9 = insert(&arr, dup(values[9]));
+            Handle i10 = insert(&arr, dup(values[9]));
+            Handle i11 = insert(&arr, dup(values[9]));
+            Handle i12 = insert(&arr, dup(values[9]));
+            Handle i13 = insert(&arr, dup(values[9]));
+            Handle i14 = insert(&arr, dup(values[9]));
+            Handle i15 = insert(&arr, dup(values[9]));
 
             TEST(size(arr) == 14);
             
@@ -155,7 +155,7 @@ namespace jot::tests::bucket_array
                             Bucket_Index removed_index = truth_indices[selected_index];
                             isize removed_value = truth_vals[selected_index];
 
-                            isize just_removed = remove(&bucket_array, removed_index);
+                            isize just_removed = remove_bucket_index(&bucket_array, removed_index);
                             TEST(just_removed == removed_value);
                             remove(&truth, removed_value);
                             break;
