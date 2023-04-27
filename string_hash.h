@@ -9,13 +9,13 @@ namespace jot
     template <typename T> 
     uint64_t int_hash(T const& val, uint64_t seed) noexcept
     {
-        return uint64_hash((u64) val ^ (seed*8251656)); 
+        return hash_64((u64) val ^ (seed*8251656)); 
     }
 
     template <typename T>  
     uint64_t int_slice_hash(Slice<T> const& val, uint64_t seed) noexcept
     {
-        return (uint64_t) murmur_hash64(val.data, val.size * (isize) sizeof(T), seed);
+        return (uint64_t) hash_murmur_64(val.data, val.size * (isize) sizeof(T), seed);
     }
 
     template <typename T>  

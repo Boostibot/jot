@@ -11,16 +11,16 @@ namespace jot
 {
     #ifndef SLICE_DEFINED
     #define SLICE_DEFINED
-    //Open POD struct representing a contiguous array in memory or a string (see string.h). 
-    //All types which wish to be compatible must declare a 
-    // slice(T) -> Slice<...> function which acts as a constructor
-    // (this lets us define the struct in such a simple manner without losing on usability)
+    //A sized pointer to contiguous array in memory or a string
     template<typename T>
     struct Slice
     {
         T* data = nullptr;
         isize size = 0;
 
+        //All types which wish to be compatible must declare a 
+        // slice(T) -> Slice<...> function which acts as a constructor
+        // (this lets us define the struct in such a simple manner without losing on usability)
         constexpr T const& operator[](isize index) const noexcept  
         { 
             assert(0 <= index && index < size && "index out of range"); return data[index]; 

@@ -11,6 +11,7 @@
 #include "bucket_array.h"
 #include "format.h"
 #include "benchmark.h"
+#include "hash_index.h"
 
 #define BENCHMARK_ARRAY true
 #define BENCHMARK_HASH_TABLE true
@@ -504,10 +505,16 @@ namespace jot::benchmarks
             Slot_Array<isize> slot_array;
             std::vector<isize> vec;
             std::unordered_map<isize, isize> map;
+            Hash_Inline hash_inline;
+
+
+
+            Hash_Table_Growth hash_growth;
+            hash_growth.rehash_at_fullness_den = REHASH_AT_FULLNESS;
 
             Array<isize> added_keys;
-            Array<isize> added_bucket_keys;
-            Array<uint32_t> added_slot_keys;
+            Array<Handle> added_bucket_keys;
+            Array<Handle> added_slot_keys;
             resize(&added_keys, batch_size);
             resize(&added_bucket_keys, batch_size);
             resize(&added_slot_keys, batch_size);
@@ -515,11 +522,12 @@ namespace jot::benchmarks
             for(isize i = 0; i < batch_size; i++)
             {
                 push(&array, i);
-                set(&hash_table, i, i);
+                set(&hash_table, i, i, hash_growth);
+                set(&hash_inline, hash_index((uint32_t)i), (hash_int_t) i);
                 map.insert_or_assign(i, i);
                 vec.push_back(i);
-                added_bucket_keys[i] = insert(&bucket_array, i, DEF_BUCKET_GROWTH).index;
-                added_slot_keys[i] = insert(&slot_array, i).index;
+                added_bucket_keys[i] = insert(&bucket_array, i, DEF_BUCKET_GROWTH);
+                added_slot_keys[i] = insert(&slot_array, i);
                 added_keys[i] = i;
             }
             
@@ -529,6 +537,9 @@ namespace jot::benchmarks
             //so that the arrays are shuffled the same way
             Random_Generator gen1(seed);
             Random_Generator gen2(seed);
+
+            println("Hash collisions: normal: {} all inline: {} (multiplicit: {})", 
+                hash_collisions(hash_table), hash_collisions(hash_inline), is_multiplicit(hash_inline));  
 
             shuffle(slice(&added_keys), &gen1);
             shuffle(slice(&added_bucket_keys), &gen2);
@@ -559,10 +570,22 @@ namespace jot::benchmarks
 
                 return true;
             });
+
+            
+            Bench_Result res_hash_inline = benchmark(GIVEN_TIME, [&]{
+                sum += get(hash_inline, hash_index((hash_int_t) added_keys[i]), 0);
+                do_no_optimize(hash_table);
+                read_write_barrier();
+                
+                if(++i >= batch_size)
+                    i = 0;
+
+                return true;
+            });
             
             i = 0;
             Bench_Result res_bucket_array = benchmark(GIVEN_TIME, [&]{
-                sum += get(bucket_array, Handle{(uint32_t) added_bucket_keys[i]});
+                sum += get(bucket_array, added_bucket_keys[i]);
                 do_no_optimize(hash_table);
                 read_write_barrier();
                 
@@ -575,7 +598,7 @@ namespace jot::benchmarks
             
             i = 0;
             Bench_Result res_slot_array = benchmark(GIVEN_TIME, [&]{
-                sum += get(slot_array, Handle{(uint32_t) added_slot_keys[i]});
+                sum += get(slot_array, added_slot_keys[i]);
                 do_no_optimize(hash_table);
                 read_write_barrier();
                 
@@ -623,6 +646,7 @@ namespace jot::benchmarks
 
             println("array:             ", res_array);
             println("hash_table:        ", res_hash_table);
+            println("hash_inline:       ", res_hash_inline);
             println("bucket_array:      ", res_bucket_array);
             println("slot_array:        ", res_slot_array);
         };

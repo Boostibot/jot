@@ -9,7 +9,7 @@ namespace jot
 {
 #endif
     static
-    uint64_t uint64_hash(uint64_t value) 
+    uint64_t hash_64(uint64_t value) 
     {
         //source: https://stackoverflow.com/a/12996028
         uint64_t hash = value;
@@ -20,7 +20,7 @@ namespace jot
     }
 
     static
-    uint32_t uint32_hash(uint32_t value) 
+    uint32_t hash_32(uint32_t value) 
     {
         //source: https://stackoverflow.com/a/12996028
         uint32_t hash = value;
@@ -31,7 +31,7 @@ namespace jot
     }
 
     static
-    uint32_t murmur_hash32(const void* key, isize size, uint32_t seed)
+    uint32_t hash_murmur_32(const void* key, isize size, uint32_t seed)
     {
         //source https://github.com/abrandoned/murmur2/blob/master/MurmurHash2.c
         // 'm' and 'r' are mixing constants generated offline.
@@ -80,7 +80,7 @@ namespace jot
     } 
 
     static
-    uint64_t murmur_hash64(const void* key, isize size, uint64_t seed)
+    uint64_t hash_murmur_64(const void* key, isize size, uint64_t seed)
     {
         //source https://github.com/abrandoned/murmur2/blob/master/MurmurHash2.c
         //& big endian support: https://github.com/niklas-ourmachinery/bitsquid-foundation/blob/master/murmur_hash.cpp
@@ -135,7 +135,7 @@ namespace jot
     } 
 
     static
-    uint32_t fnv_one_at_a_time_hash32(const void* key, isize size, uint32_t seed)
+    uint32_t hash_fnv_one_at_a_time_32(const void* key, isize size, uint32_t seed)
     {
         // Source: https://github.com/aappleby/smhasher/blob/master/src/Hashes.cpp
         uint32_t hash = seed;
@@ -150,7 +150,7 @@ namespace jot
     }
 
     static
-    uint32_t murmur_one_at_a_time_hash32(const void* key, isize size, uint32_t seed)
+    uint32_t hash_murmur_one_at_a_time_32(const void* key, isize size, uint32_t seed)
     {
         // One-byte-at-a-time hash based on Murmur's mix
         // Source: https://github.com/aappleby/smhasher/blob/master/src/Hashes.cpp
@@ -166,7 +166,7 @@ namespace jot
     }
 
     static
-    uint32_t jenkins_one_at_a_time_hash32(const void* key, isize size, uint32_t seed)
+    uint32_t hash_jenkins_one_at_a_time_32(const void* key, isize size, uint32_t seed)
     {
         uint32_t hash = seed;
         const uint8_t* data = (const uint8_t*)key;
@@ -190,7 +190,7 @@ namespace jot
     }
 
     static
-    uint32_t coffin_one_at_a_time_hash_32(const void* key, isize size, uint32_t seed) 
+    uint32_t hash_coffin_one_at_a_time_32(const void* key, isize size, uint32_t seed) 
     { 
         // Source: https://stackoverflow.com/a/7666668/5407270
         uint32_t hash = seed ^ 0x55555555;
