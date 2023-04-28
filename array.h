@@ -42,7 +42,7 @@ namespace jot
     template<class T> isize      capacity(Array<T> const& array) noexcept   { return array._capacity; }
     template<class T> isize      capacity(Array<T>* array) noexcept         { return array->_capacity; }
     template<class T> Allocator* allocator(Array<T> const& array) noexcept  { return array._allocator; }
-    template<class T> Allocator* allocator(Array<T>* array) noexcept        { return array->_data; }
+    template<class T> Allocator* allocator(Array<T>* array) noexcept        { return array->_allocator; }
 
     ///iterators
     template<typename T> T*       begin(Array<T>& array) noexcept           { return array._data; }

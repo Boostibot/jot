@@ -1,12 +1,13 @@
 #pragma once
 
 #include <random>
+
+#include "_test.h"
 #include "hash_table.h"
 #include "string_hash.h"
-#include "_test.h"
-#include "bucket_array.h"
+#include "weak_bucket_array.h"
 
-namespace jot::tests::bucket_array
+namespace jot::tests::weak_bucket_array
 {
     template <typename T>
     void test_insert_remove(Static_Array<T, 10> const& values)
@@ -14,89 +15,90 @@ namespace jot::tests::bucket_array
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
         isize alive_before = trackers_alive();
         {
-            Bucket_Array<T> arr;
+            Weak_Bucket_Array<T> arr;
 
             TEST(size(arr) == 0);
             TEST(capacity(arr) == 0);
 
-            Handle i0 = insert(&arr, dup(values[0]));
-            Handle i1 = insert(&arr, dup(values[1]));
-            Handle i2 = insert(&arr, dup(values[2]));
+            Weak_Handle i0 = insert(&arr, dup(values[0]));
+            Weak_Handle i1 = insert(&arr, dup(values[1]));
+            Weak_Handle i2 = insert(&arr, dup(values[2]));
             
             TEST(size(arr) == 3);
             TEST(capacity(arr) >= size(arr));
 
-            TEST(get(arr, i0) == values[0]);
-            TEST(get(arr, i1) == values[1]);
-            TEST(get(arr, i2) == values[2]);
+            TEST(get(arr, i0, values[9]) == values[0]);
+            TEST(get(arr, i1, values[9]) == values[1]);
+            TEST(get(arr, i2, values[9]) == values[2]);
             
-            //#if 0
-            T v1 = remove(&arr, i1);
-            TEST(v1 == values[1]);
+            TEST(remove(&arr, i1));
             TEST(size(arr) == 2);
+            
+            TEST(get(arr, i0, values[9]) == values[0]);
+            TEST(get(arr, i1, values[9]) == values[9]);
+            TEST(get(arr, i2, values[9]) == values[2]);
 
-            Handle i3 = insert(&arr, dup(values[3]));
-            Handle i4 = insert(&arr, dup(values[4]));
+            Weak_Handle i3 = insert(&arr, dup(values[3]));
+            Weak_Handle i4 = insert(&arr, dup(values[4]));
 
-            TEST(get(arr, i0) == values[0]);
-            TEST(get(arr, i2) == values[2]);
-            TEST(get(arr, i3) == values[3]);
-            TEST(get(arr, i4) == values[4]);
+            TEST(get(arr, i0, values[9]) == values[0]);
+            TEST(get(arr, i1, values[9]) == values[9]);
+            TEST(get(arr, i2, values[9]) == values[2]);
+            TEST(get(arr, i3, values[9]) == values[3]);
+            TEST(get(arr, i4, values[9]) == values[4]);
             TEST(size(arr) == 4);
 
-            T v2 = remove(&arr, i2);
-            TEST(v2 == values[2]);
+            TEST(remove(&arr, i2));
             TEST(size(arr) == 3);
+            TEST(remove(&arr, i2) == false);
 
-            Handle i5 = insert(&arr, dup(values[5]));
+            Weak_Handle i5 = insert(&arr, dup(values[5]));
             isize cap = capacity(arr);
-            TEST(get(arr, i0) == values[0]);
-            TEST(get(arr, i3) == values[3]);
-            TEST(get(arr, i4) == values[4]);
-            TEST(get(arr, i5) == values[5]);
+            TEST(get(arr, i2, values[9]) == values[9]);
+            TEST(get(arr, i0, values[9]) == values[0]);
+            TEST(get(arr, i3, values[9]) == values[3]);
+            TEST(get(arr, i4, values[9]) == values[4]);
+            TEST(get(arr, i5, values[9]) == values[5]);
             TEST(size(arr) == 4);
             TEST(cap >= size(arr));
             
-            Handle i6 = insert(&arr, dup(values[6]));
-            Handle i7 = insert(&arr, dup(values[7]));
-            Handle i8 = insert(&arr, dup(values[8]));
-            Handle i9 = insert(&arr, dup(values[9]));
-            Handle i10 = insert(&arr, dup(values[9]));
-            Handle i11 = insert(&arr, dup(values[9]));
-            Handle i12 = insert(&arr, dup(values[9]));
-            Handle i13 = insert(&arr, dup(values[9]));
-            Handle i14 = insert(&arr, dup(values[9]));
-            Handle i15 = insert(&arr, dup(values[9]));
+            Weak_Handle i6 = insert(&arr, dup(values[6]));
+            Weak_Handle i7 = insert(&arr, dup(values[7]));
+            Weak_Handle i8 = insert(&arr, dup(values[8]));
+            Weak_Handle i9 = insert(&arr, dup(values[9]));
+            Weak_Handle i10 = insert(&arr, dup(values[9]));
+            Weak_Handle i11 = insert(&arr, dup(values[9]));
+            Weak_Handle i12 = insert(&arr, dup(values[9]));
+            Weak_Handle i13 = insert(&arr, dup(values[9]));
+            Weak_Handle i14 = insert(&arr, dup(values[9]));
+            Weak_Handle i15 = insert(&arr, dup(values[9]));
 
             TEST(size(arr) == 14);
             
-            TEST(get(arr, i6) == values[6]);
-            TEST(get(arr, i7) == values[7]);
-            TEST(get(arr, i8) == values[8]);
-            TEST(get(arr, i9) == values[9]);
-            TEST(get(arr, i10) == values[9]);
-            TEST(get(arr, i11) == values[9]);
-            TEST(get(arr, i12) == values[9]);
-            TEST(get(arr, i13) == values[9]);
-            TEST(get(arr, i14) == values[9]);
-            TEST(get(arr, i15) == values[9]);
+            TEST(get(arr, i6, values[0]) == values[6]);
+            TEST(get(arr, i7, values[0]) == values[7]);
+            TEST(get(arr, i8, values[0]) == values[8]);
+            TEST(get(arr, i9, values[0]) == values[9]);
+            TEST(get(arr, i10, values[0]) == values[9]);
+            TEST(get(arr, i11, values[0]) == values[9]);
+            TEST(get(arr, i12, values[0]) == values[9]);
+            TEST(get(arr, i13, values[0]) == values[9]);
+            TEST(get(arr, i14, values[0]) == values[9]);
+            TEST(get(arr, i15, values[0]) == values[9]);
             
             cap = capacity(arr);
 
-            T v0 = remove(&arr, i0);
-            T v3 = remove(&arr, i3);
-            T v4 = remove(&arr, i4);
-            T v5 = remove(&arr, i5);
+            TEST(remove(&arr, i0));
+            TEST(remove(&arr, i3));
+            TEST(remove(&arr, i4));
+            TEST(remove(&arr, i5));
+            TEST(get(arr, i0, values[9]) == values[9]);
+            TEST(get(arr, i2, values[9]) == values[9]);
+            TEST(get(arr, i1, values[9]) == values[9]);
+            TEST(get(arr, i5, values[9]) == values[9]);
             
             TEST(size(arr) == 10);
             TEST(capacity(arr) == cap && "capacity must not change when shrinking");
-
-            TEST(v0 == values[0]);
-            TEST(v1 == values[1]);
-            TEST(v2 == values[2]);
-            TEST(v3 == values[3]);
-            TEST(v4 == values[4]);
-            TEST(v5 == values[5]);
             //#endif
         }
         isize mem_after = default_allocator()->get_stats().bytes_allocated;
@@ -127,8 +129,8 @@ namespace jot::tests::bucket_array
             isize memory_before = default_allocator()->get_stats().bytes_allocated;
 
             {
-                Hash_Table<isize, Handle, int_hash<isize>> truth;
-                Bucket_Array<isize> bucket_array;
+                Hash_Table<isize, Weak_Handle, int_hash<isize>> truth;
+                Weak_Bucket_Array<isize> bucket_array;
 
                 reserve(&truth, block_size);
 
@@ -140,14 +142,14 @@ namespace jot::tests::bucket_array
                     switch(op)
                     {
                         case OP_INSERT: {
-                            Handle index = insert(&bucket_array, i);
+                            Weak_Handle index = insert(&bucket_array, i);
                             set(&truth, i, index);
                             break;
                         }
 
                         case OP_REMOVE: {
                             Slice<const isize> truth_vals = keys(truth);
-                            Slice<Handle> truth_indices = values(&truth);
+                            Slice<Weak_Handle> truth_indices = values(&truth);
                             if(truth_indices.size == 0)
                             {   
                                 skipped = true;
@@ -155,11 +157,10 @@ namespace jot::tests::bucket_array
                             }
 
                             isize selected_index = (isize) index_distribution(gen) % truth_indices.size;
-                            Handle removed_index = truth_indices[selected_index];
+                            Weak_Handle removed_index = truth_indices[selected_index];
                             isize removed_value = truth_vals[selected_index];
 
-                            isize just_removed = remove(&bucket_array, removed_index);
-                            TEST(just_removed == removed_value);
+                            TEST(remove(&bucket_array, removed_index));
                             remove(&truth, removed_value);
                             break;
                         }
@@ -174,14 +175,14 @@ namespace jot::tests::bucket_array
                     }
 
                     Slice<const isize> truth_vals = keys(truth);
-                    Slice<Handle> truth_indices = values(&truth);
+                    Slice<Weak_Handle> truth_indices = values(&truth);
                     isize used_size = size(bucket_array);
                     TEST(used_size == truth_vals.size);
 
                     for(isize k = 0; k < truth_indices.size; k++)
                     {
-                        Handle index = truth_indices[k];
-                        isize retrieved = get(bucket_array, index);
+                        Weak_Handle index = truth_indices[k];
+                        isize retrieved = get(bucket_array, index, (isize) -1);
                         TEST(retrieved == truth_vals[k]);
                     }
                 }
@@ -212,7 +213,7 @@ namespace jot::tests::bucket_array
     }
     
     static
-    void test_bucket_array(u32 flags)
+    void test_weak_bucket_array(u32 flags)
     {
         bool print = !(flags & Test_Flags::SILENT);
 
@@ -220,7 +221,7 @@ namespace jot::tests::bucket_array
         Static_Array<Test_String, 10>  arr2 = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
         Static_Array<Tracker<i32>, 10> arr3 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
         
-        if(print) println("\ntest_bucket_array()");
+        if(print) println("\ntest_weak_bucket_array()");
         if(print) println("  type: i32");
         test_insert_remove(arr1);
 

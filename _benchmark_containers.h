@@ -4,21 +4,16 @@
 #include <vector>
 #include <unordered_map>
 
-//#define BUCKET_ARRAY_NO_FFS
-
 #include "_test.h"
 #include "string_hash.h"
 #include "bucket_array.h"
-#include "bucket_array2.h"
+#include "weak_bucket_array.h"
 #include "format.h"
 #include "benchmark.h"
 #include "hash_index.h"
 
-#define BENCHMARK_ARRAY true
-#define BENCHMARK_HASH_TABLE true
 #define BENCHMARK_STD false
 #define GIVEN_TIME 500
-#define DEF_BUCKET_GROWTH Bucket_Array_Growth{256, 3, 2}
 
 namespace jot::benchmarks
 {
@@ -114,19 +109,19 @@ namespace jot::benchmarks
                 Bucket_Array<isize> bucket_array;
                 for(isize i = 0; i < batch_size; i++)
                 {
-                    (void) insert_bucket_index(&bucket_array, i, DEF_BUCKET_GROWTH);
+                    (void) insert(&bucket_array, i);
                     do_no_optimize(bucket_array);
                     read_write_barrier();
                 }
                 return true;
             }, batch_size);
             
-            Bench_Result res_bucket_array2 = benchmark(GIVEN_TIME, [&]{
-                second::Bucket_Array<isize> bucket_array;
+            Bench_Result res_weak_bucket_array = benchmark(GIVEN_TIME, [&]{
+                Weak_Bucket_Array<isize> weak_bucket_array;
                 for(isize i = 0; i < batch_size; i++)
                 {
-                    (void) insert(&bucket_array, i);
-                    do_no_optimize(bucket_array);
+                    (void) insert(&weak_bucket_array, i);
+                    do_no_optimize(weak_bucket_array);
                     read_write_barrier();
                 }
                 return true;
@@ -177,11 +172,11 @@ namespace jot::benchmarks
                 println("unordered_map:", res_unordered_map);
             }
 
-            println("array:         ", res_array);
-            println("hash_table:    ", res_hash_table);
-            println("bucket_array:  ", res_bucket_array);
-            println("bucket_array2: ", res_bucket_array2);
-            println("slot_array:    ", res_slot_array);
+            println("array:             ", res_array);
+            println("hash_table:        ", res_hash_table);
+            println("bucket_array:      ", res_bucket_array);
+            println("weak bucket array: ", res_weak_bucket_array);
+            println("slot_array:        ", res_slot_array);
         };
         
         println("\n=== ignore below ===");
@@ -203,7 +198,7 @@ namespace jot::benchmarks
             Array<isize> array;
             Hash_Table<isize, isize, int_hash<isize>> hash_table;
             Bucket_Array<isize> bucket_array;
-            second::Bucket_Array<isize> bucket_array2;
+            Weak_Bucket_Array<isize> weak_bucket_array;
             Slot_Array<isize> slot_array;
             std::vector<isize> vec;
             std::unordered_map<isize, isize> map;
@@ -279,13 +274,13 @@ namespace jot::benchmarks
                 read_write_barrier();
                 return true;
             });
-            
+         
             removed_i = 0;
             Bench_Result res_bucket_array = benchmark(GIVEN_TIME, [&]{
                 if(removed_i == 0)
                 {
                     for(isize i = 0; i < batch_size; i++)
-                        added_keys[i] = insert(&bucket_array, i, DEF_BUCKET_GROWTH).index;
+                        added_keys[i] = insert(&bucket_array, i).index;
                 
                     shuffle(slice(&added_keys), &gen);
                 
@@ -299,13 +294,13 @@ namespace jot::benchmarks
                 read_write_barrier();
                 return true;
             });
-            
+
             removed_i = 0;
-            Bench_Result res_bucket_array2 = benchmark(GIVEN_TIME, [&]{
+            Bench_Result res_weak_bucket_array = benchmark(GIVEN_TIME, [&]{
                 if(removed_i == 0)
                 {
                     for(isize i = 0; i < batch_size; i++)
-                        added_keys[i] = insert(&bucket_array2, i).index;
+                        added_keys[i] = insert(&weak_bucket_array, i).index;
                 
                     shuffle(slice(&added_keys), &gen);
                 
@@ -314,8 +309,8 @@ namespace jot::benchmarks
                 }
             
                 isize removed = added_keys[--removed_i];
-                remove(&bucket_array2, Handle{(uint32_t) removed});
-                do_no_optimize(bucket_array);
+                remove(&weak_bucket_array, Weak_Handle{(uint32_t) removed});
+                do_no_optimize(weak_bucket_array);
                 read_write_barrier();
                 return true;
             });
@@ -398,7 +393,7 @@ namespace jot::benchmarks
             println("hash_table:        ", res_hash_table);
             println("hash_table mark:   ", res_mark_hash_table);
             println("bucket_array:      ", res_bucket_array);
-            println("bucket_array2:     ", res_bucket_array2);
+            println("weak bucket array: ", res_weak_bucket_array);
             println("slot_array:        ", res_slot_array);
         };
         
@@ -431,7 +426,7 @@ namespace jot::benchmarks
                 set(&hash_table, i, i);
                 map.insert_or_assign(i, i);
                 vec.push_back(i);
-                (void) insert(&bucket_array, i, DEF_BUCKET_GROWTH);
+                //(void) insert(&bucket_array, i, DEF_BUCKET_GROWTH);
                 (void) insert(&slot_array, i);
             }
 
@@ -457,6 +452,8 @@ namespace jot::benchmarks
                 return true;
             }, batch_size);
             
+            //@TODO
+            #if 0
             Bench_Result res_bucket_array = benchmark(GIVEN_TIME, [&]{
             
                 map_mutate(&bucket_array, [&](isize* item, isize, isize){
@@ -468,7 +465,8 @@ namespace jot::benchmarks
 
                 return true;
             }, batch_size);
-            
+            #endif
+
             Bench_Result res_slot_array = benchmark(GIVEN_TIME, [&]{
                 auto vals = slice(slot_array);
                 for(isize i = 0; i < batch_size; i++)
@@ -512,7 +510,6 @@ namespace jot::benchmarks
 
             println("array:             ", res_array);
             println("hash_table:        ", res_hash_table);
-            println("bucket_array:      ", res_bucket_array);
             println("slot_array:        ", res_slot_array);
         };
         
@@ -535,12 +532,11 @@ namespace jot::benchmarks
             Array<isize> array;
             Hash_Table<isize, isize, int_hash<isize>> hash_table;
             Bucket_Array<isize> bucket_array;
+            Weak_Bucket_Array<isize> weak_bucket_array;
             Slot_Array<isize> slot_array;
             std::vector<isize> vec;
             std::unordered_map<isize, isize> map;
             Hash_Inline hash_inline;
-
-
 
             Hash_Table_Growth hash_growth;
             hash_growth.rehash_at_fullness_den = REHASH_AT_FULLNESS;
@@ -548,9 +544,11 @@ namespace jot::benchmarks
             Array<isize> added_keys;
             Array<Handle> added_bucket_keys;
             Array<Handle> added_slot_keys;
+            Array<Weak_Handle> added_weak_keys;
             resize(&added_keys, batch_size);
             resize(&added_bucket_keys, batch_size);
             resize(&added_slot_keys, batch_size);
+            resize(&added_weak_keys, batch_size);
 
             for(isize i = 0; i < batch_size; i++)
             {
@@ -559,8 +557,9 @@ namespace jot::benchmarks
                 set(&hash_inline, hash_index((uint32_t)i), (hash_int_t) i);
                 map.insert_or_assign(i, i);
                 vec.push_back(i);
-                added_bucket_keys[i] = insert(&bucket_array, i, DEF_BUCKET_GROWTH);
+                added_bucket_keys[i] = insert(&bucket_array, i);
                 added_slot_keys[i] = insert(&slot_array, i);
+                added_weak_keys[i] = insert(&weak_bucket_array, i);
                 added_keys[i] = i;
             }
             
@@ -603,7 +602,6 @@ namespace jot::benchmarks
 
                 return true;
             });
-
             
             Bench_Result res_hash_inline = benchmark(GIVEN_TIME, [&]{
                 sum += get(hash_inline, hash_index((hash_int_t) added_keys[i]), 0);
@@ -627,7 +625,18 @@ namespace jot::benchmarks
 
                 return true;
             });
+            
+            i = 0;
+            Bench_Result res_weak_bucket_array = benchmark(GIVEN_TIME, [&]{
+                sum += get(weak_bucket_array, added_weak_keys[i], (isize) -1);
+                do_no_optimize(hash_table);
+                read_write_barrier();
+                
+                if(++i >= batch_size)
+                    i = 0;
 
+                return true;
+            });
             
             i = 0;
             Bench_Result res_slot_array = benchmark(GIVEN_TIME, [&]{
@@ -681,6 +690,7 @@ namespace jot::benchmarks
             println("hash_table:        ", res_hash_table);
             println("hash_inline:       ", res_hash_inline);
             println("bucket_array:      ", res_bucket_array);
+            println("weak bucket array: ", res_weak_bucket_array);
             println("slot_array:        ", res_slot_array);
         };
         
@@ -753,19 +763,6 @@ namespace jot::benchmarks
                 Bucket_Array<isize> bucket_array;
                 for(isize i = 0; i < batch_size; i++)
                 {
-                    Handle added = insert(&bucket_array, counter++, DEF_BUCKET_GROWTH);
-                    (void) insert(&bucket_array, counter++, DEF_BUCKET_GROWTH);
-                    remove(&bucket_array, added);
-                }
-                do_no_optimize(bucket_array);
-                read_write_barrier();
-                return true;
-            }, batch_size);
-            
-            Bench_Result res_bucket_array2 = benchmark(GIVEN_TIME, [&]{
-                second::Bucket_Array<isize> bucket_array;
-                for(isize i = 0; i < batch_size; i++)
-                {
                     Handle added = insert(&bucket_array, counter++);
                     (void) insert(&bucket_array, counter++);
                     remove(&bucket_array, added);
@@ -774,7 +771,22 @@ namespace jot::benchmarks
                 read_write_barrier();
                 return true;
             }, batch_size);
+           
+           
+            Bench_Result res_weak_bucket_array = benchmark(GIVEN_TIME, [&]{
             
+                Weak_Bucket_Array<isize> bucket_array;
+                for(isize i = 0; i < batch_size; i++)
+                {
+                    Weak_Handle added = insert(&bucket_array, counter++);
+                    (void) insert(&bucket_array, counter++);
+                    remove(&bucket_array, added);
+                }
+                do_no_optimize(bucket_array);
+                read_write_barrier();
+                return true;
+            }, batch_size);
+
             Bench_Result res_slot_array = benchmark(GIVEN_TIME, [&]{
             
                 Slot_Array<isize> slot_array;
@@ -832,7 +844,7 @@ namespace jot::benchmarks
             println("hash_table:        ", res_hash_table);
             println("hash_table mark:   ", res_mark_hash_table);
             println("bucket_array:      ", res_bucket_array);
-            println("bucket_array2:     ", res_bucket_array2);
+            println("weak bucket array: ", res_weak_bucket_array);
             println("slot_array:        ", res_slot_array);
         };
         
@@ -856,6 +868,9 @@ namespace jot::benchmarks
 
             Array<isize> key_array;
             resize(&key_array, 2*section_size);
+            
+            Array<Weak_Handle> weak_key_array;
+            resize(&weak_key_array, 2*section_size);
 
             isize counter = 0;
             isize effective_batch_size = div_round_up(batch_size, section_size);
@@ -963,10 +978,10 @@ namespace jot::benchmarks
                 for(isize i = 0; i < effective_batch_size; i++)
                 {
                     for(isize j = 0; j < section_size; j++)
-                        key_array[j] = insert(&bucket_array, counter++, DEF_BUCKET_GROWTH).index;
+                        key_array[j] = insert(&bucket_array, counter++).index;
                         
                     for(isize j = 0; j < section_size; j++)
-                        key_array[j + section_size] = insert(&bucket_array, counter++, DEF_BUCKET_GROWTH).index;
+                        key_array[j + section_size] = insert(&bucket_array, counter++).index;
                     
                     isize from = i % 2 == 0 ? 0 : section_size; 
                     for(isize j = 0; j < section_size; j++)
@@ -980,20 +995,20 @@ namespace jot::benchmarks
                 return true;
             });
             
-            Bench_Result res_bucket_array2 = benchmark(LOCAL_GIVEN_TIME, [&]{
+            Bench_Result res_weak_bucket_array = benchmark(LOCAL_GIVEN_TIME, [&]{
                 
-                second::Bucket_Array<isize> bucket_array;
+                Weak_Bucket_Array<isize> bucket_array;
                 for(isize i = 0; i < effective_batch_size; i++)
                 {
                     for(isize j = 0; j < section_size; j++)
-                        key_array[j] = insert(&bucket_array, counter++).index;
+                        weak_key_array[j] = insert(&bucket_array, counter++);
                         
                     for(isize j = 0; j < section_size; j++)
-                        key_array[j + section_size] = insert(&bucket_array, counter++).index;
+                        weak_key_array[j + section_size] = insert(&bucket_array, counter++);
                     
                     isize from = i % 2 == 0 ? 0 : section_size; 
                     for(isize j = 0; j < section_size; j++)
-                        remove(&bucket_array, Handle{(uint32_t) key_array[j + from]});
+                        remove(&bucket_array, weak_key_array[j + from]);
 
                     counter += 2;
                 }
@@ -1107,7 +1122,7 @@ namespace jot::benchmarks
             println("hash_table:        ", res_hash_table);
             println("hash_table mark:   ", res_mark_hash_table);
             println("bucket_array:      ", res_bucket_array);
-            println("bucket_array2:     ", res_bucket_array2);
+            println("weak bucket array: ", res_weak_bucket_array);
             println("slot_array:        ", res_slot_array);
         };
         

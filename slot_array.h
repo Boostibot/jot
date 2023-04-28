@@ -30,11 +30,6 @@ namespace jot
         // This lets for example set up two slot arrays whose handles never overlap and we can thus easily detect
         // bugs in access.
         uint32_t _handle_offset = 0; 
-        
-        //@NOTE: if kept only data pointer and allocated (sizeof(T) + sizeof(uint32_t))*capacity bytes every
-        //  time we could speed this up even more. Doing this would also mean this entire struct would be only
-        //  32B which is ideal! I am afraid that that would cost us some additional clarity however 
-        //  and right now I am too lazy to implement it.
 
         Slot_Array(Allocator* allocator = default_allocator(), uint32_t handle_offset = 0) noexcept
             : _allocator(allocator), _handle_offset(handle_offset)
@@ -54,7 +49,7 @@ namespace jot
     template<class T> isize      capacity(Slot_Array<T> const& slot_array) noexcept   { return slot_array._capacity; }
     template<class T> isize      capacity(Slot_Array<T>* slot_array) noexcept         { return slot_array->_capacity; }
     template<class T> Allocator* allocator(Slot_Array<T> const& slot_array) noexcept  { return slot_array._allocator; }
-    template<class T> Allocator* allocator(Slot_Array<T>* slot_array) noexcept        { return slot_array->_data; }
+    template<class T> Allocator* allocator(Slot_Array<T>* slot_array) noexcept        { return slot_array->_allocator; }
     
     ///Iterators
     template<typename T> T*       begin(Slot_Array<T>& slot_array) noexcept           { return slot_array._data; }
@@ -76,7 +71,7 @@ namespace jot
     ///Inserts an item to the array and returns its handle
     template<class T> Handle insert(Slot_Array<T>* slot_array, T val);
     
-    ///Inserts an item from the array give its handle
+    ///Removes an item from the array give its handle
     template<class T> T remove(Slot_Array<T>* slot_array, Handle handle) noexcept;
 
     ///Converts handle to element index
@@ -170,8 +165,8 @@ namespace jot
         //   2 memory reads per slot lookup
         //   2 memory reads per insertion
         //   5 memory reads per insertion (removed item, removed slot, swapped item, swapped slot, last owner lookup)
-        // The deletion seems scary but in practice it is extremely fast. Only about 3x slower than array pop
-        // this is A LOT faster than removal from bucket array or hash map and about 10x faster than from std::unordered_map!
+        // The deletion seems scary but in practice it is extremely fast. Only a slither slower than pop from array.
+        // Overall this structure is A LOT faster than bucket array or hash map and about 10x faster than std::unordered_map!
 
         struct Slot
         {
@@ -187,60 +182,63 @@ namespace jot
         isize set_capacity_failing(Slot_Array<T>* slot_array, isize new_capacity) noexcept
         {
             assert(is_invariant(*slot_array));
+            const isize SLOT_ALIGNMENT = 4;
+            const isize COMBINED_SIZE = (isize) (sizeof(T) + sizeof(Slot));
 
-            const isize SLOT_ALIGNMENT = 8;
-            const isize ITEM_BYTES = (isize) sizeof(T);
-            const isize SLOT_BYTES = (isize) sizeof(Slot);
-
-            isize old_cap = slot_array->_capacity;
-            isize new_cap = new_capacity;
             Allocator* alloc = slot_array->_allocator;
+            isize old_cap = slot_array->_capacity*COMBINED_SIZE + SLOT_ALIGNMENT;
+            isize new_cap = new_capacity*COMBINED_SIZE + SLOT_ALIGNMENT;
         
-            void* new_data = nullptr;
-            void* new_slots = nullptr;
-
-            bool s1 = memory_resize_allocate(alloc, &new_data, new_cap*ITEM_BYTES, slot_array->_data, old_cap*ITEM_BYTES, DEF_ALIGNMENT<T>, GET_LINE_INFO());
-            bool s2 = memory_resize_allocate(alloc, &new_slots, new_cap*SLOT_BYTES, slot_array->_slots, old_cap*SLOT_BYTES, SLOT_ALIGNMENT, GET_LINE_INFO());
-
-            if(s1 == false || s2 == false)
+            //@NOTE: We allocate both _data and _slots in one allocation this ensures:
+            // better cache locality, faster execution (fewer allocations), less fragmentation
+            // primarily for small Slot_Array's (which is the main focus of this data structure anyway)
+            Slot* new_slots = nullptr;
+            T* new_data = nullptr;
+            if(new_capacity != 0)
             {
-                memory_resize_undo(alloc, &new_data, new_cap*ITEM_BYTES, slot_array->_data, old_cap*ITEM_BYTES, DEF_ALIGNMENT<T>, GET_LINE_INFO());
-                memory_resize_undo(alloc, &new_slots, new_cap*SLOT_BYTES, slot_array->_slots, old_cap*SLOT_BYTES, SLOT_ALIGNMENT, GET_LINE_INFO());
+                if(slot_array->_data != nullptr)
+                {
+                    if(alloc->resize(slot_array->_data, old_cap, new_cap, 8, GET_LINE_INFO()))
+                        new_data = slot_array->_data;
+                }
 
-                if(!s1) return new_cap*ITEM_BYTES;
-                if(!s2) return new_cap*SLOT_BYTES;
+                if(new_data == nullptr)
+                    new_data = (T*) alloc->allocate(new_cap, 8, GET_LINE_INFO());
+
+                if(new_data == nullptr)
+                    return new_cap;
+
+                new_slots = (Slot*) align_forward(new_data + new_capacity, SLOT_ALIGNMENT);
             }
-
+            
             isize to_size = min(slot_array->_size, new_capacity);
             
             //@NOTE: We assume reallocatble ie. that the object helds in each slice
             // do not depend on their own adress => can be freely moved around in memory
-            // => we can simply memove without calling moves and destructors (see slice_ops.h)
-            //assert(JOT_IS_REALLOCATABLE(T) && "we assume reallocatble!");
-            if(new_data != slot_array->_data)   memcpy(new_data, slot_array->_data, (size_t) (to_size*ITEM_BYTES));
-            if(new_slots != slot_array->_slots) memcpy(new_slots, slot_array->_slots, (size_t) (to_size*SLOT_BYTES));
+            memmove(new_slots, slot_array->_slots, (size_t) to_size * sizeof(Slot));
+            if(new_data != slot_array->_data)   
+                memcpy(new_data, slot_array->_data, (size_t) to_size * sizeof(T));
 
             for(isize i = new_capacity; i < slot_array->_size; i++)
                 slot_array->_data[i].~T();
         
-            //when growing properly link the added nodes to the free list
-            if(old_cap < new_cap)
+            //properly link the added nodes to the free list
+            if(slot_array->_capacity < new_capacity)
             {
-                for(isize i = old_cap; i < new_cap; i++)
+                for(isize i = slot_array->_capacity; i < new_capacity; i++)
                 {
-                    
                     Slot* new_slot = (Slot*) new_slots + i;
                     new_slot->owner = (uint32_t) -1;
                     new_slot->next = (uint32_t) i + 1;
                 }
 
-                Slot* last_new_slot = (Slot*) new_slots + new_cap - 1;
+                Slot* last_new_slot = (Slot*) new_slots + new_capacity - 1;
                 last_new_slot->next = (uint32_t) slot_array->_free_list;
-                slot_array->_free_list = (uint32_t) old_cap;
+                slot_array->_free_list = (uint32_t) slot_array->_capacity;
             }
 
-            memory_resize_deallocate(alloc, &new_data, new_cap*ITEM_BYTES, slot_array->_data, old_cap*ITEM_BYTES, DEF_ALIGNMENT<T>, GET_LINE_INFO());
-            memory_resize_deallocate(alloc, &new_slots, new_cap*SLOT_BYTES, slot_array->_slots, old_cap*SLOT_BYTES, SLOT_ALIGNMENT, GET_LINE_INFO());
+            if(slot_array->_data != nullptr)
+                alloc->deallocate(slot_array->_data, old_cap, 8, GET_LINE_INFO());
 
             slot_array->_size = (uint32_t) to_size;
             slot_array->_data = (T*) new_data;

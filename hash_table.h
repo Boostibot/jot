@@ -1,10 +1,6 @@
 #pragma once
 
-#include <string.h>
-
 #include "memory.h"
-//#include "slice.h"
-//#include "panic.h"
 
 namespace jot
 {   
@@ -26,7 +22,7 @@ namespace jot
     template<typename Key> using Equal_Fn = bool     (*)(Key const&, Key const&);
     template<typename Key> using Hash_Fn  = uint64_t (*)(Key const&, uint64_t seed);
     
-    //Cache efficient packed hash & multihash table
+    ///Cache efficient packed hash & multihash table
     template<class Key_, class Value_, Hash_Fn<Key_> hash, Equal_Fn<Key_> equals = default_key_equals<Key_>>
     struct Hash_Table
     {

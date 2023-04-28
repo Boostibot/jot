@@ -164,7 +164,7 @@ namespace jot
         {
             isize new_size = 0;
             if(table->_size * REHASH_AT_FULLNESS >= table->_capacity)
-                new_size = table->_capacity * 2;
+                new_size = (isize) table->_capacity * 2;
 
             if(table->_removed_count * REHASH_AT_FULLNESS >= table->_capacity)
                 new_size = table->_capacity;
