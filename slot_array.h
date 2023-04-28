@@ -82,7 +82,7 @@ namespace jot
     ///Converts handle to element index
     template<class T> isize to_index(Slot_Array<T> const& slot_array, Handle slot) noexcept;
     ///Converts element index to handle
-    template<class T> Handle to_slot(Slot_Array<T> const& slot_array, isize index) noexcept;
+    template<class T> Handle to_handle(Slot_Array<T> const& slot_array, isize index) noexcept;
 
     ///returns an item given its handle
     template<class T> T const& get(Slot_Array<T> const& slot_array, Handle handle) noexcept;

@@ -57,7 +57,6 @@ namespace jot
         static constexpr isize MASK_BITS = (isize) sizeof(uint64_t) * 8;
         static constexpr isize MASK_COUNT = 2;
         static constexpr isize BUCKET_SIZE = MASK_BITS * MASK_COUNT;
-        static constexpr isize USED_SLOTS_ALIGN = 16; //should be enough for all SIMD instructions
 
         struct Bucket
         {

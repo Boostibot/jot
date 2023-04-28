@@ -3,7 +3,7 @@
 #include <random>
 
 #include "_test.h"
-#include "bucket_array.h"
+#include "bucket_array2.h"
 
 namespace jot::tests::bucket_array
 {
@@ -13,7 +13,7 @@ namespace jot::tests::bucket_array
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
         isize alive_before = trackers_alive();
         {
-            Bucket_Array<T> arr;
+            second::Bucket_Array<T> arr;
 
             TEST(size(arr) == 0);
             TEST(capacity(arr) == 0);
@@ -28,7 +28,8 @@ namespace jot::tests::bucket_array
             TEST(get(arr, i0) == values[0]);
             TEST(get(arr, i1) == values[1]);
             TEST(get(arr, i2) == values[2]);
-
+            
+            //#if 0
             T v1 = remove(&arr, i1);
             TEST(v1 == values[1]);
             TEST(size(arr) == 2);
@@ -95,6 +96,7 @@ namespace jot::tests::bucket_array
             TEST(v3 == values[3]);
             TEST(v4 == values[4]);
             TEST(v5 == values[5]);
+            //#endif
         }
         isize mem_after = default_allocator()->get_stats().bytes_allocated;
         isize alive_after = trackers_alive();
@@ -124,8 +126,8 @@ namespace jot::tests::bucket_array
             isize memory_before = default_allocator()->get_stats().bytes_allocated;
 
             {
-                Hash_Table<isize, Bucket_Index, int_hash<isize>> truth;
-                Bucket_Array<isize> bucket_array;
+                Hash_Table<isize, Handle, int_hash<isize>> truth;
+                second::Bucket_Array<isize> bucket_array;
 
                 reserve(&truth, block_size);
 
@@ -137,14 +139,14 @@ namespace jot::tests::bucket_array
                     switch(op)
                     {
                         case OP_INSERT: {
-                            Bucket_Index index = insert_bucket_index(&bucket_array, i);
+                            Handle index = insert(&bucket_array, i);
                             set(&truth, i, index);
                             break;
                         }
 
                         case OP_REMOVE: {
                             Slice<const isize> truth_vals = keys(truth);
-                            Slice<Bucket_Index> truth_indices = values(&truth);
+                            Slice<Handle> truth_indices = values(&truth);
                             if(truth_indices.size == 0)
                             {   
                                 skipped = true;
@@ -152,10 +154,10 @@ namespace jot::tests::bucket_array
                             }
 
                             isize selected_index = (isize) index_distribution(gen) % truth_indices.size;
-                            Bucket_Index removed_index = truth_indices[selected_index];
+                            Handle removed_index = truth_indices[selected_index];
                             isize removed_value = truth_vals[selected_index];
 
-                            isize just_removed = remove_bucket_index(&bucket_array, removed_index);
+                            isize just_removed = remove(&bucket_array, removed_index);
                             TEST(just_removed == removed_value);
                             remove(&truth, removed_value);
                             break;
@@ -171,13 +173,13 @@ namespace jot::tests::bucket_array
                     }
 
                     Slice<const isize> truth_vals = keys(truth);
-                    Slice<Bucket_Index> truth_indices = values(&truth);
+                    Slice<Handle> truth_indices = values(&truth);
                     isize used_size = size(bucket_array);
                     TEST(used_size == truth_vals.size);
 
                     for(isize k = 0; k < truth_indices.size; k++)
                     {
-                        Bucket_Index index = truth_indices[k];
+                        Handle index = truth_indices[k];
                         isize retrieved = get(bucket_array, index);
                         TEST(retrieved == truth_vals[k]);
                     }

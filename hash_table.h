@@ -23,15 +23,10 @@ namespace jot
         return a == b;
     }
 
-    template<typename Key> using Equal_Fn = bool   (*)(Key const&, Key const&);
+    template<typename Key> using Equal_Fn = bool     (*)(Key const&, Key const&);
     template<typename Key> using Hash_Fn  = uint64_t (*)(Key const&, uint64_t seed);
     
-    //Cache efficient packed hash table. Stores the jump table, keys and values all in seperate arrays for maximum cache utilization.
-    // This also allows us to expose the values array directly to the user which removes the need for custom iterators. 
-    // Further we can also construct/decosntruct the hash table by transfering to/from it two Stacks. One for values and other for keys.
-    // Because it doesnt have explicit links between keys with the same hash has to only ever delete entries in the jump table by marking 
-    // them as deleted. After sufficient ammount of deleted entries rehashing is triggered (exactly the same ways as while adding) which 
-    // only then properly removes the deleted jump table entries.
+    //Cache efficient packed hash & multihash table
     template<class Key_, class Value_, Hash_Fn<Key_> hash, Equal_Fn<Key_> equals = default_key_equals<Key_>>
     struct Hash_Table
     {
@@ -54,10 +49,14 @@ namespace jot
         uint32_t _hash_collisions = 0; //The count of hash colisions currently in the table. Multiplicit keys are counted into this
         uint32_t _max_hash_collisions = 0;
         uint64_t _seed = *hash_table_globals::seed_ptr(); //The current set seed. Can be changed during rehash
-
-        //@NOTE: we can implement multi hash table or properly support deletion if we added extra array
-        //   called _group containg for each entry a next and prev entry index (as u32). That way we 
-        //   could upon deletion go to back or prev and change the _linker index to point to either of them
+        
+        //@NOTE: 
+        // We store the jump table, keys and values all in seperate arrays for maximum cache utilization.
+        // This also allows us to expose the values array directly to the user which removes the need for custom iterators. 
+        // Further we can also construct/decosntruct the hash table by transfering to/from it two Stacks. One for values and other for keys.
+        // Because it doesnt have explicit links between keys with the same hash has to only ever delete entries in the jump table by marking 
+        // them as deleted. After sufficient ammount of deleted entries rehashing is triggered (exactly the same ways as while adding) which 
+        // only then properly removes the deleted jump table entries.
 
         Hash_Table() noexcept {};
         Hash_Table(Allocator* alloc, uint64_t seed = *hash_table_globals::seed_ptr()) noexcept 
@@ -318,7 +317,6 @@ namespace jot
 
             //iterate the marks from front and back 
             // swapping mark from the back into holes from front
-            //  (we dont actually need to swap marks so we skip it)
             // swapping the entries in entry array in the same time
             // the final position of the forward index is the filtered size
             //this is the optimal way to remove any dead entries while 

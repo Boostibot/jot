@@ -16,13 +16,11 @@ namespace jot
 
         constexpr T const& operator[](isize index) const noexcept  
         { 
-            assert(0 <= index && index < size && "index out of range"); 
-            return data[index]; 
+            assert(0 <= index && index < size && "index out of range"); return data[index]; 
         }
         constexpr T& operator[](isize index) noexcept 
         { 
-            assert(0 <= index && index < size && "index out of range"); 
-            return data[index]; 
+            assert(0 <= index && index < size && "index out of range"); return data[index]; 
         }
     };
 

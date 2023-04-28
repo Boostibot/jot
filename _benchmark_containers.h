@@ -9,6 +9,7 @@
 #include "_test.h"
 #include "string_hash.h"
 #include "bucket_array.h"
+#include "bucket_array2.h"
 #include "format.h"
 #include "benchmark.h"
 #include "hash_index.h"
@@ -119,7 +120,17 @@ namespace jot::benchmarks
                 }
                 return true;
             }, batch_size);
-
+            
+            Bench_Result res_bucket_array2 = benchmark(GIVEN_TIME, [&]{
+                second::Bucket_Array<isize> bucket_array;
+                for(isize i = 0; i < batch_size; i++)
+                {
+                    (void) insert(&bucket_array, i);
+                    do_no_optimize(bucket_array);
+                    read_write_barrier();
+                }
+                return true;
+            }, batch_size);
             
             Bench_Result res_slot_array = benchmark(GIVEN_TIME, [&]{
                 Slot_Array<isize> slot_array;
@@ -166,10 +177,11 @@ namespace jot::benchmarks
                 println("unordered_map:", res_unordered_map);
             }
 
-            println("array:        ", res_array);
-            println("hash_table:   ", res_hash_table);
-            println("bucket_array: ", res_bucket_array);
-            println("slot_array:   ", res_slot_array);
+            println("array:         ", res_array);
+            println("hash_table:    ", res_hash_table);
+            println("bucket_array:  ", res_bucket_array);
+            println("bucket_array2: ", res_bucket_array2);
+            println("slot_array:    ", res_slot_array);
         };
         
         println("\n=== ignore below ===");
@@ -191,6 +203,7 @@ namespace jot::benchmarks
             Array<isize> array;
             Hash_Table<isize, isize, int_hash<isize>> hash_table;
             Bucket_Array<isize> bucket_array;
+            second::Bucket_Array<isize> bucket_array2;
             Slot_Array<isize> slot_array;
             std::vector<isize> vec;
             std::unordered_map<isize, isize> map;
@@ -286,7 +299,26 @@ namespace jot::benchmarks
                 read_write_barrier();
                 return true;
             });
-
+            
+            removed_i = 0;
+            Bench_Result res_bucket_array2 = benchmark(GIVEN_TIME, [&]{
+                if(removed_i == 0)
+                {
+                    for(isize i = 0; i < batch_size; i++)
+                        added_keys[i] = insert(&bucket_array2, i).index;
+                
+                    shuffle(slice(&added_keys), &gen);
+                
+                    removed_i = batch_size;
+                    return false;
+                }
+            
+                isize removed = added_keys[--removed_i];
+                remove(&bucket_array2, Handle{(uint32_t) removed});
+                do_no_optimize(bucket_array);
+                read_write_barrier();
+                return true;
+            });
             
             removed_i = 0;
             Bench_Result res_slot_array = benchmark(GIVEN_TIME, [&]{
@@ -366,6 +398,7 @@ namespace jot::benchmarks
             println("hash_table:        ", res_hash_table);
             println("hash_table mark:   ", res_mark_hash_table);
             println("bucket_array:      ", res_bucket_array);
+            println("bucket_array2:     ", res_bucket_array2);
             println("slot_array:        ", res_slot_array);
         };
         
@@ -729,6 +762,19 @@ namespace jot::benchmarks
                 return true;
             }, batch_size);
             
+            Bench_Result res_bucket_array2 = benchmark(GIVEN_TIME, [&]{
+                second::Bucket_Array<isize> bucket_array;
+                for(isize i = 0; i < batch_size; i++)
+                {
+                    Handle added = insert(&bucket_array, counter++);
+                    (void) insert(&bucket_array, counter++);
+                    remove(&bucket_array, added);
+                }
+                do_no_optimize(bucket_array);
+                read_write_barrier();
+                return true;
+            }, batch_size);
+            
             Bench_Result res_slot_array = benchmark(GIVEN_TIME, [&]{
             
                 Slot_Array<isize> slot_array;
@@ -786,6 +832,7 @@ namespace jot::benchmarks
             println("hash_table:        ", res_hash_table);
             println("hash_table mark:   ", res_mark_hash_table);
             println("bucket_array:      ", res_bucket_array);
+            println("bucket_array2:     ", res_bucket_array2);
             println("slot_array:        ", res_slot_array);
         };
         
@@ -933,6 +980,29 @@ namespace jot::benchmarks
                 return true;
             });
             
+            Bench_Result res_bucket_array2 = benchmark(LOCAL_GIVEN_TIME, [&]{
+                
+                second::Bucket_Array<isize> bucket_array;
+                for(isize i = 0; i < effective_batch_size; i++)
+                {
+                    for(isize j = 0; j < section_size; j++)
+                        key_array[j] = insert(&bucket_array, counter++).index;
+                        
+                    for(isize j = 0; j < section_size; j++)
+                        key_array[j + section_size] = insert(&bucket_array, counter++).index;
+                    
+                    isize from = i % 2 == 0 ? 0 : section_size; 
+                    for(isize j = 0; j < section_size; j++)
+                        remove(&bucket_array, Handle{(uint32_t) key_array[j + from]});
+
+                    counter += 2;
+                }
+
+                do_no_optimize(bucket_array);
+                read_write_barrier();
+                return true;
+            });
+
             Bench_Result res_slot_array = benchmark(LOCAL_GIVEN_TIME, [&]{
                 
                 Slot_Array<isize> slot_array;
@@ -1037,6 +1107,7 @@ namespace jot::benchmarks
             println("hash_table:        ", res_hash_table);
             println("hash_table mark:   ", res_mark_hash_table);
             println("bucket_array:      ", res_bucket_array);
+            println("bucket_array2:     ", res_bucket_array2);
             println("slot_array:        ", res_slot_array);
         };
         

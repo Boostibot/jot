@@ -536,11 +536,3 @@ namespace jot
     }
 }
 
-namespace std 
-{
-    template<class T> 
-    void swap(jot::Array<T>& stack1, jot::Array<T>& stack2)
-    {
-        jot::swap(&stack1, &stack2);
-    }
-}

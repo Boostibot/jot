@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <assert.h>
+#include <string.h>
 
 #ifndef NODISCARD
     #define NODISCARD [[nodiscard]]
@@ -82,7 +83,8 @@ namespace jot
     static bool memory_resize_allocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
     static bool memory_resize_deallocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
     static bool memory_resize_undo(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
-
+    static void* reallocate(Allocator* alloc, void* old_allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept;
+    
     //Acts as regular malloc
     struct Malloc_Allocator : Allocator
     {
@@ -126,20 +128,18 @@ namespace jot
         *b = (T&&) copy;
     };
 
-    #ifndef GET_LINE_INFO
-        #ifndef _MSC_VER
-            #define __FUNCTION__ __func__
-        #endif
-
-        struct Line_Info
-        {
-            const char* file = "";
-            const char* func = "";
-            ptrdiff_t line = -1;
-        };
-    
-        #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
+    #ifndef _MSC_VER
+        #define __FUNCTION__ __func__
     #endif
+
+    struct Line_Info
+    {
+        const char* file = "";
+        const char* func = "";
+        ptrdiff_t line = -1;
+    };
+    
+    #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
     
     #ifndef SLICE_DEFINED
         #define SLICE_DEFINED
@@ -173,7 +173,11 @@ namespace jot
         static void default_out_of_memory_handler(Line_Info, const char*, isize, Allocator*, ...)
         {
             assert("Out of memory!");
-            *(const char* volatile*) 0 = "JOT_PANIC triggered! ";
+            #ifndef JOT_MALLOC
+                *(const char* volatile*) 0 = "JOT_PANIC triggered! ";
+            #else
+                abort();
+            #endif
         }
 
         inline Out_Of_Memory_handler_Function* out_of_memory_hadler_ptr()
@@ -334,7 +338,6 @@ namespace jot
         JOT_FREE(original_ptr);
     }
     
-    
     NODISCARD
     void* Malloc_Allocator::allocate(isize size, isize align, Line_Info) noexcept
     {
@@ -440,6 +443,24 @@ namespace jot
         return alloc->deallocate(*new_allocated, new_size, align, callee);
     }
     
+    static void* reallocate(Allocator* alloc, void* old_allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept
+    {
+        void* out = nullptr;
+        if(memory_resize_allocate(alloc, &out, new_size, old_allocated, old_size, align, callee))
+        {
+            isize min_size = new_size;
+            if(min_size > old_size)
+                min_size = old_size;
+
+            if(out != old_allocated)
+                memcpy(out, old_allocated, (size_t) min_size);
+
+            memory_resize_deallocate(alloc, &out, new_size, old_allocated, old_size, align, callee);
+        }
+
+        return out;
+    }
+
     #ifdef ALLOC_RESIZE_EXAMPLE
     static void destroy_extra(Slice<uint8_t> slice, isize from_size);
     
