@@ -4,9 +4,7 @@
 
 namespace jot
 {
-    //Allocate linearry from a buffer. Once the buffer is filled no more
-    // allocations are possible. Deallocation is possible only of the most recent allocation
-    //Doesnt insert any extra data into the provided buffer
+    ///Allocates linearry from a buffer. Once the buffer is filled no more allocations are possible
     struct Linear_Allocator : Allocator
     {
         uint8_t* buffer_from = nullptr;
@@ -90,9 +88,9 @@ namespace jot
         }
         
         virtual
-        Stats get_stats() const noexcept override
+        Allocator_Stats get_stats() const noexcept override
         {
-            Stats stats = {};
+            Allocator_Stats stats = {};
             stats.name = "Linear_Allocator";
             stats.supports_resize = true;
             stats.parent = parent;

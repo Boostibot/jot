@@ -79,12 +79,12 @@ namespace jot
 
     ///Reallocates array to the specified capacity. If the capacity is smaller then its size, shrinks it destroying items
     ///in process
-    template<class T> NODISCARD bool set_capacity_failing(Array<T>* array, isize new_capacity) noexcept;
+    template<class T> bool set_capacity_failing(Array<T>* array, isize new_capacity) noexcept;
     template<class T> void set_capacity(Array<T>* array, isize new_capacity);
 
     ///Potentially reallocates array so that capacity is at least to_size. If capacity is already greater than to_size
     ///does nothing.
-    template<class T> NODISCARD bool reserve_failing(Array<T>* array, isize to_size) noexcept;
+    template<class T> bool reserve_failing(Array<T>* array, isize to_size) noexcept;
     template<class T> void reserve(Array<T>* array, isize to_size);
 
     ///Same as reserve expect when reallocation happens grows 3/2*size + 8
@@ -127,24 +127,24 @@ namespace jot
 {
     namespace array_internal 
     {
-        inline const uint8_t* null_termination_array()
+        inline const void* null_termination()
         {
             static const uint8_t NULL_TERMINATION_ARRAY[8] = {'\0'};
             return NULL_TERMINATION_ARRAY;
         }
 
         template<class T> 
-        void null_terminate(Array<T>* array) noexcept
+        static void null_terminate(Array<T>* array) noexcept 
         {
-            if constexpr(is_string_char<T>)
-                array->_data[array->_size] = T();
+            if (is_string_char<T>)
+                memset(array->_data + array->_size, 0, sizeof(T));
         }
-        
+
         template<class T> 
         void set_data_to_termination(Array<T>* array)
         {
-            if constexpr(is_string_char<T>)
-                array->_data = (T*) (void*) null_termination_array();
+            if (is_string_char<T>)
+                array->_data = (T*) null_termination();
             else
                 array->_data = nullptr;
         }   
@@ -264,8 +264,11 @@ namespace jot
         bool data_inv = true;
         bool espcape_inv = true;
 
-        if constexpr(is_string_char<T>)
-            espcape_inv = array._data != nullptr && array._data[array._size] == T(0);
+        if (is_string_char<T>)
+        {
+            espcape_inv = array._data != nullptr;
+            espcape_inv = espcape_inv && memcmp(array._data, array_internal::null_termination(), sizeof(T)) == 0;
+        }
         else
             data_inv = (array._capacity == 0) == (array._data == nullptr);
 

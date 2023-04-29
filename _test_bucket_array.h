@@ -6,7 +6,11 @@
 #include "_test.h"
 #include "bucket_array.h"
 
-namespace jot::tests::bucket_array
+namespace jot
+{
+namespace tests
+{
+namespace bucket_array
 {
     template <typename T>
     void test_insert_remove(Static_Array<T, 10> const& values)
@@ -115,8 +119,8 @@ namespace jot::tests::bucket_array
 
         std::random_device rd;
         
-        constexpr isize OP_INSERT = 0;
-        constexpr isize OP_REMOVE = 1;
+        static const isize OP_INSERT = 0;
+        static const isize OP_REMOVE = 1;
 
         std::discrete_distribution<unsigned> op_distribution({75, 25});
         std::uniform_int_distribution<unsigned> index_distribution(0);
@@ -233,4 +237,6 @@ namespace jot::tests::bucket_array
         if(flags & Test_Flags::STRESS)
             stress_test(print);
     }
+}
+}
 }

@@ -11,7 +11,7 @@ namespace jot
 {
     #ifndef SLICE_DEFINED
     #define SLICE_DEFINED
-    //A sized pointer to contiguous array in memory or a string
+    ///Sized pointer to contiguous array in memory or a string
     template<typename T>
     struct Slice
     {
@@ -170,7 +170,6 @@ namespace jot
             to.data[i] = with;
     }
     
-    //@TODO: rename to format is + something
     template<typename T> 
     bool are_items_equal(Slice<T> a, Slice<T> b) noexcept
     {
@@ -184,26 +183,12 @@ namespace jot
         return true;
     }
 
-    //We declare custom type traits here that are macro and intrinsic only
-    // so that they dont generate any symbols. 
-    //These are used for type dependent optimalization
-    #ifndef JOT_CUSTOM_TYPE_TRAITS
-        #if defined(__GNUC__) && !defined(__clang__)
-            #define JOT_IS_TRIVIALLY_DESTRUCTIBLE(T) __has_trivial_destructor(T)
-        #else
-            #define JOT_IS_TRIVIALLY_DESTRUCTIBLE(T) __is_trivially_destructible(T)
-        #endif
-        #define JOT_IS_TRIVIALLY_COPYABLE(T)     (__is_trivially_copyable(T))
-        #define JOT_IS_REALLOCATABLE(T) true
-    #endif
-
     template<typename T> 
     void copy_items(Slice<T> to, Slice<const T> from) noexcept
     {
         //we by default use memmove since its safer and means less worry later on
         assert(to.size >= from.size && "size must be big enough");
-        bool by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
-        if(by_byte)
+        if(__is_trivially_copyable(T))
         {
             memmove(to.data, from.data, from.size * sizeof(T));
             return;
@@ -225,8 +210,7 @@ namespace jot
     void move_items(Slice<T> to, Slice<T> from) noexcept
     {
         assert(to.size >= from.size && "size must be big enough");
-        bool by_byte = JOT_IS_TRIVIALLY_COPYABLE(T);
-        if(by_byte)
+        if(__is_trivially_copyable(T))
         {
             memmove(to.data, from.data, from.size * sizeof(T));
             return;

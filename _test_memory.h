@@ -9,7 +9,11 @@
 #include "allocator_stack.h"
 #include "allocator_stack_ring.h"
 
-namespace jot::tests::memory
+namespace jot
+{
+namespace tests
+{
+namespace memory
 {
     static
     void test_align()
@@ -53,13 +57,12 @@ namespace jot::tests::memory
     static
     void test_stats_plausibility(Allocator* alloc)
     {
-        Allocator::Stats stats = alloc->get_stats();
+        Allocator_Stats stats = alloc->get_stats();
 
         TEST(stats.max_bytes_used >= stats.bytes_used);
         TEST(stats.max_bytes_allocated >= stats.bytes_allocated);
 
-        Allocator::Stats def_stats;
-        TEST(stats.bytes_used >= stats.bytes_allocated || stats.bytes_used == def_stats.bytes_used);
+        TEST(stats.bytes_used >= stats.bytes_allocated || stats.bytes_used == 0);
     }
     
     static
@@ -468,4 +471,6 @@ namespace jot::tests::memory
         isize alloced_after = default_allocator()->get_stats().bytes_allocated;
         TEST(alloced_before == alloced_after);
     }
+}
+}
 }

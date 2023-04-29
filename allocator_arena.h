@@ -1,20 +1,19 @@
 #pragma once
 
 #include "memory.h"
+#define INTRUSIVE_LIST_SINGLE
 #include "intrusive_list.h"
 
 namespace jot 
 {
-    //Allocate lineary from block. If the block is exhausted request more memory from its parent alocator and add it to block list.
-    // Can be easily reset without freeying any acquired memeory. Releases all memory in destructor
+    ///Allocate lineary from block. If the block is exhausted request more memory from its parent alocator.
     struct Arena_Allocator : Allocator
     {
         struct Block
         {
-            static constexpr bool is_bidirectional = false;
-            Block* next = nullptr;
-            uint32_t size = 0;
-            uint32_t was_alloced = false;
+            Block* next;
+            uint32_t size;
+            uint32_t was_alloced;
         };
 
         using Grow_Fn = isize(*)(isize);
@@ -23,7 +22,8 @@ namespace jot
         uint8_t* available_to = nullptr;
         uint8_t* last_allocation = nullptr;
 
-        Chain<Block> blocks = {};
+        Block* first_block = nullptr;
+        Block* last_block = nullptr;
         Block* current_block = nullptr; 
 
         Allocator* parent = nullptr;
@@ -49,7 +49,7 @@ namespace jot
             assert(is_invariant());
         }
         
-        NODISCARD virtual
+        virtual
         void* allocate(isize size, isize align, Line_Info callee) noexcept override
         {
             assert(is_power_of_two(align));
@@ -90,7 +90,7 @@ namespace jot
             return true;
         }
 
-        NODISCARD virtual
+        virtual
         bool resize(void* allocated, isize old_size, isize new_size, isize align, Line_Info) noexcept override
         {
             (void) align;
@@ -107,9 +107,9 @@ namespace jot
         }
 
         virtual
-        Stats get_stats() const noexcept override
+        Allocator_Stats get_stats() const noexcept override
         {
-            Stats stats = {};
+            Allocator_Stats stats = {};
             stats.name = "Arena_Allocator";
             stats.supports_resize = true;
             stats.parent = parent;
@@ -127,8 +127,7 @@ namespace jot
             assert(is_invariant());
             isize passed_bytes = 0;
             
-
-            Block* current = blocks.first;
+            Block* current = first_block;
             Block* prev = nullptr;
             while(current != nullptr)
             {
@@ -142,7 +141,7 @@ namespace jot
                     parent->deallocate(prev, total_block_size, ARENA_BLOCK_ALIGN, GET_LINE_INFO());
             }
 
-            assert(prev == blocks.last && "must be a valid chain!");
+            assert(prev == last_block && "must be a valid chain!");
             assert(passed_bytes >= bytes_used);
         }
 
@@ -151,39 +150,37 @@ namespace jot
             if(buffer_size < sizeof(Block))
                 return;
 
-            Block* block = (Block*) (void*) buffer;
-            *block = Block{};
-            block->was_alloced = false;
-            block->size = (uint32_t) buffer_size - sizeof(Block);
+            Block block_data = {0};
+            block_data.was_alloced = false;
+            block_data.size = (uint32_t) buffer_size - sizeof(Block);
 
-            Chain<Block> free = free_chain();
+            Block* block = (Block*) (void*) buffer;
+            *block = block_data;
+
             Block* before = nullptr;
-            for(Block* curr = free.first; curr; before = curr, curr = curr->next)
+            
+            Block* curr = nullptr;
+            if(current_block != nullptr)
+                curr = current_block->next;
+
+            for(; curr; before = curr, curr = curr->next)
             {
                 if(curr->size >= buffer_size)
                     break;
             }
 
-            insert_node(&blocks, before, block);
-        }
+            if(before != nullptr)
+            {
+                block->next = before->next;
+                before->next = block;
+            }
 
-        Chain<Block> used_chain() const noexcept
-        {
-            return Chain<Block>{blocks.first, current_block};
-        }
-        
-        Chain<Block> free_chain() const noexcept
-        {
-            if(current_block == nullptr)
-                return Chain<Block>{nullptr, nullptr};
-
-            assert(current_block != nullptr);
-            return Chain<Block>{current_block->next, blocks.last};
+            insert_node_sl(&first_block, &last_block, before, block);
         }
 
         void reset() 
         {
-            current_block = blocks.first;
+            current_block = first_block;
             if(current_block != nullptr)
             {
                 available_from = data(current_block);
@@ -203,18 +200,21 @@ namespace jot
             assert(is_invariant());
 
             //Tries to find an open block that would fit size and align
-            Chain<Block> free = free_chain();
+            Block* curr = nullptr;
+            if(current_block != nullptr)
+                curr = current_block->next;
+
             Block* before = current_block;
             Block* obtained = nullptr;
 
-            for(Block* curr = free.first; curr; before = curr, curr = curr->next)
+            for(; curr; before = curr, curr = curr->next)
             {
                 uint8_t* block_data = data(curr);
                 void* aligned = align_forward(block_data, align);
                 isize aligned_size = ptrdiff(block_data + curr->size, aligned);
                 if(aligned_size >= size)
                 {
-                    obtained = extract_node(&blocks, before, curr);
+                    obtained = extract_node_sl(&first_block, &last_block, before, curr);
                     break;
                 }
             }
@@ -250,7 +250,7 @@ namespace jot
             assert(obtained != current_block);
 
             //Add it to the end and set statistics
-            insert_node(&blocks, current_block, obtained);
+            insert_node_sl(&first_block, &last_block, current_block, obtained);
             available_from = data(obtained);
             available_to = available_from + obtained->size;
             current_block = obtained;
@@ -266,14 +266,14 @@ namespace jot
 
             isize count = 0;
             Block* last = nullptr;
-            for(Block* current = blocks.first; current; current = current->next)
+            for(Block* current = first_block; current; current = current->next)
             {
                 last = current;
                 count ++;
             }
             
-            bool blocks_inv1 = last == blocks.last && count == used_blocks;
-            bool blocks_inv2 = (blocks.first == nullptr) == (used_blocks == 0) && used_blocks >= 0;
+            bool blocks_inv1 = last == last_block && count == used_blocks;
+            bool blocks_inv2 = (first_block == nullptr) == (used_blocks == 0) && used_blocks >= 0;
 
             bool block_size_inv = chunk_size > sizeof(Block);
 

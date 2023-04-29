@@ -15,7 +15,6 @@ namespace jot
     };
 
     #define DEFINE_STRING_TYPE(CHAR_T)                                                          \
-        template<> constexpr bool is_string_char<CHAR_T> = true;                                \
         template<> struct Slice<const CHAR_T>                                                   \
         {                                                                                       \
             const CHAR_T* data = nullptr;                                                       \

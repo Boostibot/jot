@@ -1,14 +1,6 @@
 #pragma once
 
-//Executes a function at the end of its lifetime.
-// This can be used in the following way:
-// 
-//      FILE* file = fopen("...");
-//      defer(fclose(file));
-//      // ....
-// 
-// We can now use the file liberaly without having to
-// worry about closing it. This is also perfectly exception safe.
+///Executes a function at the end of its lifetime.
 template <typename Fn>
 struct Defered 
 {
@@ -27,3 +19,12 @@ struct Defered
 #define PP_CONCAT4(a, b, c, d) PP_CONCAT4_(a, b, c, d)
 
 #define defer(...) Defered PP_CONCAT4(defer_,__LINE__, _, __COUNTER__) ([&]{__VA_ARGS__;})
+
+// This can be used in the following way:
+// 
+//      FILE* file = fopen("...");
+//      defer(fclose(file));
+//      // ....
+// 
+// We can now use the file liberaly without having to
+// worry about closing it. This is also perfectly exception safe.

@@ -70,7 +70,11 @@ namespace jot
     ///Converts handle to element index
     template<class T> Weak_Bucket_Index to_index(Weak_Bucket_Array<T> const& bucket_array, Weak_Handle slot) noexcept;
     ///Converts element index to handle
+<<<<<<< Updated upstream
     template<class T> Weak_Handle to_slot(Weak_Bucket_Array<T> const& bucket_array, isize index) noexcept;
+=======
+    template<class T> Weak_Handle to_handle(Weak_Bucket_Array<T> const& bucket_array, isize index) noexcept;
+>>>>>>> Stashed changes
 
     ///returns an item given its handle. if the handle is not found or is outdated returns if_not_found instead.
     template <typename T> T const& get(Weak_Bucket_Array<T> const& from, Weak_Handle handle, T const& if_not_found) noexcept;

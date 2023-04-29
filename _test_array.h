@@ -7,7 +7,11 @@
 #include "array.h"
 #include "format.h"
 
-namespace jot::tests::array
+namespace jot
+{
+namespace tests
+{
+namespace array
 {
     template<typename T>
     void test_push_pop(Static_Array<T, 6> vals)
@@ -512,17 +516,17 @@ namespace jot::tests::array
 
         if(print) println("  test_stress()");
 
-        constexpr isize OP_PUSH1 = 0;
-        constexpr isize OP_PUSH2 = 1;
-        constexpr isize OP_PUSH3 = 2;
-        constexpr isize OP_POP = 3;
-        constexpr isize OP_RESERVE = 4;
-        constexpr isize OP_SPLICE = 5;
-        constexpr isize OP_INSERT = 6;
-        constexpr isize OP_REMOVE = 7;
-        constexpr isize OP_INSERT_UNORDERED = 8;
-        constexpr isize OP_REMOVE_UNORDERED = 9;
-        constexpr isize OP_SET_CAPACITY = 10;
+        static const isize OP_PUSH1 = 0;
+        static const isize OP_PUSH2 = 1;
+        static const isize OP_PUSH3 = 2;
+        static const isize OP_POP = 3;
+        static const isize OP_RESERVE = 4;
+        static const isize OP_SPLICE = 5;
+        static const isize OP_INSERT = 6;
+        static const isize OP_REMOVE = 7;
+        static const isize OP_INSERT_UNORDERED = 8;
+        static const isize OP_REMOVE_UNORDERED = 9;
+        static const isize OP_SET_CAPACITY = 10;
 
         std::uniform_int_distribution<unsigned> op_distribution(0, 10);
         std::uniform_int_distribution<unsigned> index_distribution(0);
@@ -678,4 +682,6 @@ namespace jot::tests::array
         if(flags & Test_Flags::STRESS)
             test_stress(print);
     }
+}
+}
 }

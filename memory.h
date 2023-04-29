@@ -4,10 +4,13 @@
 #include <stdint.h>
 #include <assert.h>
 #include <string.h>
+<<<<<<< Updated upstream
 
 #ifndef NODISCARD
     #define NODISCARD [[nodiscard]]
 #endif
+=======
+>>>>>>> Stashed changes
 
 #ifndef JOT_MALLOC
     #include <stdlib.h>
@@ -20,48 +23,52 @@ using usize = size_t;
 
 namespace jot
 {
-    struct Line_Info;
+    struct Line_Info
+    {
+        const char* file = "";
+        const char* func = "";
+        ptrdiff_t line = -1;
+    };
+    
+    #ifndef _MSC_VER
+        #define __FUNCTION__ __func__
+    #endif
+    #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
+    
+    struct Allocator;
+
+    struct Allocator_Stats
+    {
+        Allocator* parent;
+        const char* name;
+        bool supports_resize;
+
+        isize bytes_used;
+        isize bytes_allocated;
+            
+        isize max_bytes_used;
+        isize max_bytes_allocated;
+
+        isize allocation_count;
+        isize deallocation_count;
+        isize resize_count;
+    };
 
     struct Allocator
     {
-        struct Stats
-        {
-            //if a returned stats struct contains 
-            //default values it mean that the speicific
-            //statistic is not tracked
-            Allocator* parent = nullptr;
-            const char* name = nullptr;
-            bool supports_resize = false;
-
-            isize bytes_used = PTRDIFF_MIN;
-            isize bytes_allocated = PTRDIFF_MIN;
-            
-            isize max_bytes_used = PTRDIFF_MIN;
-            isize max_bytes_allocated = PTRDIFF_MIN;
-
-            isize allocation_count = PTRDIFF_MIN;
-            isize deallocation_count = PTRDIFF_MIN;
-            isize resize_count = PTRDIFF_MIN;
-        };
-
         //We also pass line info to each allocation function. This is used to give better error/info messages esentially for free
         //This combined with the fact that this interface operates entirely type erased means we can switch to a 'debug' or 'tracking'
         // allocator during runtime of the program on demand (such as something bugging out)
 
-        NODISCARD virtual
-        void* allocate(isize size, isize align, Line_Info callee) noexcept = 0; 
+        virtual void* allocate(isize size, isize align, Line_Info callee) noexcept = 0; 
         
-        virtual 
-        bool deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept = 0; 
+        virtual bool deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept = 0; 
 
-        NODISCARD virtual
-        bool resize(void* allocated, isize old_size, isize new_size, isize align, Line_Info callee) noexcept = 0; 
+        virtual bool resize(void* allocated, isize old_size, isize new_size, isize align, Line_Info callee) noexcept = 0; 
         
-        virtual
-        Stats get_stats() const noexcept = 0;
+        virtual Allocator_Stats get_stats() const noexcept = 0;
 
-        virtual
-        ~Allocator() noexcept {}
+        virtual ~Allocator() noexcept {}
     };
 
     inline bool  is_power_of_two(isize num);
@@ -79,7 +86,6 @@ namespace jot
     //These three functions let us easily write custom 'set_capacity' or 'realloc' functions without losing on generality or safety. (see ALLOC_RESIZE_EXAMPLE)
     //They primarily serve to simplify writing reallocation rutines for SOA structs where we want all of the arrays to have the same capacity.
     // this means that if one fails all the allocations should be undone (precisely what memory_resize_undo does) and the funtion should fail
-    NODISCARD 
     static bool memory_resize_allocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
     static bool memory_resize_deallocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
     static bool memory_resize_undo(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
@@ -94,12 +100,12 @@ namespace jot
         isize deallocation_count = 0;
         isize resize_count = 0;
         
-        NODISCARD virtual void* allocate(isize size, isize align, Line_Info) noexcept override;
-                  virtual bool  deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept override;
-        NODISCARD virtual bool  resize(void* allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept override;
-                  virtual Stats get_stats() const noexcept override;
+        virtual void* allocate(isize size, isize align, Line_Info) noexcept override;
+        virtual bool deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept override;
+        virtual bool resize(void* allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept override;
+        virtual Allocator_Stats get_stats() const noexcept override;
 
-        inline virtual ~Malloc_Allocator() noexcept override {}
+        virtual ~Malloc_Allocator() noexcept override {}
     };
 
     template <typename T>
@@ -113,6 +119,7 @@ namespace jot
         static constexpr int64_t GIBI_BYTE = (int64_t) 1 << 30;
         static constexpr int64_t TEBI_BYTE = (int64_t) 1 << 40;
     }
+<<<<<<< Updated upstream
     
     template <typename T> constexpr 
     T && move(T* val) noexcept 
@@ -165,10 +172,13 @@ namespace jot
             }
         };
     #endif 
+=======
+>>>>>>> Stashed changes
 
     namespace memory_globals
     {
         using Out_Of_Memory_handler_Function = void(*)(Line_Info callee, const char* cformat, isize requested_size, Allocator* requested_from, ...);
+<<<<<<< Updated upstream
         
         static void default_out_of_memory_handler(Line_Info, const char*, isize, Allocator*, ...)
         {
@@ -179,6 +189,9 @@ namespace jot
                 abort();
             #endif
         }
+=======
+        static void default_out_of_memory_handler(Line_Info callee, const char* cformat_string, isize requested_size, Allocator* allocator, ...);
+>>>>>>> Stashed changes
 
         inline Out_Of_Memory_handler_Function* out_of_memory_hadler_ptr()
         {
@@ -243,6 +256,46 @@ namespace jot
     
     using memory_globals::default_allocator;
     using memory_globals::scratch_allocator;
+    
+    template <typename T> constexpr 
+    T && move(T* val) noexcept 
+    { 
+        return (T &&) *val; 
+    };
+
+    template <typename T> constexpr 
+    void swap(T* a, T* b) noexcept 
+    { 
+        T copy = (T&&) *a;
+        *a = (T&&) *b;
+        *b = (T&&) copy;
+    };
+
+    
+    #ifndef SLICE_DEFINED
+        #define SLICE_DEFINED
+        template<typename T>
+        struct Slice
+        {
+            T* data = nullptr;
+            isize size = 0;
+
+            constexpr T const& operator[](isize index) const noexcept  
+            { 
+                assert(0 <= index && index < size && "index out of range"); return data[index]; 
+            }
+
+            constexpr T& operator[](isize index) noexcept 
+            { 
+                assert(0 <= index && index < size && "index out of range"); return data[index]; 
+            }
+        
+            constexpr operator Slice<const T>() const noexcept 
+            { 
+                return Slice<const T>{data, size}; 
+            }
+        };
+    #endif 
 }
 
 //this is necessary because c++...
@@ -250,6 +303,11 @@ inline void* operator new(size_t, void* ptr) noexcept;
 
 //if you are getting linker errors on this put this somewhere in your code
 //inline void* operator new(size_t, void* ptr) noexcept {return ptr;}
+
+#if defined(_MSC_VER) && defined(_DEBUG)
+   #include <crtdbg.h>
+   #include <stdarg.h>
+#endif
 
 namespace jot
 {   
@@ -289,7 +347,8 @@ namespace jot
 
         return (void*) ptr_num;
     }
-
+    
+    
     struct Aligned_Malloc_Header
     {
         uint32_t align_padding;
@@ -338,7 +397,10 @@ namespace jot
         JOT_FREE(original_ptr);
     }
     
+<<<<<<< Updated upstream
     NODISCARD
+=======
+>>>>>>> Stashed changes
     void* Malloc_Allocator::allocate(isize size, isize align, Line_Info) noexcept
     {
         assert(size >= 0 && is_power_of_two(align));
@@ -364,7 +426,6 @@ namespace jot
         return true;
     }
 
-    NODISCARD
     bool Malloc_Allocator::resize(void* allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept
     {
         assert(old_size > 0 && new_size >= 0 && is_power_of_two(align));
@@ -373,9 +434,9 @@ namespace jot
         return false;
     }
 
-    Malloc_Allocator::Stats Malloc_Allocator::get_stats() const noexcept
+    Allocator_Stats Malloc_Allocator::get_stats() const noexcept
     {
-        Stats stats = {};
+        Allocator_Stats stats = {};
         stats.name = "Malloc_Allocator";
         stats.supports_resize = false;
         stats.bytes_allocated = total_alloced;
@@ -460,6 +521,40 @@ namespace jot
 
         return out;
     }
+<<<<<<< Updated upstream
+=======
+    
+    namespace memory_globals
+    {
+        static void default_out_of_memory_handler(Line_Info callee, const char*, isize requested_size, Allocator* allocator, ...)
+        {
+            #if defined(_MSC_VER) && defined(_DEBUG)
+                using lli =  long long int;
+                Allocator_Stats stats = {0};
+                const char* alloc_name = nullptr;
+                if(allocator != nullptr)
+                    stats = allocator->get_stats();
+
+                if(stats.name == nullptr)
+                   stats.name = "<no name>";
+               
+                _CrtDbgReport(_CRT_ERROR, callee.file, (int) callee.line, callee.file,
+                    "Allocator %s ran out of memory\n"
+                    "Requested %lld B\n"
+                    "Allocator_Stats:\n"
+                    "  allocated: %lld max allocated: %lld\n"
+                    "  num allocs: %lld num frees: %lld", stats.name, (lli) requested_size, 
+                    (lli) stats.bytes_allocated, (lli) stats.max_bytes_allocated,
+                    (lli) stats.allocation_count, (lli) stats.deallocation_count);
+            #else
+                assert("Out of memory!");
+                *(const char* volatile*) 0 = "JOT_PANIC triggered! ";
+            #endif
+
+            (void) callee; (void) requested_size; (void) allocator; 
+        }
+    }
+>>>>>>> Stashed changes
 
     #ifdef ALLOC_RESIZE_EXAMPLE
     static void destroy_extra(Slice<uint8_t> slice, isize from_size);

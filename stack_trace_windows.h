@@ -16,8 +16,6 @@
 #include <imagehlp.h>
 #pragma pack( pop, before_imagehlp )
 
-#include "defines.h"
-
 namespace jot
 {
     struct Process_Module 
@@ -122,7 +120,7 @@ namespace jot
     }
     
     static
-    Array<void*> fill_stack_frames(CONTEXT context, Debug_Context* debug_context, DWORD image_type = 0, isize max_frames = cast(isize) 1 << 62)
+    Array<void*> fill_stack_frames(CONTEXT context, Debug_Context* debug_context, DWORD image_type = 0, isize max_frames = (isize) 1 << 62)
     {
         STACKFRAME64 frame = {0};
         #ifdef _M_IX86
@@ -166,7 +164,7 @@ namespace jot
             if (ok == false)
                 break;
 
-            void* addr = cast(void*) frame.AddrPC.Offset;
+            void* addr = (void*) frame.AddrPC.Offset;
             push(&frames, addr);
         }
     
@@ -192,13 +190,13 @@ namespace jot
         for(isize i = 0; i < addr_array.size; i++)
         {
             Stack_Trace_Entry entry;
-            DWORD64 address = cast(DWORD64) addr_array[i];
+            DWORD64 address = (DWORD64) addr_array[i];
             entry.address = address;
             entry.is_architectural = is_below_main;
             if (address != 0) 
             {
                 memset(symbol_info_data, '\0', total_symbol_info_size);
-                SYMBOL_INFO* symbol_info = cast(SYMBOL_INFO*) symbol_info_data;
+                SYMBOL_INFO* symbol_info = (SYMBOL_INFO*) symbol_info_data;
                 symbol_info->SizeOfStruct = sizeof(SYMBOL_INFO);
                 symbol_info->MaxNameLen = max_name_len;
                 DWORD64 displacement = 0;
@@ -207,7 +205,7 @@ namespace jot
                 if (symbol_info->Name[0] != '\0')
                 {
                     isize actual_size = UnDecorateSymbolName(symbol_info->Name, symbol_name_data, max_name_len, UNDNAME_COMPLETE);
-                    entry.source_mangled_function = own(slice(cast(char*) symbol_info->Name));
+                    entry.source_mangled_function = own(String((char*) symbol_info->Name));
 
                     if(actual_size != 0)
                     {
@@ -233,7 +231,7 @@ namespace jot
                 if (SymGetLineFromAddr64(debug_context->process, address, &offset_from_symbol, &line)) 
                 {
                     entry.source_line = line.LineNumber;
-                    entry.source_file = own(slice(line.FileName));
+                    entry.source_file = own(String(line.FileName));
                 }
             }
 
@@ -263,7 +261,7 @@ namespace jot
         Array<void*> addr_array;
         resize(&addr_array, max_levels);
         DWORD hash;
-        isize frames = CaptureStackBackTrace(cast(DWORD) skip_levels, cast(DWORD) size(addr_array), data(&addr_array), &hash);
+        isize frames = CaptureStackBackTrace((DWORD) skip_levels, (DWORD) size(addr_array), data(&addr_array), &hash);
         resize(&addr_array, frames);
     
         return process_stack_trace(debug_context, slice(&addr_array));
@@ -338,5 +336,3 @@ namespace jot
         virtual ~Windows_Stack_Tracer() override {}
     };
 }
-
-#include "undefs.h"

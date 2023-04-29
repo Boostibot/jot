@@ -400,7 +400,7 @@ namespace jot
             return true;
         }
 
-        template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals> NODISCARD
+        template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
         void panic_out_of_memory(Hash_Table<Key, Value, hash, equals> const& table, Line_Info info, isize requested, const char* on_op)
         {
             const char* alloc_name = table._allocator->get_stats().name; 
@@ -570,7 +570,7 @@ namespace jot
         return true;
     }
     
-    template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals> NODISCARD
+    template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
     bool reserve_entries_failing(Hash_Table<Key, Value, hash, equals>* table, isize to_fit, Hash_Table_Growth growth = {}) noexcept
     {
         if(to_fit <= table->_entries_capacity)
@@ -584,7 +584,7 @@ namespace jot
         return hash_table_internal::set_entries_capacity(table, new_capacity);
     }
 
-    template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals> NODISCARD
+    template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
     bool rehash_failing(Hash_Table<Key, Value, hash, equals>* table, isize to_size, uint64_t seed, Hash_Table_Growth growth = {}) noexcept
     {
         isize rehash_to = growth.jump_table_base_size;

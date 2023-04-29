@@ -17,7 +17,11 @@ namespace jot
     }
 }
 
-namespace jot::tests::hash_table
+namespace jot
+{
+namespace tests
+{
+namespace hash_table
 {
     template <typename Table> 
     bool value_matches_at(Table const& table, typename Table::Key const& key, typename Table::Value const& value)
@@ -683,4 +687,6 @@ namespace jot::tests::hash_table
         isize memory_after = default_allocator()->get_stats().bytes_allocated;
         TEST(memory_before == memory_after);
     }
+}
+}
 }

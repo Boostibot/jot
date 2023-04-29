@@ -1,16 +1,17 @@
 #pragma once
 
 #include <random>
+#include "_test.h"
 #include "hash_table.h"
 #include "string_hash.h"
-#include "_test.h"
 #include "slot_array.h"
 
-namespace jot::tests::slot_array
+namespace jot
 {
-    template <typename T>
-    void print_slot_array(Slot_Array<T> const& array);
-    
+namespace tests
+{
+namespace slot_array
+{
     template <typename T>
     static void test_insert_remove_get(Static_Array<T, 10> elems)
     {
@@ -103,8 +104,8 @@ namespace jot::tests::slot_array
 
         std::random_device rd;
         
-        constexpr isize OP_INSERT = 0;
-        constexpr isize OP_REMOVE = 1;
+        static const isize OP_INSERT = 0;
+        static const isize OP_REMOVE = 1;
 
         std::discrete_distribution<unsigned> op_distribution({75, 25});
         std::uniform_int_distribution<unsigned> index_distribution(0);
@@ -220,78 +221,5 @@ namespace jot::tests::slot_array
             stress_test(print);
     }
 }
-
-#if 0
-namespace jot::tests::slot_array
-{
-    template <typename T>
-    void print_slot_array(Slot_Array<T> const& array)
-    {
-        using namespace slot_array_internal;
-        auto print_esc_at = [&](isize i, isize offset){
-            if(i != 0) print(", ");
-
-            isize curr = array._slots[i*SLOT_SIZE + offset];
-            if(curr == (uint32_t) -1)
-                print(" .");
-            else
-                print(Padded_Int_Format{curr, 2, ' '});
-        };  
-
-        println("{");
-        println("    size:        {}", array._size);
-        println("    capacity:    {}", array._capacity);
-
-        print  ("                  ");
-        for(isize i = 0; i < array._capacity; i++)
-        {
-            if(i != 0) print(", ");
-            print(Padded_Int_Format{i, 2, ' '});
-        }
-        println();
-
-        print  ("    items:       [");
-        for(isize i = 0; i < array._capacity; i++)
-        {
-            if(i != 0)
-                print(", ");
-
-            uint32_t index = array._slots[i*SLOT_SIZE + ITEM];
-            if(index == (uint32_t) -1)
-                print("__");
-            else
-                print(Padded_Int_Format{array._data[index], 2, ' '});
-
-        }
-        print("]\n");
-        
-        print  ("    slot items:  [");
-        for(isize i = 0; i < array._capacity; i++)
-            print_esc_at(i, ITEM);
-        print("]\n");
-        
-        print  ("    slot owners: [");
-        for(isize i = 0; i < array._capacity; i++)
-            print_esc_at(i, OWNER);
-        print("]\n");
-        
-        print  ("    slot nexts:  [");
-        for(isize i = 0; i < array._capacity; i++)
-            print_esc_at(i, NEXT);
-        print("]\n");
-
-        print  ("    free list:   ");
-        uint32_t curr = array._free_list;
-        while(curr != -1)
-        {
-            print(curr);
-            //print_slot(array._slots + curr*SLOT_SIZE);
-            print(" -> ");
-            curr = array._slots[curr*SLOT_SIZE + NEXT];
-        }
-        print("-1\n");
-        println("}");
-    }
-
 }
-#endif
+}

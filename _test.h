@@ -5,7 +5,9 @@
 #include "string.h"
 #include "format.h"
 
-namespace jot::tests
+namespace jot
+{
+namespace tests
 {
     namespace test_internal
     {
@@ -144,6 +146,7 @@ namespace jot::tests
             ? (println("test failed: "#cond " at: " __FILE__ __FUNCTION__ " line ", __LINE__), *(int*) 0 = 1, (void) 0)    \
             : (void) 0) \
 
+}
 }
 
 namespace jot

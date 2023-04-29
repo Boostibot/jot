@@ -68,7 +68,11 @@ namespace jot
     ///Converts handle to element index
     template<class T> Bucket_Index to_index(Bucket_Array<T> const& bucket_array, Handle slot) noexcept;
     ///Converts element index to handle
+<<<<<<< Updated upstream
     template<class T> Handle to_slot(Bucket_Array<T> const& bucket_array, isize index) noexcept;
+=======
+    template<class T> Handle to_handle(Bucket_Array<T> const& bucket_array, isize index) noexcept;
+>>>>>>> Stashed changes
 
     ///returns an item given its handle
     template<class T> T const& get(Bucket_Array<T> const& bucket_array, Handle handle) noexcept;

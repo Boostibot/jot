@@ -5,7 +5,11 @@
 #include "string_hash.h"
 #include "hash_index.h"
 
-namespace jot::tests::hash_index
+namespace jot
+{
+namespace tests
+{
+namespace hash_index
 {
     void test_insert_remove_get_set()
     {
@@ -82,4 +86,6 @@ namespace jot::tests::hash_index
         isize mem_after = default_allocator()->get_stats().bytes_allocated;
         TEST(mem_before == mem_after);
     }
+}
+}
 }

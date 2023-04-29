@@ -1,60 +1,52 @@
 #pragma once
-#include <memory>
+#include <stdint.h>
+
+inline void* operator new(size_t, void* ptr) noexcept;
 
 namespace jot
 {
-    
     template <typename T>
     T make_def_value() noexcept
     {
         return T();
     }
 
-    //Struct similar to std::unique_ptr which calls deleter on the
-    // stored value in destructor. Takes Is def_value function instead of value
-    // because not all types will be constxepr constructible. Is move only
+    ///Calls deleter on the stored value in destructor
     template <typename T, void (*deleter)(T), T (*def_value)() = make_def_value<T>>
     struct Resource
     {
+        //@NOTE: Takes def_value function instead of value
+        // because not all types are be constxepr constructible
         T val = def_value();
         
         Resource() noexcept {};
-        Resource(T val) noexcept
-            : val(move(&val)) {}
-
+        Resource(T val) noexcept : val((T&&) val) {}
         Resource(Resource const&) noexcept = delete;
-        Resource(Resource&& other) noexcept 
-        {
-            *this = (Resource&&) other;
+        Resource(Resource&& other) noexcept : val((T&&) other.val)
+        { 
+            other.val = def_value();
         }
         
+        ~Resource() noexcept
+        {
+            deleter((T&&) val);
+        }
+
         Resource& operator=(Resource const&) noexcept = delete;
         Resource& operator=(Resource&& other) noexcept 
         {
-            T temp = move(&other.val);
-            other.val = move(&this->val);
-            this->val = move(&temp);
+            T temp = (T&&) other.val;
+            other.val = (T&&) val;
+            val = (T&&) temp;
             return *this;
-        }
-
-        ~Resource() noexcept
-        {
-            deleter(move(&val));
         }
         
         operator T() noexcept {
             return val;    
         }
-
-        static T&& move(T* ptr)
-        {
-            return (T&&) *ptr;
-
-        }
     };
     
-    //use like so:
-    #if 0
+    #ifdef RESOURCE_EXAMPLE
     struct Shader
     {
         static void program_delete(GLuint program) 

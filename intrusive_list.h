@@ -4,6 +4,7 @@
 // on every mutating function
 #if 0
 #define INTRUSIVE_LIST_PEDANTIC
+#define INTRUSIVE_LIST_SINGLE
 #endif
 
 namespace jot
@@ -16,51 +17,67 @@ namespace jot
 
     //Works on all nodes that have the following structure:
     // (1) `next` ptr
-    // (2) static constexpr bool `is_bidirectional`
     // (3) `prev` ptr* 
-    //     * prev ptr required only if is_bidirectional is set to true
+    //     * prev ptr required only if INTRUSIVE_LIST_SINGLE is not set
     #if 0
     struct Example_Node
     {
         int my_data1 = 0;
         int my_data2 = 0;
 
-        static constexpr bool is_bidirectional = true;
         Example_Node* next = nullptr;
         Example_Node* prev = nullptr;
     };
     #endif
-    
-    template<typename Node>
-    struct Chain
-    {
-        Node* first = nullptr;
-        Node* last = nullptr;
-    };
 
-    template<typename Node> constexpr
-    bool is_isolated(Node node)
+    //the single linked version is postfixed with sl (Single Linked)
+    // and the double linked with dl (Double Linked)
+    #ifdef INTRUSIVE_LIST_SINGLE
+        #define is_isolated_xx          is_isolated_sl
+        #define is_connected_xx         is_connected_sl
+        #define _check_is_connected_xx  _check_is_connected_dl
+        
+        #define link_chain_xx   link_chain_sl
+        #define unlink_chain_xx unlink_chain_sl
+        #define extract_node_xx extract_node_sl
+        #define insert_node_xx  insert_node_sl
+    #else
+        #define is_isolated_xx          is_isolated_dl
+        #define is_connected_xx         is_connected_dl
+        #define _check_is_connected_xx  _check_is_connected_dl
+        
+        #define link_chain_xx   link_chain_dl
+        #define unlink_chain_xx unlink_chain_dl
+        #define extract_node_xx extract_node_dl
+        #define insert_node_xx  insert_node_dl
+    #endif
+
+    template<typename Node>
+    bool is_isolated_xx(Node const& node)
     {
-        if constexpr(Node::is_bidirectional)
+        #ifndef INTRUSIVE_LIST_SINGLE
             return node.next == nullptr && node.prev == nullptr;
-        else
+        #else
             return node.next == nullptr;
+        #endif
     }
 
-    template<typename Node> constexpr
-    bool is_isolated(const Node first, const Node last)
+    template<typename Node>
+    bool is_isolated_xx(Node const& first, Node const& last)
     {
-        if constexpr(Node::is_bidirectional)
+        
+        #ifndef INTRUSIVE_LIST_SINGLE
             return last.next == nullptr && first.prev == nullptr;
-        else
+        #else
             return last.next == nullptr;
+        #endif
     }
 
     //Checks if last node is reachable from first.
     // null - null is also valid chain but any other combination
     // of null and not null is not
-    template<typename Node> constexpr
-    bool is_connected(const Node* first, const Node* last)
+    template<typename Node>
+    bool is_connected_xx(const Node* first, const Node* last)
     {
         const Node* current = first;
         const Node* prev = nullptr;
@@ -74,11 +91,11 @@ namespace jot
         return prev == last;
     }
     
-    template<typename Node> constexpr
-    bool _check_is_connected(const Node* first, const Node* last) noexcept
+    template<typename Node>
+    bool _check_is_connected_xx(const Node* first, const Node* last) noexcept
     {
         #ifdef INTRUSIVE_INDEX_LIST_PEDANTIC
-        return is_connected(first, last, arr);
+        return is_connected_xx(first, last, arr);
         #else
         (void) first; (void) last;
         return true;
@@ -88,11 +105,11 @@ namespace jot
     //Adds chain between (and including) first_inserted - last_inserted between before
     // and after after. Both before and after can be nullptr in that case they are treated 
     // as the start/end of the list and properly handled
-    template<typename Node> constexpr
-    void link_chain(Node* before, Node* first_inserted, Node* last_inserted, Node* after) noexcept
+    template<typename Node>
+    void link_chain_xx(Node* before, Node* first_inserted, Node* last_inserted, Node* after) noexcept
     {
         assert(first_inserted != nullptr && last_inserted != nullptr && "must not be null");
-        assert(is_isolated(*first_inserted, *last_inserted) && "must be isolated");
+        assert(is_isolated_xx(*first_inserted, *last_inserted) && "must be isolated");
         
         last_inserted->next = after;
         if(before != nullptr)
@@ -101,22 +118,20 @@ namespace jot
             before->next = first_inserted;
         }
             
-        if constexpr(Node::is_bidirectional)
-        {
+        #ifndef INTRUSIVE_LIST_SINGLE
             first_inserted->prev = before;
             if(after != nullptr)
             {
                 assert(after->prev == before && "before and after must be adjecent!");
                 after->prev = last_inserted;
             }
-        }
+        #endif
     }
-
     //Removes a chain between (and including) first_inserted - last_inserted.
     // Both before and after can be nullptr in that case they are treated as start/end of
     // list and properly handled
-    template<typename Node> constexpr
-    void unlink_chain(Node* before, Node* first_inserted, Node* last_inserted, Node* after) noexcept
+    template<typename Node>
+    void unlink_chain_xx(Node* before, Node* first_inserted, Node* last_inserted, Node* after) noexcept
     {
         assert(first_inserted != nullptr && last_inserted != nullptr && "must not be null");
 
@@ -126,85 +141,88 @@ namespace jot
             assert(before->next == first_inserted && "before and first_inserted must be adjecent!");
             before->next = after;
         }
-
-        if constexpr(Node::is_bidirectional)
-        {
+        
+        #ifndef INTRUSIVE_LIST_SINGLE
             first_inserted->prev = nullptr;
             if(after != nullptr)
             {
                 assert(after->prev == last_inserted && "last_inserted and after must be adjecent!");
                 after->prev = before;
             }
-        }
+        #endif
     }
 
     //Unlinks node after extract_after (which has to be what) properly unlinking it from the
     // chain and returning it. extract_after can be nullptr in which case it is treated as the start 
     // of the chain and what has to be the first node. what cannot be nullptr
-    template<typename Node> constexpr
-    Node* extract_node(Chain<Node>* from, Node* extract_after, Node* what) noexcept
+    template<typename Node>
+    Node* extract_node_xx(Node** first, Node** last, Node* extract_after, Node* what) noexcept
     {
-        assert(_check_is_connected(from->first, from->last));
+        assert(_check_is_connected_xx(*first, *last));
         assert(what != nullptr && "cannot be nullptr");
-        assert(from->first != nullptr && "cant extract from empty chain");
+        assert(*first != nullptr && "cant extract from empty chain");
 
         //if is start of chain
         if(extract_after == nullptr)
-            from->first = what->next;
+            *first = what->next;
         else
             assert(extract_after->next == what);
             
         //if is end of chain
-        if(what == from->last)
-            from->last = extract_after;
+        if(what == *last)
+            *last = extract_after;
 
-        unlink_chain(extract_after, what, what, what->next);
+        unlink_chain_xx(extract_after, what, what, what->next);
             
-        if(from->first == nullptr || from->last == nullptr)
+        if(*first == nullptr || *last == nullptr)
         {
-            from->first = nullptr;
-            from->last = nullptr;
+            *first = nullptr;
+            *last = nullptr;
         }
         
-        assert(_check_is_connected(from->first, from->last));
+        assert(_check_is_connected_xx(*first, *last));
         return what;
     }
 
     //Links what node after insert_after properly linking it to the rest of the chain.
     // if the insert after is nullptr it is inserted as the first node to the chain.
     // what cannot be nullptr and must be isolated node (not part of any chain)
-    template<typename Node> constexpr
-    void insert_node(Chain<Node>* to, Node* insert_after, Node* what) noexcept
+    template<typename Node>
+    void insert_node_xx(Node** first, Node** last, Node* insert_after, Node* what) noexcept
     {
-        assert(_check_is_connected(to->first, to->last));
+        assert(_check_is_connected_xx(*first, *last));
         assert(what != nullptr && "cannot be nullptr");
-        assert(is_isolated(*what) && "must be isolated");
+        assert(is_isolated_xx(*what) && "must be isolated");
 
-        if(to->first == nullptr)
+        if(*first == nullptr)
         {
             assert(insert_after == nullptr);
-            to->first = what;
-            to->last = what;
+            *first = what;
+            *last = what;
             return;
         }
 
         //if is start of chain
         if(insert_after == nullptr)
         {
-            link_chain<Node>(nullptr, what, what, to->first);
-            to->first = what;
+            link_chain_xx<Node>(nullptr, what, what, *first);
+            *first = what;
         }
         //if is end of chain
-        else if(insert_after == to->last)
+        else if(insert_after == *last)
         {
-            link_chain<Node>(insert_after, what, what, nullptr);
-            to->last = what;
+            link_chain_xx<Node>(insert_after, what, what, nullptr);
+            *last = what;
         }
         else
         {
-            link_chain(insert_after, what, what, insert_after->next);
+            link_chain_xx<Node>(insert_after, what, what, insert_after->next);
         }
         
-        assert(_check_is_connected(to->first, to->last));
+        assert(_check_is_connected_xx(*first, *last));
     }
 }
+
+#ifdef INTRUSIVE_LIST_SINGLE
+    #undef INTRUSIVE_LIST_SINGLE
+#endif

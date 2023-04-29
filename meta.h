@@ -1,11 +1,11 @@
 #pragma once
 namespace meta
 {
-    //returns compiler specific (but very readable!) name at compile time
+    ///returns compiler specific (but very readable!) name at compile time
     template<typename T> constexpr
     const char* type_name() noexcept ;
 
-    //takes a type declared in a namespace and returns that namespace (is useful for macros that tell where they are)
+    ///takes a type declared in a namespace and returns that namespace (is useful for macros that tell where they are)
     template<typename Dummy_Struct> constexpr
     const char* namespace_name() noexcept;
 
@@ -24,7 +24,10 @@ namespace meta
     //  int
     //  std::basic_iostream<char>
     //  meta::String
+}
 
+namespace meta
+{
     #if defined(__clang__)
         #define __FUNCTION_NAME__ __PRETTY_FUNCTION__
     #elif defined(__GNUC__)

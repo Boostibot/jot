@@ -74,6 +74,8 @@ namespace jot
         //special case for string literals so that we dont instantiate any templates.
         //(Each size of a string literal is different type as for example "hello" char[6])
         Format_Adaptor(const char* val) noexcept;
+        Format_Adaptor(String const& val) noexcept;
+        Format_Adaptor(Mutable_String const& val) noexcept;
     };
 
     //Since we need to enforce that all types are type erased through Format_Adaptor we cannot use variadics. 
@@ -433,52 +435,22 @@ namespace jot
     
     template <> struct Formattable<bool>
     {
-        static void format(String_Builder* into, bool val)
-        {
-            push_multiple(into, val ? "true" : "false");
-        }
+        static void format(String_Builder* into, bool val) { push_multiple(into, val ? "true" : "false"); }
     };
-    
-    //Inheriting tells the format function that this type acts as format string. 
-    //All types inheriting this must have a format_string(T const&) -> String function
-    struct Is_String_Format {};
 
-    template <> struct Formattable<String> : Is_String_Format
+    template <> struct Formattable<String>
     {
         static void format(String_Builder* into, String str) { push_multiple(into, str);}
-        static String format_string(String str) noexcept     { return str;}
     };
     
-    template <> struct Formattable<Mutable_String> : Is_String_Format
+    template <> struct Formattable<Mutable_String>
     {
         static void format(String_Builder* into, Mutable_String str) { push_multiple(into, str);}
-        static String format_string(Mutable_String str) noexcept     { return str;}
-    };
-    
-    template <> struct Formattable<const char*> : Is_String_Format
-    {
-        static void format(String_Builder* into, const char* str) { push_multiple(into, str);}
-        static String format_string(const char* str) noexcept     { return str;}
-    };
-
-    template <isize N> struct Formattable<char [N]> : Is_String_Format
-    {
-        static
-        void format(String_Builder* into, const char (&arr)[N])
-        {
-            String str = {arr, N};
-            Formattable<String>::format(into, str);
-        }
-
-        static String format_string(const char* str) noexcept      { return str;}
     };
 
     template <> struct Formattable<char>
     {
-        static void format(String_Builder* into, char c)
-        {
-            push(into, c);
-        }
+        static void format(String_Builder* into, char c) { push(into, c); }
     };
     
     template <typename T> struct Formattable<Slice<T>>
@@ -517,14 +489,6 @@ namespace jot
             T* ed = (T*) adaptor._data;
             Formattable<T>::format(into, *ed);
         }
-        
-        template <typename T>
-        static String format_string_adaptor(Format_Adaptor adaptor)
-        {
-            T* ed = (T*) adaptor._data;
-            String format_str = Formattable<T>::format_string(*ed);
-            return format_str;
-        }
 
         static void cstring_format_adaptor(String_Builder* into, Format_Adaptor adaptor)
         {
@@ -537,6 +501,11 @@ namespace jot
             String str = (const char*) adaptor._data;
             return str;
         }
+        
+        static String string_format_string_adaptor(Format_Adaptor adaptor)
+        {
+            return *(String*) adaptor._data;
+        }
     }
     
     template<typename T>
@@ -544,9 +513,6 @@ namespace jot
     {
         _data = (void*) &val;
         _format = format_internal::format_adaptor<T>;
-        constexpr bool is_fmt_string = __is_base_of(Is_String_Format, Formattable<T>);
-        if constexpr(is_fmt_string)
-            _format_string = format_internal::format_string_adaptor<T>;
     }
         
     Format_Adaptor::Format_Adaptor(const char* val) noexcept
@@ -554,6 +520,20 @@ namespace jot
         _data = (void*) val;
         _format = format_internal::cstring_format_adaptor;
         _format_string = format_internal::cstring_format_string_adaptor;
+    }
+    
+    Format_Adaptor::Format_Adaptor(String const& val) noexcept
+    {
+        _data = (void*) &val;
+        _format = format_internal::format_adaptor<String>;
+        _format_string = format_internal::string_format_string_adaptor;
+    }
+    
+    Format_Adaptor::Format_Adaptor(Mutable_String const& val) noexcept
+    {
+        _data = (void*) &val;
+        _format = format_internal::format_adaptor<Mutable_String>;
+        _format_string = format_internal::string_format_string_adaptor;
     }
 
     static void concat_adapted_into(String_Builder* into, Slice<Format_Adaptor> adapted)
@@ -714,16 +694,12 @@ namespace jot
             return setlocale(LC_ALL, ".UTF-8") != NULL;
     }
 
-    namespace {
-        inline const static bool _locale_setter = set_utf8_locale(true);
+    inline bool _auto_set_utf8_locale()
+    {
+        static bool _locale_setter = set_utf8_locale(true);
+        return _locale_setter;
     }
-    #endif // !SET_UTF8_LOCALE
-    
-    //inline String_Builder_Panic make_panic(Line_Info line_info, FORMAT_ADAPTOR_10_ARGS_DECL) noexcept
-    //{
-    //    return String_Builder_Panic(line_info, format(FORMAT_ADAPTOR_10_ARGS));
-    //}
-    
-}
 
-#include "undefs.h"
+    static bool _locale_setter = _auto_set_utf8_locale();
+    #endif // !SET_UTF8_LOCALE
+}

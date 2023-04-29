@@ -8,14 +8,21 @@
 #include "string_hash.h"
 #include "bucket_array.h"
 #include "weak_bucket_array.h"
+<<<<<<< Updated upstream
 #include "format.h"
 #include "benchmark.h"
+=======
+#include "slot_array.h"
+>>>>>>> Stashed changes
 #include "hash_index.h"
+#include "benchmark.h"
 
 #define BENCHMARK_STD false
 #define GIVEN_TIME 500
 
-namespace jot::benchmarks
+namespace jot
+{
+namespace benchmarks
 {
     //Adds batch size elements to a newly constructed container. Reporst time per add
     static void benchmark_cotainer_add();
@@ -47,6 +54,7 @@ namespace jot::benchmarks
     //Reports time per batch ( (insert + insert + remove)*N )
     static void benchmark_cotainer_insert_remove_sections();
 }
+}
 
 namespace jot
 {
@@ -60,7 +68,9 @@ namespace jot
     };
 }
 
-namespace jot::benchmarks
+namespace jot
+{
+namespace benchmarks
 {
     using Random_Generator = std::mt19937;
     using Random_Device = std::random_device;
@@ -376,7 +386,7 @@ namespace jot::benchmarks
                     }
                 
                     isize removed = added_keys[--removed_i];
-                    map.extract(removed);
+                    map.erase(removed);
                     do_no_optimize(map);
                     read_write_barrier();
                     return true;
@@ -493,8 +503,8 @@ namespace jot::benchmarks
                 }, batch_size);
             
                 res_unordered_map = benchmark(GIVEN_TIME, [&]{
-                    for(auto [key, val] : map)
-                        sum += val;
+                    for(auto const& entry : map)
+                        sum += entry.second;
                     do_no_optimize(map);
                     read_write_barrier();
                 
@@ -825,7 +835,7 @@ namespace jot::benchmarks
                     {
                         map.insert_or_assign(counter, counter);
                         map.insert_or_assign(counter + 1, counter + 1);
-                        map.extract(counter);
+                        map.erase(counter);
                         counter += 2;
                     }
                     do_no_optimize(map);
@@ -1101,7 +1111,7 @@ namespace jot::benchmarks
                     
                         isize from = i % 2 == 0 ? 0 : section_size; 
                         for(isize j = 0; j < section_size; j++)
-                            map.extract(key_array[j + from]);
+                            map.erase(key_array[j + from]);
 
                         counter += 2;
                     }
@@ -1136,4 +1146,4 @@ namespace jot::benchmarks
         bench(100000, 100);
     }
 }
-
+}

@@ -4,24 +4,24 @@
   
 namespace jot
 {
-    //Allocates lineary from fixed buffer placing 8 byte headers in front of each allocation.
-    //
-    //Deallocates from the back of the buffer (stack) keeping data hot. When runs out of memory
-    // deallocates from the start and wraps around then behaves like a stack again. 
-    // this is important bcause of "snaking": when we allocate in patern of a b a b a b... such that 
-    // before each new alloaction of a or b we deallocate the previous data the stack pointer keeps advancing
-    // forward even though we are holding on to just two allocations at any given time leaving giant bubble in the back.
-    // Wrapping around "pops" the empty space bubble an enabling it to be reused.
-    //
-    //Headers allow this allocator to traverse the allocations in both directions which is used for deallocation
-    // from the font and to potentially resize blocks that arent necessarily at the end of the stack.
-    // 
-    //This allocator is a good choice for almost-general-purpose scratch allocator. Its is only about
-    // 50% slower than arena allocator without touching the data. The fact that this reuses memory  
-    // keeps the memory hot which makes it with touching data alot faster than 
-    // arena would be particualrly for short term stack order allocations/frees.
+    ///Allocates lineary from fixed buffer placing 8 byte headers in front of each allocation.
     struct Stack_Ring_Allocator : Allocator
     {
+        //Deallocates from the back of the buffer (stack) keeping data hot. When runs out of memory
+        // deallocates from the start and wraps around then behaves like a stack again. 
+        // this is important bcause of "snaking": when we allocate in patern of a b a b a b... such that 
+        // before each new alloaction of a or b we deallocate the previous data the stack pointer keeps advancing
+        // forward even though we are holding on to just two allocations at any given time leaving giant bubble in the back.
+        // Wrapping around "pops" the empty space bubble an enabling it to be reused.
+        //
+        //Headers allow this allocator to traverse the allocations in both directions which is used for deallocation
+        // from the font and to potentially resize blocks that arent necessarily at the end of the stack.
+        // 
+        //This allocator is a good choice for almost-general-purpose scratch allocator. Its is only about
+        // 50% slower than arena allocator without touching the data. The fact that this reuses memory  
+        // keeps the memory hot which makes it with touching data alot faster than 
+        // arena would be particualrly for short term stack order allocations/frees.
+
         uint8_t* buffer_from = nullptr;
         uint8_t* buffer_to = nullptr;
 
@@ -375,9 +375,9 @@ namespace jot
         }
         
         virtual
-        Stats get_stats() const noexcept override
+        Allocator_Stats get_stats() const noexcept override
         {
-            Stats stats = {};
+            Allocator_Stats stats = {};
             stats.name = "Stack_Ring_Allocator";
             stats.supports_resize = true;
             stats.parent = parent;
