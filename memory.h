@@ -4,13 +4,6 @@
 #include <stdint.h>
 #include <assert.h>
 #include <string.h>
-<<<<<<< Updated upstream
-
-#ifndef NODISCARD
-    #define NODISCARD [[nodiscard]]
-#endif
-=======
->>>>>>> Stashed changes
 
 #ifndef JOT_MALLOC
     #include <stdlib.h>
@@ -119,34 +112,6 @@ namespace jot
         static constexpr int64_t GIBI_BYTE = (int64_t) 1 << 30;
         static constexpr int64_t TEBI_BYTE = (int64_t) 1 << 40;
     }
-<<<<<<< Updated upstream
-    
-    template <typename T> constexpr 
-    T && move(T* val) noexcept 
-    { 
-        return (T &&) *val; 
-    };
-
-    template <typename T> constexpr 
-    void swap(T* a, T* b) noexcept 
-    { 
-        T copy = (T&&) *a;
-        *a = (T&&) *b;
-        *b = (T&&) copy;
-    };
-
-    #ifndef _MSC_VER
-        #define __FUNCTION__ __func__
-    #endif
-
-    struct Line_Info
-    {
-        const char* file = "";
-        const char* func = "";
-        ptrdiff_t line = -1;
-    };
-    
-    #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
     
     #ifndef SLICE_DEFINED
         #define SLICE_DEFINED
@@ -172,26 +137,13 @@ namespace jot
             }
         };
     #endif 
-=======
->>>>>>> Stashed changes
 
     namespace memory_globals
     {
         using Out_Of_Memory_handler_Function = void(*)(Line_Info callee, const char* cformat, isize requested_size, Allocator* requested_from, ...);
-<<<<<<< Updated upstream
-        
-        static void default_out_of_memory_handler(Line_Info, const char*, isize, Allocator*, ...)
-        {
-            assert("Out of memory!");
-            #ifndef JOT_MALLOC
-                *(const char* volatile*) 0 = "JOT_PANIC triggered! ";
-            #else
-                abort();
-            #endif
-        }
-=======
+
         static void default_out_of_memory_handler(Line_Info callee, const char* cformat_string, isize requested_size, Allocator* allocator, ...);
->>>>>>> Stashed changes
+
 
         inline Out_Of_Memory_handler_Function* out_of_memory_hadler_ptr()
         {
@@ -397,10 +349,6 @@ namespace jot
         JOT_FREE(original_ptr);
     }
     
-<<<<<<< Updated upstream
-    NODISCARD
-=======
->>>>>>> Stashed changes
     void* Malloc_Allocator::allocate(isize size, isize align, Line_Info) noexcept
     {
         assert(size >= 0 && is_power_of_two(align));
@@ -521,8 +469,6 @@ namespace jot
 
         return out;
     }
-<<<<<<< Updated upstream
-=======
     
     namespace memory_globals
     {
@@ -531,7 +477,6 @@ namespace jot
             #if defined(_MSC_VER) && defined(_DEBUG)
                 using lli =  long long int;
                 Allocator_Stats stats = {0};
-                const char* alloc_name = nullptr;
                 if(allocator != nullptr)
                     stats = allocator->get_stats();
 
@@ -554,7 +499,6 @@ namespace jot
             (void) callee; (void) requested_size; (void) allocator; 
         }
     }
->>>>>>> Stashed changes
 
     #ifdef ALLOC_RESIZE_EXAMPLE
     static void destroy_extra(Slice<uint8_t> slice, isize from_size);

@@ -24,7 +24,7 @@ namespace jot
         uint32_t _buckets_capacity = 0; 
         uint32_t _size = 0;      
         uint32_t _capacity = 0;  
-        uint32_t _first_free = -1;
+        uint32_t _first_free = (uint32_t) -1;
         uint32_t _handle_offset = 0;
 
         static_assert(sizeof(T) >= sizeof(uint32_t), "Item must be big enough!");
@@ -68,11 +68,7 @@ namespace jot
     ///Converts handle to element index
     template<class T> Bucket_Index to_index(Bucket_Array<T> const& bucket_array, Handle slot) noexcept;
     ///Converts element index to handle
-<<<<<<< Updated upstream
-    template<class T> Handle to_slot(Bucket_Array<T> const& bucket_array, isize index) noexcept;
-=======
     template<class T> Handle to_handle(Bucket_Array<T> const& bucket_array, isize index) noexcept;
->>>>>>> Stashed changes
 
     ///returns an item given its handle
     template<class T> T const& get(Bucket_Array<T> const& bucket_array, Handle handle) noexcept;

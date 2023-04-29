@@ -1,288 +1,248 @@
 ﻿#pragma once
 
 #include "memory.h"
-#include "hash.h"
-#include "array.h"
-#include <string.h>
 
-#define REHASH_AT_FULLNESS 2
-
-using hash_int_t = uint64_t;
-hash_int_t hash_index(hash_int_t index)
-{
-    //return jot::hash_32(index);
-    return jot::hash_64(index);
-}
+//A set of functions for creating lookup hashes into tables. These are just the bare jump tables that can be found
+// in evey hash table implementation and nothing more. This is great if have wide tables and need to hash by mutilple different colums.
+// These hash indeces are ultra fast as well. For more info see example at the end of the file.
 
 namespace jot
 {
-
-    struct Hash64_Entry
+    template<typename hash_t>
+    struct Hash_Index
     {
-        hash_int_t hash;
-        hash_int_t key;
+        hash_t entry;
+        hash_t hash;
     };
 
-    struct Hash_Inline
+    template<typename hash_t, typename Fn>
+    Hash_Index<hash_t> find_hash(const hash_t* indeces, isize indeces_size, hash_t hash, const Fn compare_at_i) noexcept
     {
-        Hash64_Entry* _data = nullptr;
-        Allocator* _allocator = default_allocator();
-        uint32_t _capacity = 0;
-        uint32_t _size = 0;
-        uint32_t _hash_collisions = 0;
-        uint32_t _removed_count = 0;
-        bool _is_multiplicit = false;
+        if(indeces_size <= 0)
+            return Hash_Index<hash_t>{-1, -1};
 
-        ~Hash_Inline()
+        assert(is_power_of_two(indeces_size));
+        hash_t mask = (hash_t) indeces_size - 1;
+        hash_t i = hash & mask;
+        for(; indeces[i] > 0; i = (i + 1) & mask)
         {
-            if(_data != nullptr)
-                _allocator->deallocate(_data, _capacity*sizeof(Hash64_Entry), 8, GET_LINE_INFO());
+            hash_t at = indeces[i] - 2;
+            if(compare_at_i(at))
+                return Hash_Index<hash_t>{at, i};
         }
-    };
-    
 
-    isize size(Hash_Inline const& hash) noexcept;
-    isize capacity(Hash_Inline const& hash) noexcept;
-    bool is_invariant(Hash_Inline const& hash) noexcept;
-    bool is_multiplicit(Hash_Inline const& hash) noexcept;
-    isize hash_collisions(Hash_Inline const& hash) noexcept;
-
-    hash_int_t set(Hash_Inline* table, hash_int_t hash, hash_int_t key);
-    hash_int_t get(Hash_Inline const& table, hash_int_t hash, hash_int_t if_not_found) noexcept;
-    hash_int_t find(Hash_Inline const& table, hash_int_t hash) noexcept;
-
-    hash_int_t insert(Hash_Inline* table, hash_int_t hash, hash_int_t key);
-    bool remove(Hash_Inline* table, hash_int_t hash) noexcept;
-    void grow_if_overfull(Hash_Inline* table);
-    isize rehash_failing(Hash_Inline* hash, isize new_capacity) noexcept;
-    void rehash(Hash_Inline* hash, isize new_capacity);
-
-    isize size(Hash_Inline const& hash) noexcept
-    {
-        return hash._size;
-    }
-    
-    isize capacity(Hash_Inline const& hash) noexcept
-    {
-        return hash._capacity;
+        return Hash_Index<hash_t>{-1, -1};
     }
 
-    bool is_invariant(Hash_Inline const& hash) noexcept
+    template<typename hash_t, typename Fn>
+    Hash_Index<hash_t> find_next_hash(const hash_t* indeces, isize indeces_size, Hash_Index<hash_t> prev, const Fn compare_at_i) noexcept
     {
-        bool is_alloc_valid = (hash._allocator != nullptr);
-        bool is_power_of_two_ = is_power_of_two(hash._capacity) || hash._capacity == 0;
-        bool is_capacity_valid = hash._capacity >= hash._size && hash._capacity >= hash._removed_count;
-        bool is_data_valid = (hash._data == nullptr) == (hash._capacity == 0);
-        return is_power_of_two_ && is_alloc_valid && is_capacity_valid && is_data_valid;
-    }
-    
-    bool is_multiplicit(Hash_Inline const& hash) noexcept
-    {
-        return hash._is_multiplicit;
-    }
-    
-    isize hash_collisions(Hash_Inline const& hash) noexcept
-    {
-        return hash._hash_collisions;
-    }
+        return find_hash(indeces, indeces_size, prev.hash + 1, compare_at_i);
+    }   
 
-    isize rehash_failing(Hash_Inline* hash, isize new_capacity) noexcept
+    template<typename hash_t, typename Fn>
+    isize rehash(hash_t** indeces, isize indeces_size, isize old_capacity, isize new_capacity , Allocator* alloc, const Fn hash_at_i) noexcept
     {
-        assert(is_invariant(*hash));
-        assert(is_power_of_two(new_capacity) || new_capacity == 0);
-        assert(new_capacity >= hash->_size && new_capacity >= hash->_capacity);
-
-        const isize ALIGN = 8;
-        const isize ENTRY_SIZE = (isize) sizeof(Hash64_Entry);
+        const isize ENTRY_SIZE = (isize) sizeof(hash_t);
         
-        Hash64_Entry* old_data = hash->_data;
-        Hash64_Entry* new_data = (Hash64_Entry*) hash->_allocator->allocate(new_capacity*ENTRY_SIZE, ALIGN, GET_LINE_INFO());
-        if(new_data == nullptr)
-            return new_capacity*ENTRY_SIZE;
-
-        memset(new_data, 0, new_capacity*ENTRY_SIZE);
-
-        hash_int_t mask = new_capacity - 1;
-        uint32_t hash_collisions = 0;
-        bool is_multiplicit = false;
-        for(isize i = 0; i < hash->_capacity; i++)
+        hash_t* old_data = *indeces;
+        hash_t* new_data = nullptr;
+        if(new_capacity != 0)
         {
-            if(old_data[i].hash <= 1)
-                continue;
+            if(new_capacity <= indeces_size)
+                new_capacity = indeces_size + 1;
 
-            hash_int_t place_to = old_data[i].hash & mask;
-            //If is new slot not empty find appropriate empty slot
-            if(new_data[place_to].hash != 0)
+            if(is_power_of_two(new_capacity) == false)
             {
-                //if contains exactly the hash then it must be duplicit hash
-                if(new_data[place_to].hash == old_data[i].hash)
-                    is_multiplicit = true;
+                isize corrected = 8;
+                while(corrected < new_capacity)
+                    corrected *= 2;
 
-                //Find empty
-                isize counter = 0;
-                while(new_data[place_to].hash != 0)
-                {
-                    assert(counter ++ < hash->_capacity);
-                    place_to = (place_to + 1) & mask;
-                }
-
-                hash_collisions ++;
+                new_capacity = corrected;
             }
 
-            assert(new_data[place_to].hash == 0);
-            new_data[place_to].hash = old_data[i].hash;
-            new_data[place_to].key = old_data[i].key;
+            new_data = (hash_t*) alloc->allocate(new_capacity*ENTRY_SIZE, 8, GET_LINE_INFO());
+            if(new_data == nullptr)
+                return new_capacity*ENTRY_SIZE;
+
+            memset(new_data, 0, new_capacity*ENTRY_SIZE);
+        }
+
+        hash_t mask = (hash_t) new_capacity - 1;
+        for(isize i = 0; i < old_capacity; i++)
+        {
+            if(old_data[i] <= 1)
+                continue;
+            
+            hash_t hash = hash_at_i(old_data[i] - 2);
+            hash_t k = hash & mask;
+            isize counter = 0;
+            for(; indeces[k] > 0; k = (k + 1) & mask)
+                assert(counter ++ < old_capacity);
+
+            new_data[k] = old_data[i];
         }
 
         if(old_data != nullptr)
-            hash->_allocator->deallocate(old_data, hash->_capacity*ENTRY_SIZE, ALIGN, GET_LINE_INFO());
+            alloc->deallocate(old_data, old_capacity*ENTRY_SIZE, 8, GET_LINE_INFO());
 
-        hash->_data = new_data;
-        hash->_capacity = (uint32_t) new_capacity;
-        hash->_hash_collisions = hash_collisions;
-        hash->_is_multiplicit = is_multiplicit;
-        hash->_removed_count = 0;
-
-        assert(is_invariant(*hash));
+        *indeces = new_data;
         return 0;
     }
-    
-    void rehash(Hash_Inline* hash, isize new_capacity)
-    {
-        isize failed_bytes_requested = rehash_failing(hash, new_capacity);
-        if(failed_bytes_requested != 0)
-        {
-            memory_globals::out_of_memory_hadler()(GET_LINE_INFO(),
-                "Hash_Inline allocation failed! Attempted to allocated %t bytes from allocator %p",
-                failed_bytes_requested, hash->_allocator);
-        }
-    }
-    
-    void grow_if_overfull(Hash_Inline* table)
-    {
-        if(table->_size * REHASH_AT_FULLNESS >= table->_capacity || table->_removed_count * REHASH_AT_FULLNESS >= table->_capacity)
-        {
-            isize new_size = 0;
-            if(table->_size * REHASH_AT_FULLNESS >= table->_capacity)
-                new_size = (isize) table->_capacity * 2;
 
-            if(table->_removed_count * REHASH_AT_FULLNESS >= table->_capacity)
-                new_size = table->_capacity;
+    isize calculate_hash_growth(isize size, isize capacity) noexcept
+    {
+        const isize FILLED_DEN = 2;
+        const isize FILLED_NUM = 1;
+        const isize BASE_SIZE = 8;
+        if(size * FILLED_NUM < capacity * FILLED_DEN)
+            return capacity;
 
-            new_size = max(new_size, 8);
-            rehash(table, new_size);
-        }
+        isize new_capacity = capacity * 2;
+        new_capacity = max(new_capacity, BASE_SIZE);
+
+        return new_capacity;
     }
 
-    hash_int_t get(Hash_Inline const& table, hash_int_t hash, hash_int_t if_not_found) noexcept
+    template<typename hash_t>
+    isize insert_hash(hash_t* indeces, isize indeces_size, hash_t hash, hash_t point_to) noexcept
     {
-        assert(is_invariant(table));
-        if(hash < 2)
-            hash += 2;
+        assert(is_power_of_two(indeces_size));
+        hash_t mask = (hash_t) indeces_size - 1;
+        hash_t i = hash & mask;
+        hash_t counter = 0;
+        for(; indeces[i] > 1; i = (i + 1) & mask)
+            assert(counter ++ < indeces_size && "must not be completely full!");
 
-        if(table._capacity == 0)
-            return if_not_found;
-        
-        hash_int_t mask = (hash_int_t) table._capacity - 1;
-        isize counter = 0;
-        for(hash_int_t i = hash & mask; table._data[i].hash > 1; i = (i + 1) & mask)
-        {
-            assert(counter ++ < table._capacity);
-            if(table._data[i].hash == hash)
-                return table._data[i].key;
-        }
-
-        return if_not_found;
-    }
-
-    hash_int_t set(Hash_Inline* table, hash_int_t hash, hash_int_t key)
-    {
-        assert(is_invariant(*table));
-        if(hash < 2)
-            hash += 2;
-        
-        grow_if_overfull(table);
-
-        hash_int_t mask = (hash_int_t) table->_capacity - 1;
-        hash_int_t i = hash & mask;
-        if(table->_data[i].hash == hash)
-        {
-           table->_data[i].key = key;
-           return i;
-        }
-        
-        isize counter = 0;
-        for(; table->_data[i].hash > 1; i = (i + 1) & mask)
-            assert(counter ++ < table->_capacity);
-        
-        if(i != (hash & mask) && table->_data[i].hash != 1)
-            table->_hash_collisions ++;
-
-        table->_data[i].hash = hash;
-        table->_data[i].key = key;
-        table->_size ++;
-        assert(is_invariant(*table));
+        indeces[i] = point_to + 2;
         return i;
     }
-
-    hash_int_t insert(Hash_Inline* table, hash_int_t hash, hash_int_t key)
-    {
-        assert(is_invariant(*table));
-        if(hash < 2)
-            hash += 2;
-
-        grow_if_overfull(table);
-        
-        hash_int_t mask = (hash_int_t) table->_capacity - 1;
-        hash_int_t i = hash & mask;
-        if(table->_data[i].hash == hash)
-            table->_is_multiplicit = true;
-
-        isize counter = 0;
-        for(;table->_data[i].hash > 1; i = (i + 1) & mask)
-            assert(counter ++ < table->_capacity);
-
-        if(i != (hash & mask) && table->_data[i].hash != 1)
-            table->_hash_collisions ++;
-        
-        table->_data[i].hash = hash;
-        table->_data[i].key = key;
-        table->_size ++;
-        assert(is_invariant(*table));
-        return i;
-    }
-
-    hash_int_t find(Hash_Inline const& table, hash_int_t hash) noexcept
-    {
-        if(hash < 2)
-            hash += 2;
-
-        if(table._capacity == 0)
-            return -1;
-        
-        hash_int_t mask = (hash_int_t) table._capacity - 1;
-        isize counter = 0;
-        for(hash_int_t i = hash & mask; table._data[i].hash; i = (i + 1) & mask)
-        {
-            assert(counter ++ < table._capacity);
-            if(table._data[i].hash == hash)
-                return i;
-        }
-
-        return (hash_int_t) -1;
-    }
     
-    bool remove(Hash_Inline* table, hash_int_t hash) noexcept
+    template<typename hash_t>
+    bool remove_hash(hash_t* indeces, isize indeces_size, hash_t hash, hash_t index) noexcept
     {
-        assert(is_invariant(*table));
-        isize index = find(*table, hash);
-        if(index == -1)
+        if(indeces_size <= 0)
             return false;
 
-        table->_data[index].hash = 1;
-        table->_size --;
-        table->_removed_count ++;
-        assert(is_invariant(*table));
-        return true;
+        assert(is_power_of_two(indeces_size));
+        hash_t mask = (hash_t) indeces_size - 1;
+        hash_t i = hash & mask;
+        hash_t counter = 0;
+        for(; indeces[i] > 0; i = (i + 1) & mask)
+        {
+            assert(counter ++ < indeces_size && "must not be completely full!");
+            if(indeces[i] - 2 == index)
+            {
+                indeces[i] = 1;
+                return true;
+            }
+        }
+
+        return false;
     }
+
+
+    #ifdef HASH_INDEX_EXAMPLE
+    struct Row
+    {
+        int a = 0;
+        int b = 0;
+        int c = 0;
+        String_Builder d;
+    };
+
+    struct Table
+    {
+        Slot_Array<Row> rows;
+        hash_t* a_hash = nullptr;
+        hash_t* b_hash = nullptr;
+        hash_t* c_hash = nullptr;
+        isize hashes_capacity = 0;
+
+        ~Table() noexcept;
+    };
+
+    Handle table_insert(Table* into, Row row)
+    {
+        isize new_cap = calculate_hash_growth(size(into->rows), into->hashes_capacity);
+        if(new_cap != into->hashes_capacity)
+        {
+            Allocator* alloc = allocator(into->rows);
+            isize size = jot::size(into->rows);
+  
+            isize failed = rehash(&into->a_hash, size, into->hashes_capacity, new_cap, alloc, [&](isize i){
+                Row const& row = get(into->rows, Handle{(hash_t) i});
+                return hash(row.a);
+            });
+    
+            failed += rehash(&into->b_hash, size, into->hashes_capacity, new_cap, alloc, [&](isize i){
+                Row const& row = get(into->rows, Handle{(hash_t) i});
+                return hash(row.b);
+            });
+            
+            failed += rehash(&into->c_hash, size, into->hashes_capacity, new_cap, alloc, [&](isize i){
+                Row const& row = get(into->rows, Handle{(hash_t) i});
+                return hash(row.c);
+            });
+
+            if(failed != 0)
+                memory_globals::out_of_memory_hadler()(GET_LINE_INFO(), "%t %p", failed, allocator(into->rows));
+
+            into->hashes_capacity = new_cap;
+        }
+    
+        auto a_ = hash(row.a);
+        auto b_ = hash(row.b);
+        auto c_ = hash(row.c);
+        //auto d_ = int_array_hash(row.d, 0);
+
+        Handle h = insert(&into->rows, move(&row));
+        insert_hash(into->a_hash, into->hashes_capacity, a_, h.index);
+        insert_hash(into->b_hash, into->hashes_capacity, b_, h.index);
+        insert_hash(into->c_hash, into->hashes_capacity, c_, h.index);
+        //insert(&into->d_hash, d_, h.index);
+
+        return h;
+    }
+
+    Table::~Table() noexcept
+    {
+        Allocator* alloc = allocator(rows);
+        isize size = jot::size(rows);
+        const auto idle = [](isize){return false;};
+
+        rehash(&a_hash, size, hashes_capacity, 0, alloc, idle);
+        rehash(&b_hash, size, hashes_capacity, 0, alloc, idle);
+        rehash(&c_hash, size, hashes_capacity, 0, alloc, idle);
+    }
+
+    Row table_remove(Table* into, Handle row)
+    {
+        Row removed = remove(&into->rows, row);
+
+        auto a_ = hash(removed.a);
+        auto b_ = hash(removed.b);
+        auto c_ = hash(removed.c);
+
+        remove_hash(into->a_hash, into->hashes_capacity, a_, row.index);
+        remove_hash(into->b_hash, into->hashes_capacity, b_, row.index);
+        remove_hash(into->c_hash, into->hashes_capacity, c_, row.index);
+
+        return removed;
+    }
+
+    Hash_Index<hash_t> table_get_by_a(Table const& table, int a)
+    {
+        Hash_Index<hash_t> found = find_hash(table.a_hash, table.hashes_capacity, hash(a), [&](isize i){
+            Row const& row = get(table.rows, Handle{(hash_t) i});
+            return a == row.a;
+        });
+
+        return found;
+    }
+    
+    //The same...
+    Hash_Index<hash_t> table_get_by_b(Table const& table, int b);
+    Hash_Index<hash_t> table_get_by_c(Table const& table, int c);
+    #endif
 }

@@ -28,7 +28,7 @@ namespace jot
         uint32_t _buckets_capacity = 0; 
         uint32_t _size = 0;      
         uint32_t _capacity = 0;  
-        uint32_t _first_free = -1;
+        uint32_t _first_free = (uint32_t) -1;
         uint32_t _handle_offset = 0;
 
         static_assert(sizeof(T) >= sizeof(uint32_t), "Item must be big enough!");
@@ -70,11 +70,7 @@ namespace jot
     ///Converts handle to element index
     template<class T> Weak_Bucket_Index to_index(Weak_Bucket_Array<T> const& bucket_array, Weak_Handle slot) noexcept;
     ///Converts element index to handle
-<<<<<<< Updated upstream
-    template<class T> Weak_Handle to_slot(Weak_Bucket_Array<T> const& bucket_array, isize index) noexcept;
-=======
     template<class T> Weak_Handle to_handle(Weak_Bucket_Array<T> const& bucket_array, isize index) noexcept;
->>>>>>> Stashed changes
 
     ///returns an item given its handle. if the handle is not found or is outdated returns if_not_found instead.
     template <typename T> T const& get(Weak_Bucket_Array<T> const& from, Weak_Handle handle, T const& if_not_found) noexcept;
@@ -105,7 +101,7 @@ namespace jot
 
         //The minimum number of empty buckets to make during the first allocation
         const static uint32_t LEAST_BUCKETS_COUNT = 128;
-        const static uint32_t USED_BIT = 1 << 31;
+        const static uint32_t USED_BIT = (uint32_t) 1 << 31;
         const static uint64_t ALLOCATED_BIT = 1;
 
         struct Bucket
@@ -322,10 +318,6 @@ namespace jot
         handle.generation = bucket->generations[index.item];
 
         T* bucket_data = BUCKET_DATA(bucket);
-        uint64_t ptr_num = (uint64_t) bucket->data;
-        uint64_t rest_num = ~ALLOCATED_BIT;
-        uint64_t result = ptr_num & rest_num;
-        T* _data = (T*) result;
 
         bucket_array->_first_free = *(uint32_t*) (void*) (bucket_data + index.item);
         bucket_array->_size += 1;

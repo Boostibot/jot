@@ -7,15 +7,11 @@
 #include "string_hash.h"
 #include "weak_bucket_array.h"
 
-<<<<<<< Updated upstream
-namespace jot::tests::weak_bucket_array
-=======
 namespace jot
 {
 namespace tests
 {
 namespace weak_bucket_array
->>>>>>> Stashed changes
 {
     template <typename T>
     void test_insert_remove(Static_Array<T, 10> const& values)
@@ -125,13 +121,8 @@ namespace weak_bucket_array
 
         std::random_device rd;
         
-<<<<<<< Updated upstream
-        constexpr isize OP_INSERT = 0;
-        constexpr isize OP_REMOVE = 1;
-=======
         static const isize OP_INSERT = 0;
         static const isize OP_REMOVE = 1;
->>>>>>> Stashed changes
 
         std::discrete_distribution<unsigned> op_distribution({75, 25});
         std::uniform_int_distribution<unsigned> index_distribution(0);
@@ -248,8 +239,5 @@ namespace weak_bucket_array
             stress_test(print);
     }
 }
-<<<<<<< Updated upstream
-=======
 }
 }
->>>>>>> Stashed changes

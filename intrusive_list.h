@@ -17,8 +17,7 @@ namespace jot
 
     //Works on all nodes that have the following structure:
     // (1) `next` ptr
-    // (3) `prev` ptr* 
-    //     * prev ptr required only if INTRUSIVE_LIST_SINGLE is not set
+    // (3) `prev` ptr  (required only if INTRUSIVE_LIST_DOUBLE)
     #if 0
     struct Example_Node
     {
@@ -32,7 +31,7 @@ namespace jot
 
     //the single linked version is postfixed with sl (Single Linked)
     // and the double linked with dl (Double Linked)
-    #ifdef INTRUSIVE_LIST_SINGLE
+    #if defined(INTRUSIVE_LIST_SINGLE)
         #define is_isolated_xx          is_isolated_sl
         #define is_connected_xx         is_connected_sl
         #define _check_is_connected_xx  _check_is_connected_dl
@@ -41,7 +40,8 @@ namespace jot
         #define unlink_chain_xx unlink_chain_sl
         #define extract_node_xx extract_node_sl
         #define insert_node_xx  insert_node_sl
-    #else
+    
+    #elif defined(INTRUSIVE_LIST_DOUBLE)
         #define is_isolated_xx          is_isolated_dl
         #define is_connected_xx         is_connected_dl
         #define _check_is_connected_xx  _check_is_connected_dl
@@ -50,6 +50,8 @@ namespace jot
         #define unlink_chain_xx unlink_chain_dl
         #define extract_node_xx extract_node_dl
         #define insert_node_xx  insert_node_dl
+    #else
+        #error "Define either INTRUSIVE_LIST_SINGLE or INTRUSIVE_LIST_DOUBLE before including intrusive_list.h"
     #endif
 
     template<typename Node>
@@ -69,6 +71,7 @@ namespace jot
         #ifndef INTRUSIVE_LIST_SINGLE
             return last.next == nullptr && first.prev == nullptr;
         #else
+            (void) first;
             return last.next == nullptr;
         #endif
     }
@@ -222,6 +225,19 @@ namespace jot
         assert(_check_is_connected_xx(*first, *last));
     }
 }
+
+
+#undef is_isolated_xx         
+#undef is_connected_xx        
+#undef _check_is_connected_xx 
+#undef link_chain_xx  
+#undef unlink_chain_xx
+#undef extract_node_xx
+#undef insert_node_xx 
+
+#ifdef INTRUSIVE_LIST_DOUBLE
+    #undef INTRUSIVE_LIST_DOUBLE
+#endif
 
 #ifdef INTRUSIVE_LIST_SINGLE
     #undef INTRUSIVE_LIST_SINGLE

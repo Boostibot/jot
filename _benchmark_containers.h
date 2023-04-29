@@ -1,5 +1,6 @@
 #pragma once
 
+
 #include <random>
 #include <vector>
 #include <unordered_map>
@@ -8,14 +9,10 @@
 #include "string_hash.h"
 #include "bucket_array.h"
 #include "weak_bucket_array.h"
-<<<<<<< Updated upstream
-#include "format.h"
-#include "benchmark.h"
-=======
 #include "slot_array.h"
->>>>>>> Stashed changes
 #include "hash_index.h"
 #include "benchmark.h"
+
 
 #define BENCHMARK_STD false
 #define GIVEN_TIME 500
@@ -546,10 +543,6 @@ namespace benchmarks
             Slot_Array<isize> slot_array;
             std::vector<isize> vec;
             std::unordered_map<isize, isize> map;
-            Hash_Inline hash_inline;
-
-            Hash_Table_Growth hash_growth;
-            hash_growth.rehash_at_fullness_den = REHASH_AT_FULLNESS;
 
             Array<isize> added_keys;
             Array<Handle> added_bucket_keys;
@@ -563,8 +556,7 @@ namespace benchmarks
             for(isize i = 0; i < batch_size; i++)
             {
                 push(&array, i);
-                set(&hash_table, i, i, hash_growth);
-                set(&hash_inline, hash_index((uint32_t)i), (hash_int_t) i);
+                set(&hash_table, i, i);
                 map.insert_or_assign(i, i);
                 vec.push_back(i);
                 added_bucket_keys[i] = insert(&bucket_array, i);
@@ -579,9 +571,6 @@ namespace benchmarks
             //so that the arrays are shuffled the same way
             Random_Generator gen1(seed);
             Random_Generator gen2(seed);
-
-            println("Hash collisions: normal: {} all inline: {} (multiplicit: {})", 
-                hash_collisions(hash_table), hash_collisions(hash_inline), is_multiplicit(hash_inline));  
 
             shuffle(slice(&added_keys), &gen1);
             shuffle(slice(&added_bucket_keys), &gen2);
@@ -614,7 +603,6 @@ namespace benchmarks
             });
             
             Bench_Result res_hash_inline = benchmark(GIVEN_TIME, [&]{
-                sum += get(hash_inline, hash_index((hash_int_t) added_keys[i]), 0);
                 do_no_optimize(hash_table);
                 read_write_barrier();
                 
