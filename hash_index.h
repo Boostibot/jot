@@ -24,11 +24,13 @@ namespace jot
         assert(is_power_of_two(indeces_size));
         hash_t mask = (hash_t) indeces_size - 1;
         hash_t i = hash & mask;
+        isize counter = 0;
         for(; indeces[i] > 0; i = (i + 1) & mask)
         {
-            hash_t at = indeces[i] - 2;
-            if(compare_at_i(at))
-                return Hash_Index<hash_t>{at, i};
+            assert(counter ++ < indeces_size);
+            Hash_Index<hash_t> curr = {indeces[i] - 2, i};
+            if(compare_at_i(curr))
+                return curr;
         }
 
         return Hash_Index<hash_t>{-1, -1};
@@ -74,7 +76,8 @@ namespace jot
             if(old_data[i] <= 1)
                 continue;
             
-            hash_t hash = hash_at_i(old_data[i] - 2);
+            Hash_Index<hash_t> curr = {indeces[i] - 2, i};
+            hash_t hash = hash_at_i(curr);
             hash_t k = hash & mask;
             isize counter = 0;
             for(; indeces[k] > 0; k = (k + 1) & mask)
@@ -103,6 +106,7 @@ namespace jot
 
         return new_capacity;
     }
+    
 
     template<typename hash_t>
     isize insert_hash(hash_t* indeces, isize indeces_size, hash_t hash, hash_t point_to) noexcept

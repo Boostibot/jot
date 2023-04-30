@@ -16,20 +16,80 @@ using usize = size_t;
 
 namespace jot
 {
-    struct Line_Info
-    {
-        const char* file = "";
-        const char* func = "";
-        ptrdiff_t line = -1;
-    };
-    
-    #ifndef _MSC_VER
-        #define __FUNCTION__ __func__
-    #endif
-    #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
-    
-    struct Allocator;
+    struct Allocator_Stats;
+    struct Line_Info;
 
+    struct Allocator
+    {
+        ///Allocates size bytes aligned to align
+        virtual void* allocate(isize size, isize align, Line_Info callee) noexcept = 0; 
+        
+        ///Deallocates previously allocated data. Return value signals if iternally the deallocation succeeded and can be ignored.
+        virtual bool deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept = 0; 
+
+        ///Attempts to resize in place some previously made allocation. If succeeds return true and the allocation is now considered
+        ///to be new_size long. If fails returns false. The return value MUST be checked!
+        virtual bool resize(void* allocated, isize old_size, isize new_size, isize align, Line_Info callee) noexcept = 0; 
+        
+        ///Returns partially filled Allocator_Stats. Not tracked fields are 0
+        virtual Allocator_Stats get_stats() const noexcept = 0;
+
+        virtual ~Allocator() noexcept {}
+        
+        //@NOTE: We also pass line info to each allocation function. This is used to give better error/info messages esentially for free
+        //This combined with the fact that this interface operates entirely type erased means we can switch to a 'debug' or 'tracking'
+        // allocator during runtime of the program on demand (such as something bugging out)
+    };
+
+    inline bool  is_power_of_two(isize num);
+    inline void* align_forward(void* ptr, isize align_to);
+    inline void* align_backward(void* ptr, isize align_to);
+    //@TODO: remove
+    inline isize ptrdiff(void* ptr1, void* ptr2);
+
+    ///c malloc except allocates aligned
+    static void* aligned_malloc(isize byte_size, isize align) noexcept;
+    static void  aligned_free(void* aligned_ptr, isize align) noexcept;
+
+    ///These three functions let us easily write custom 'set_capacity' or 'realloc' functions without losing on generality or safety. (see ALLOC_RESIZE_EXAMPLE)
+    ///They primarily serve to simplify writing reallocation rutines for SOA structs where we want all of the arrays to have the same capacity.
+    /// this means that if one fails all the allocations should be undone (precisely what memory_resize_undo does) and the funtion should fail
+    static bool memory_resize_allocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
+    static bool memory_resize_deallocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
+    static bool memory_resize_undo(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
+
+    ///Similar to realloc. Attempts to grow the allocation in place if succeeds return the same adress else allocates a new storage and memcopies the data over.
+    ///Returns NULL on error
+    static void* reallocate(Allocator* alloc, void* old_allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept;
+
+    ///Allocates using aligned_malloc/aligned_free
+    struct Malloc_Allocator : Allocator
+    {
+        isize total_alloced = 0;
+        isize max_alloced = 0;
+        isize allocation_count = 0;
+        isize deallocation_count = 0;
+        isize resize_count = 0;
+        
+        virtual void* allocate(isize size, isize align, Line_Info) noexcept override;
+        virtual bool deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept override;
+        virtual bool resize(void* allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept override;
+        virtual Allocator_Stats get_stats() const noexcept override;
+        virtual ~Malloc_Allocator() noexcept override {}
+    };
+
+    template <typename T>
+    static constexpr isize DEF_ALIGNMENT = (isize) (alignof(T) > 32 ? alignof(T) : 32);
+    
+    namespace memory_constants
+    {
+        static constexpr int64_t PAGE = 4096;
+        static constexpr int64_t KIBI_BYTE = (int64_t) 1 << 10;
+        static constexpr int64_t MEBI_BYTE = (int64_t) 1 << 20;
+        static constexpr int64_t GIBI_BYTE = (int64_t) 1 << 30;
+        static constexpr int64_t TEBI_BYTE = (int64_t) 1 << 40;
+    }
+    
     struct Allocator_Stats
     {
         Allocator* parent;
@@ -46,72 +106,18 @@ namespace jot
         isize deallocation_count;
         isize resize_count;
     };
-
-    struct Allocator
+    
+    struct Line_Info
     {
-        //We also pass line info to each allocation function. This is used to give better error/info messages esentially for free
-        //This combined with the fact that this interface operates entirely type erased means we can switch to a 'debug' or 'tracking'
-        // allocator during runtime of the program on demand (such as something bugging out)
-
-        virtual void* allocate(isize size, isize align, Line_Info callee) noexcept = 0; 
-        
-        virtual bool deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept = 0; 
-
-        virtual bool resize(void* allocated, isize old_size, isize new_size, isize align, Line_Info callee) noexcept = 0; 
-        
-        virtual Allocator_Stats get_stats() const noexcept = 0;
-
-        virtual ~Allocator() noexcept {}
+        const char* file;
+        const char* func;
+        isize line;
     };
 
-    inline bool  is_power_of_two(isize num);
-    inline isize ptrdiff(void* ptr1, void* ptr2);
-    inline void* align_forward(void* ptr, isize align_to);
-    inline void* align_backward(void* ptr, isize align_to);
-    static void* aligned_malloc(isize byte_size, isize align) noexcept;
-    static void  aligned_free(void* aligned_ptr, isize align) noexcept;
-
-    constexpr isize max(isize a, isize b) { return a > b ? a : b; }
-    constexpr isize min(isize a, isize b) { return a < b ? a : b; }
-    constexpr isize clamp(isize val, isize lo, isize hi)            { return max(lo, min(val, hi)); }
-    constexpr isize div_round_up(isize value, isize to_multiple_of) { return (value + to_multiple_of - 1) / to_multiple_of; }
-
-    //These three functions let us easily write custom 'set_capacity' or 'realloc' functions without losing on generality or safety. (see ALLOC_RESIZE_EXAMPLE)
-    //They primarily serve to simplify writing reallocation rutines for SOA structs where we want all of the arrays to have the same capacity.
-    // this means that if one fails all the allocations should be undone (precisely what memory_resize_undo does) and the funtion should fail
-    static bool memory_resize_allocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
-    static bool memory_resize_deallocate(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
-    static bool memory_resize_undo(Allocator* alloc, void** new_allocated, isize new_size, void* old_allocated, isize old_size, isize align, Line_Info callee) noexcept;
-    static void* reallocate(Allocator* alloc, void* old_allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept;
-    
-    //Acts as regular malloc
-    struct Malloc_Allocator : Allocator
-    {
-        isize total_alloced = 0;
-        isize max_alloced = 0;
-        isize allocation_count = 0;
-        isize deallocation_count = 0;
-        isize resize_count = 0;
-        
-        virtual void* allocate(isize size, isize align, Line_Info) noexcept override;
-        virtual bool deallocate(void* allocated, isize old_size, isize align, Line_Info callee) noexcept override;
-        virtual bool resize(void* allocated, isize new_size, isize old_size, isize align, Line_Info callee) noexcept override;
-        virtual Allocator_Stats get_stats() const noexcept override;
-
-        virtual ~Malloc_Allocator() noexcept override {}
-    };
-
-    template <typename T>
-    static constexpr isize DEF_ALIGNMENT = (isize) (alignof(T) > 32 ? alignof(T) : 32);
-    
-    namespace memory_constants
-    {
-        static constexpr int64_t PAGE = 4096;
-        static constexpr int64_t KIBI_BYTE = (int64_t) 1 << 10;
-        static constexpr int64_t MEBI_BYTE = (int64_t) 1 << 20;
-        static constexpr int64_t GIBI_BYTE = (int64_t) 1 << 30;
-        static constexpr int64_t TEBI_BYTE = (int64_t) 1 << 40;
-    }
+    #ifndef _MSC_VER
+        #define __FUNCTION__ __func__
+    #endif
+    #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
     
     #ifndef SLICE_DEFINED
         #define SLICE_DEFINED
@@ -137,6 +143,14 @@ namespace jot
             }
         };
     #endif 
+    
+    //Used to stop infering of arguments. Is useful for example with get(Array<T> arr, isize index, Id<T*> if_not_found)
+    // if we tried to call get(arr, 2, nullptr) it wouldnt compile without Id because the T is either nullptr or whatever arr is...
+    template<class _T>
+    struct _Id {using T = _T;};
+
+    template<class T>
+    using Id = typename _Id<T>::T;
 
     namespace memory_globals
     {
@@ -209,12 +223,19 @@ namespace jot
     using memory_globals::default_allocator;
     using memory_globals::scratch_allocator;
     
+    //@TODO: remove
+    constexpr isize max(isize a, isize b) { return a > b ? a : b; }
+    constexpr isize min(isize a, isize b) { return a < b ? a : b; }
+    constexpr isize clamp(isize val, isize lo, isize hi)            { return max(lo, min(val, hi)); }
+    constexpr isize div_round_up(isize value, isize to_multiple_of) { return (value + to_multiple_of - 1) / to_multiple_of; }
+
     template <typename T> constexpr 
     T && move(T* val) noexcept 
     { 
         return (T &&) *val; 
     };
 
+    //@TODO: place somewhere else or btter yet remove entirely
     template <typename T> constexpr 
     void swap(T* a, T* b) noexcept 
     { 
@@ -222,7 +243,6 @@ namespace jot
         *a = (T&&) *b;
         *b = (T&&) copy;
     };
-
     
     #ifndef SLICE_DEFINED
         #define SLICE_DEFINED
@@ -253,8 +273,9 @@ namespace jot
 //this is necessary because c++...
 inline void* operator new(size_t, void* ptr) noexcept;
 
-//if you are getting linker errors on this put this somewhere in your code
-//inline void* operator new(size_t, void* ptr) noexcept {return ptr;}
+//if you are getting linker errors on this put this somewhere in your code or insclude <new>
+// 
+//   inline void* operator new(size_t, void* ptr) noexcept {return ptr;}
 
 #if defined(_MSC_VER) && defined(_DEBUG)
    #include <crtdbg.h>

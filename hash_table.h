@@ -101,11 +101,6 @@ namespace jot
         uint16_t jump_table_base_size = 32;
     };
     
-    template<class _T>
-    struct _Id {using T = _T;};
-
-    template<class T>
-    using Id = typename _Id<T>::T;
 
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
     Slice<const Key> keys(Hash_Table<Key, Value, hash, equals> const& table)

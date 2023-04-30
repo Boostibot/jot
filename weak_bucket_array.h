@@ -62,7 +62,7 @@ namespace jot
     template<class T> void grow(Weak_Bucket_Array<T>* bucket_array, isize to_size);
     
     ///Inserts an item to the array and returns its handle
-    template<class T> Weak_Handle insert(Weak_Bucket_Array<T>* bucket_array, T val);
+    template<class T> Weak_Handle insert(Weak_Bucket_Array<T>* bucket_array, Id<T> val);
     
     ///Removes an item from the array give its handle and returns true. If the handle is invalid does nothing and returns false
     template <typename T> bool remove(Weak_Bucket_Array<T>* bucket_array, Weak_Handle handle) noexcept;
@@ -73,8 +73,8 @@ namespace jot
     template<class T> Weak_Handle to_handle(Weak_Bucket_Array<T> const& bucket_array, isize index) noexcept;
 
     ///returns an item given its handle. if the handle is not found or is outdated returns if_not_found instead.
-    template <typename T> T const& get(Weak_Bucket_Array<T> const& from, Weak_Handle handle, T const& if_not_found) noexcept;
-    template <typename T> T* get(Weak_Bucket_Array<T>* from, Weak_Handle handle, T* if_not_found) noexcept;
+    template <typename T> T const& get(Weak_Bucket_Array<T> const& from, Weak_Handle handle, Id<T> const& if_not_found) noexcept;
+    template <typename T> T* get(Weak_Bucket_Array<T>* from, Weak_Handle handle, Id<T>* if_not_found) noexcept;
 
     ///Returns true if the structure is correct which should be always
     template<class T> bool is_invariant(Weak_Bucket_Array<T> const& bucket_array) noexcept;
@@ -299,7 +299,7 @@ namespace jot
     }
 
     template <typename T>
-    Weak_Handle insert(Weak_Bucket_Array<T>* bucket_array, T what)
+    Weak_Handle insert(Weak_Bucket_Array<T>* bucket_array, Id<T> what)
     {
         using namespace weak_bucket_array_internal;
         grow(bucket_array, bucket_array->_size + 1);
@@ -353,7 +353,7 @@ namespace jot
     
 
     template <typename T>
-    T* get(Weak_Bucket_Array<T>* from, Weak_Handle handle, T* if_not_found) noexcept
+    T* get(Weak_Bucket_Array<T>* from, Weak_Handle handle, Id<T>* if_not_found) noexcept
     {
         using namespace weak_bucket_array_internal;
 
@@ -367,7 +367,7 @@ namespace jot
     }
     
     template <typename T>
-    T const& get(Weak_Bucket_Array<T> const& from, Weak_Handle handle, T const& if_not_found) noexcept
+    T const& get(Weak_Bucket_Array<T> const& from, Weak_Handle handle, Id<T> const& if_not_found) noexcept
     {
         Weak_Bucket_Array<T>* cheated_arr = (Weak_Bucket_Array<T>*) (void*) &from;
         T* cheated_val = (T*) (void*) &if_not_found;

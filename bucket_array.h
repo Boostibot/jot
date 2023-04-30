@@ -60,7 +60,7 @@ namespace jot
     template<class T> void grow(Bucket_Array<T>* bucket_array, isize to_size);
     
     ///Inserts an item to the array and returns its handle
-    template<class T> Handle insert(Bucket_Array<T>* bucket_array, T val);
+    template<class T> Handle insert(Bucket_Array<T>* bucket_array, Id<T> val);
     
     ///Removes an item from the array give its handle
     template<class T> T remove(Bucket_Array<T>* bucket_array, Handle handle) noexcept;
@@ -70,9 +70,16 @@ namespace jot
     ///Converts element index to handle
     template<class T> Handle to_handle(Bucket_Array<T> const& bucket_array, isize index) noexcept;
 
-    ///returns an item given its handle
+    ///Returns true if the bucket array has the specified handle
+    template<class T> bool has(Bucket_Array<T> const& bucket_array, Handle handle) noexcept;
+
+    ///returns an item given its handle. The handle must be valid
     template<class T> T const& get(Bucket_Array<T> const& bucket_array, Handle handle) noexcept;
     template<class T> T* get(Bucket_Array<T>* bucket_array, Handle handle) noexcept;
+    
+    ///returns an item given its handle or if_not_found if the handle is invalid or unused
+    template<class T> T const& get(Bucket_Array<T> const& bucket_array, Handle handle, Id<T> const& if_not_found) noexcept;
+    template<class T> T* get(Bucket_Array<T>* bucket_array, Handle handle, Id<T>* if_not_found) noexcept;
 
     ///Returns true if the structure is correct which should be always
     template<class T> bool is_invariant(Bucket_Array<T> const& bucket_array) noexcept;
@@ -352,7 +359,7 @@ namespace jot
     }
 
     template <typename T>
-    Handle insert(Bucket_Array<T>* bucket_array, T what)
+    Handle insert(Bucket_Array<T>* bucket_array, Id<T> what)
     {
         using namespace bucket_array_internal;
         grow(bucket_array, bucket_array->_size + 1);
@@ -412,16 +419,39 @@ namespace jot
 
         Bucket_Index index = to_index(*from, handle);
         Mask bit = (Mask) 1 << index.bit;
-        assert((from->_buckets[index.bucket].mask[index.mask] & bit) > 0 && "handle not used!");
+        assert(index.bucket < from->_buckets_size && (from->_buckets[index.bucket].mask[index.mask] & bit) > 0 && "handle not used!");
         T* bucket_data = (T*) from->_buckets[index.bucket].data;
 
         return bucket_data + index.item;
     }
     
     template <typename T>
+    T* get(Bucket_Array<T>* from, Handle handle, Id<T>* if_not_found) noexcept
+    {
+        using namespace bucket_array_internal;
+
+        Bucket_Index index = to_index(*from, handle);
+        Mask bit = (Mask) 1 << index.bit;
+        if(index.bucket >= from->_buckets_size || (from->_buckets[index.bucket].mask[index.mask] & bit) == 0)
+            return if_not_found;
+
+        T* bucket_data = (T*) from->_buckets[index.bucket].data;
+
+        return bucket_data + index.item;
+    }
+
+    template <typename T>
     T const& get(Bucket_Array<T> const& from, Handle handle) noexcept
     {
         Bucket_Array<T>* cheated = (Bucket_Array<T>*) (void*) &from;
         return *get(cheated, handle);
+    }
+    
+    template <typename T>
+    T const& get(Bucket_Array<T> const& from, Handle handle, Id<T> const& t) noexcept
+    {
+        Bucket_Array<T>* cheated = (Bucket_Array<T>*) (void*) &from;
+        T* cheated_if_not_found = (T*) (void*) &if_not_found;
+        return *get(cheated, handle, cheated_if_not_found);
     }
 }
