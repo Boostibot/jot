@@ -14,6 +14,9 @@
 using isize = ptrdiff_t;
 using usize = size_t;
 
+#define ISIZE_MAX PTRDIFF_MAX
+#define USIZE_MAX SIZE_MAX
+
 namespace jot
 {
     struct Allocator_Stats;

@@ -551,7 +551,7 @@ namespace jot
     {
         //estimate the needed size so we dont need to reallocate so much
         grow(into, size(into) + format_str.size + 5*adapted.size);
-        constexpr String sub_for = "{}";
+        constexpr String sub_for = make_constexpr_string("{}");
 
         isize last = 0;
         isize new_found = 0;

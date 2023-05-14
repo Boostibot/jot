@@ -13,7 +13,6 @@
 #include "hash_index.h"
 #include "benchmark.h"
 
-
 #define BENCHMARK_STD false
 #define GIVEN_TIME 500
 

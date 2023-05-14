@@ -11,10 +11,8 @@ namespace jot
 {
 namespace tests
 {
-namespace weak_bucket_array
-{
     template <typename T>
-    void test_insert_remove(Static_Array<T, 10> const& values)
+    static void test_weak_bucket_array_insert_remove(Static_Array<T, 10> const& values)
     {
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
         isize alive_before = trackers_alive();
@@ -112,8 +110,7 @@ namespace weak_bucket_array
         TEST(mem_after == mem_before);
     }
     
-    static
-    void stress_test(bool print = true)
+    static void test_weak_bucket_array_stress(bool print)
     {
         using Seed = std::random_device::result_type;
 
@@ -200,8 +197,6 @@ namespace weak_bucket_array
             TEST(memory_before == memory_after);
         };
         
-        //3145023208
-        //Seed seed = 3145023208;
         Seed seed = rd();
         gen = std::mt19937(seed);
         for(isize i = 0; i < 10; i++)
@@ -216,8 +211,7 @@ namespace weak_bucket_array
         }
     }
     
-    static
-    void test_weak_bucket_array(u32 flags)
+    static void test_weak_bucket_array(u32 flags)
     {
         bool print = !(flags & Test_Flags::SILENT);
 
@@ -227,17 +221,16 @@ namespace weak_bucket_array
         
         if(print) println("\ntest_weak_bucket_array()");
         if(print) println("  type: i32");
-        test_insert_remove(arr1);
+        test_weak_bucket_array_insert_remove(arr1);
 
         if(print) println("  type: Test_String");
-        test_insert_remove(arr2);
+        test_weak_bucket_array_insert_remove(arr2);
         
         if(print) println("  type: Tracker<i32>");
-        test_insert_remove(arr3);
+        test_weak_bucket_array_insert_remove(arr3);
 
         if(flags & Test_Flags::STRESS)
-            stress_test(print);
+            test_weak_bucket_array_stress(print);
     }
-}
 }
 }

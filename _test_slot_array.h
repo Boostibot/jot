@@ -10,10 +10,8 @@ namespace jot
 {
 namespace tests
 {
-namespace slot_array
-{
     template <typename T>
-    static void test_insert_remove_get(Static_Array<T, 10> elems)
+    static void test_slot_array_insert_remove_get(Static_Array<T, 10> elems)
     {
         isize trackers_before = trackers_alive();
         isize memory_before = default_allocator()->get_stats().bytes_allocated;
@@ -95,8 +93,7 @@ namespace slot_array
         TEST(memory_before == memory_after);
     }
     
-    static
-    void stress_test(bool print = true)
+    static void test_slot_array_stress(bool print)
     {
         using Seed = std::random_device::result_type;
 
@@ -198,7 +195,6 @@ namespace slot_array
         }
     }
     
-
     static void test_slot_array(u32 flags)
     {
         bool print = !(flags & Test_Flags::SILENT);
@@ -209,17 +205,16 @@ namespace slot_array
         
         if(print) println("\ntest_slot_array()");
         if(print) println("  type: i32");
-        test_insert_remove_get(arr1);
+        test_slot_array_insert_remove_get(arr1);
 
         if(print) println("  type: Test_String");
-        test_insert_remove_get(arr2);
+        test_slot_array_insert_remove_get(arr2);
         
         if(print) println("  type: Tracker<i32>");
-        test_insert_remove_get(arr3);
+        test_slot_array_insert_remove_get(arr3);
         
         if(flags & Test_Flags::STRESS)
-            stress_test(print);
+            test_slot_array_stress(print);
     }
-}
 }
 }

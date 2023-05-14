@@ -13,8 +13,6 @@ namespace jot
 {
 namespace tests
 {
-namespace memory
-{
     static
     void test_align()
     {
@@ -144,7 +142,7 @@ namespace memory
     }
     
     static
-    void stress_test(bool print)
+    void test_memory_stress(bool print)
     {
         struct IRange 
         {
@@ -466,11 +464,10 @@ namespace memory
         test_stack_ring();
         
         if(flags & Test_Flags::STRESS)
-            stress_test(print);
+            test_memory_stress(print);
 
         isize alloced_after = default_allocator()->get_stats().bytes_allocated;
         TEST(alloced_before == alloced_after);
     }
-}
 }
 }

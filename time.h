@@ -81,9 +81,8 @@ namespace jot
     inline double clock_s()
     {
         double freq = _double_perf_freq();
-        double sec_to_nanosec = 1.0e9;
         double counter = (double) (_query_perf_counter() - *_perf_counter_base());
-        return counter * sec_to_nanosec / freq;
+        return counter / freq;
     }
 }
 #else

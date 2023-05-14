@@ -220,6 +220,7 @@ namespace jot
     template<typename T>
     Array<T>::~Array() noexcept 
     {
+        assert(is_invariant(*this));
         if(_capacity != 0)
         {
             array_internal::destruct_items(_data, 0, _size);

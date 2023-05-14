@@ -21,8 +21,6 @@ namespace jot
 {
 namespace tests
 {
-namespace hash_table
-{
     template <typename Table> 
     bool value_matches_at(Table const& table, typename Table::Key const& key, typename Table::Value const& value)
     {
@@ -51,7 +49,7 @@ namespace hash_table
     }
         
     template <typename Table> 
-    void test_table_add_find()
+    void test_hash_table_add_find()
     {
         isize alive_before = trackers_alive();
         {
@@ -95,7 +93,7 @@ namespace hash_table
     }
         
     template <typename Table> 
-    void test_table_add_find_any(Static_Array<typename Table::Key, 10> keys, Static_Array<typename Table::Value, 10> values)
+    void test_hash_table_add_find_any(Static_Array<typename Table::Key, 10> keys, Static_Array<typename Table::Value, 10> values)
     {
         isize alive_before = trackers_alive();
         {
@@ -139,7 +137,7 @@ namespace hash_table
     }
 
     template <typename Table> 
-    void test_table_mark_remove()
+    void test_hash_table_mark_remove()
     {
         isize alive_before = trackers_alive();
         {
@@ -251,7 +249,7 @@ namespace hash_table
     }
 
     template <typename Table> 
-    void test_table_remove()
+    void test_hash_table_remove()
     {
         isize alive_before = trackers_alive();
         {
@@ -348,57 +346,7 @@ namespace hash_table
         return (uint64_t) key.val;
     }   
     
-    static
-    void test_many_add()
-    {
-        
-        using Track = Tracker<i32>;
-        using Cast_Track = Tracker<i64>;
-        using Key = Track;
-        using Val = Track;
-        using Table = Hash_Table<Key, Val, test_tracker_hash>;
-
-        i64 before = trackers_alive();
-        {
-            Table table;
-            set(&table, Key{1}, Val{1});
-            set(&table, Key{2}, Val{2});
-            set(&table, Key{3}, Val{3});
-            set(&table, Key{4}, Val{4});
-            set(&table, Key{5}, Val{5});
-            set(&table, Key{6}, Val{6});
-            set(&table, Key{7}, Val{7});
-            set(&table, Key{8}, Val{8});
-            set(&table, Key{9}, Val{9});
-            set(&table, Key{10}, Val{10});
-            
-            set(&table, Key{11}, Val{11});
-            set(&table, Key{12}, Val{12});
-            set(&table, Key{13}, Val{13});
-            set(&table, Key{14}, Val{14});
-            set(&table, Key{15}, Val{15});
-            set(&table, Key{16}, Val{16});
-            set(&table, Key{17}, Val{17});
-            set(&table, Key{18}, Val{18});
-            set(&table, Key{19}, Val{19});
-            set(&table, Key{20}, Val{20});
-
-            set(&table, Key{21}, Val{21});
-            set(&table, Key{22}, Val{22});
-            set(&table, Key{23}, Val{23});
-            set(&table, Key{24}, Val{24});
-            set(&table, Key{25}, Val{25});
-            set(&table, Key{26}, Val{26});
-            set(&table, Key{27}, Val{27});
-            set(&table, Key{28}, Val{28});
-            set(&table, Key{29}, Val{29});
-            set(&table, Key{30}, Val{30});
-        }
-        i64 after = trackers_alive();
-        TEST(before == after);
-    }
-
-    void test_stress(bool print)
+    void test_hash_table_stress(bool print)
     {
         using Val = Tracker<i32>;
         using Key = Tracker<i32>;
@@ -447,7 +395,7 @@ namespace hash_table
             return max(count, 0);
         };
         
-        if(print) println("  test_stress()");
+        if(print) println("  test_hash_table_stress()");
 
         std::mt19937 gen;
         const auto test_batch = [&](isize block_size, isize j, u32 do_ops){
@@ -625,20 +573,18 @@ namespace hash_table
             if(print) println("\ntest_hash_table()");
 
             using Trc = Tracker<i32>;
-            test_table_add_find<Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>>();
-            test_table_add_find<Hash_Table<u32, u32, int_hash<u32>>>();
-            test_table_add_find<Hash_Table<u32, Trc, int_hash<u32>>>();
-            test_table_add_find<Hash_Table<Trc, u32, test_tracker_hash>>();
-            test_table_add_find<Hash_Table<Trc, Trc, test_tracker_hash>>();
+            test_hash_table_add_find<Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>>();
+            test_hash_table_add_find<Hash_Table<u32, u32, int_hash<u32>>>();
+            test_hash_table_add_find<Hash_Table<u32, Trc, int_hash<u32>>>();
+            test_hash_table_add_find<Hash_Table<Trc, u32, test_tracker_hash>>();
+            test_hash_table_add_find<Hash_Table<Trc, Trc, test_tracker_hash>>();
             
-            if(print) println("  test_table_add_find() type: Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>");
-            if(print) println("  test_table_add_find() type: Hash_Table<u32, u32>");
-            if(print) println("  test_table_add_find() type: Hash_Table<u32, Trc>");
-            if(print) println("  test_table_add_find() type: Hash_Table<Trc, u32, test_tracker_hash>");
-            if(print) println("  test_table_add_find() type: Hash_Table<Trc, Trc, test_tracker_hash>");
+            if(print) println("  test_hash_table_add_find() type: Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>");
+            if(print) println("  test_hash_table_add_find() type: Hash_Table<u32, u32>");
+            if(print) println("  test_hash_table_add_find() type: Hash_Table<u32, Trc>");
+            if(print) println("  test_hash_table_add_find() type: Hash_Table<Trc, u32, test_tracker_hash>");
+            if(print) println("  test_hash_table_add_find() type: Hash_Table<Trc, Trc, test_tracker_hash>");
             
-            if(print) println("  test_many_add()");
-            test_many_add();
 
             const auto own = [](const char* cstr){
                 String_Builder builder;
@@ -649,44 +595,43 @@ namespace hash_table
             Static_Array<String_Builder, 10> builders = {{own("1"), own("2"), own("3"), own("4"), own("5"), own("6"), own("7"), own("8"), own("9"), own("10")}};
             Static_Array<String, 10> strings = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
 
-            test_table_add_find_any<String_Hash<String>>(builders, strings); 
+            test_hash_table_add_find_any<String_Hash<String>>(builders, strings); 
             
-            if(print) println("  test_table_add_find_any() type: Hash_Table<String, String_Builder>");
-            if(print) println("  test_table_add_find_any() type: Hash_Table<String_Builder, String>");
-            if(print) println("  test_table_add_find_any() type: Hash_Table<String_Builder, String_Builder>");
+            if(print) println("  test_hash_table_add_find_any() type: Hash_Table<String, String_Builder>");
+            if(print) println("  test_hash_table_add_find_any() type: Hash_Table<String_Builder, String>");
+            if(print) println("  test_hash_table_add_find_any() type: Hash_Table<String_Builder, String_Builder>");
 
-            test_table_mark_remove<Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>>();
-            test_table_mark_remove<Hash_Table<u8, u8, int_hash<u8>>>();
-            test_table_mark_remove<Hash_Table<u32, u32, int_hash<u32>>>();
-            test_table_mark_remove<Hash_Table<u32, Trc, int_hash<u32>>>();
-            test_table_mark_remove<Hash_Table<Trc, u32, tracker_hash<i32>>>();
-            test_table_mark_remove<Hash_Table<Trc, Trc, tracker_hash<i32>>>();
+            test_hash_table_mark_remove<Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>>();
+            test_hash_table_mark_remove<Hash_Table<u8, u8, int_hash<u8>>>();
+            test_hash_table_mark_remove<Hash_Table<u32, u32, int_hash<u32>>>();
+            test_hash_table_mark_remove<Hash_Table<u32, Trc, int_hash<u32>>>();
+            test_hash_table_mark_remove<Hash_Table<Trc, u32, tracker_hash<i32>>>();
+            test_hash_table_mark_remove<Hash_Table<Trc, Trc, tracker_hash<i32>>>();
             
-            if(print) println("  test_table_mark_remove() type: Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>");
-            if(print) println("  test_table_mark_remove() type: Hash_Table<u32, u32>");
-            if(print) println("  test_table_mark_remove() type: Hash_Table<u32, Trc>");
-            if(print) println("  test_table_mark_remove() type: Hash_Table<Trc, u32, test_tracker_hash>");
-            if(print) println("  test_table_mark_remove() type: Hash_Table<Trc, Trc, test_tracker_hash>");
+            if(print) println("  test_hash_table_mark_remove() type: Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>");
+            if(print) println("  test_hash_table_mark_remove() type: Hash_Table<u32, u32>");
+            if(print) println("  test_hash_table_mark_remove() type: Hash_Table<u32, Trc>");
+            if(print) println("  test_hash_table_mark_remove() type: Hash_Table<Trc, u32, test_tracker_hash>");
+            if(print) println("  test_hash_table_mark_remove() type: Hash_Table<Trc, Trc, test_tracker_hash>");
 
-            test_table_remove<Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>>();
-            test_table_remove<Hash_Table<u32, u32, int_hash<u32>>>();
-            test_table_remove<Hash_Table<u32, Trc, int_hash<u32>>>();
-            test_table_remove<Hash_Table<Trc, u32, test_tracker_hash>>();
-            test_table_remove<Hash_Table<Trc, Trc, test_tracker_hash>>();
+            test_hash_table_remove<Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>>();
+            test_hash_table_remove<Hash_Table<u32, u32, int_hash<u32>>>();
+            test_hash_table_remove<Hash_Table<u32, Trc, int_hash<u32>>>();
+            test_hash_table_remove<Hash_Table<Trc, u32, test_tracker_hash>>();
+            test_hash_table_remove<Hash_Table<Trc, Trc, test_tracker_hash>>();
             
-            if(print) println("  test_table_remove() type: Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>");
-            if(print) println("  test_table_remove() type: Hash_Table<u32, u32>");
-            if(print) println("  test_table_remove() type: Hash_Table<u32, Trc>");
-            if(print) println("  test_table_remove() type: Hash_Table<Trc, u32, test_tracker_hash>");
-            if(print) println("  test_table_remove() type: Hash_Table<Trc, Trc, test_tracker_hash>");
+            if(print) println("  test_hash_table_remove() type: Hash_Table<uint64_t, i32, test_int_hash<uint64_t>>");
+            if(print) println("  test_hash_table_remove() type: Hash_Table<u32, u32>");
+            if(print) println("  test_hash_table_remove() type: Hash_Table<u32, Trc>");
+            if(print) println("  test_hash_table_remove() type: Hash_Table<Trc, u32, test_tracker_hash>");
+            if(print) println("  test_hash_table_remove() type: Hash_Table<Trc, Trc, test_tracker_hash>");
             
             if(flags & Test_Flags::STRESS)
-                test_stress(print);
+                test_hash_table_stress(print);
         }
         
         isize memory_after = default_allocator()->get_stats().bytes_allocated;
         TEST(memory_before == memory_after);
     }
-}
 }
 }

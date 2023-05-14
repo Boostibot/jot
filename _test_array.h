@@ -11,10 +11,8 @@ namespace jot
 {
 namespace tests
 {
-namespace array
-{
     template<typename T>
-    void test_push_pop(Static_Array<T, 6> vals)
+    void test_array_push_pop(Static_Array<T, 6> vals)
     {
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
         isize mem_after = default_allocator()->get_stats().bytes_allocated;
@@ -127,7 +125,7 @@ namespace array
     }
 
     template<typename T>
-    void test_copy(Static_Array<T, 6> vals)
+    void test_array_copy(Static_Array<T, 6> vals)
     {
         isize before = trackers_alive();
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
@@ -217,7 +215,7 @@ namespace array
     }
 
     template<typename T>
-    void test_reserve(Static_Array<T, 6> vals)
+    void test_array_reserve(Static_Array<T, 6> vals)
     {
         isize before = trackers_alive();
         isize after = trackers_alive();
@@ -312,10 +310,8 @@ namespace array
         TEST(mem_before == mem_after);
     }
 
-    
-
     template<typename T>
-    void test_resize(Static_Array<T, 6> vals)
+    void test_array_resize(Static_Array<T, 6> vals)
     {
         isize before = trackers_alive();
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
@@ -383,7 +379,7 @@ namespace array
     }
 
     template<typename T>
-    void test_insert_remove(Static_Array<T, 6> vals)
+    void test_array_insert_remove(Static_Array<T, 6> vals)
     {
         isize before = trackers_alive();
         isize mem_before = default_allocator()->get_stats().bytes_allocated;
@@ -509,12 +505,12 @@ namespace array
     }
     
     static
-    void test_stress(bool print)
+    void test_array_stress(bool print)
     {
         using Track = Tracker<isize>;
         std::mt19937 gen;
 
-        if(print) println("  test_stress()");
+        if(print) println("  test_array_stress()");
 
         static const isize OP_PUSH1 = 0;
         static const isize OP_PUSH2 = 1;
@@ -647,13 +643,12 @@ namespace array
     template<typename T>
     void test_array(Static_Array<T, 6> vals)
     {
-        test_push_pop<T>(dup(vals));
-        test_copy<T>(dup(vals));
-        test_resize<T>(dup(vals));
-        test_reserve<T>(dup(vals));
-        test_insert_remove<T>(dup(vals));
+        test_array_push_pop<T>(dup(vals));
+        test_array_copy<T>(dup(vals));
+        test_array_resize<T>(dup(vals));
+        test_array_reserve<T>(dup(vals));
+        test_array_insert_remove<T>(dup(vals));
     }
-    
 
     static
     void test_array(u32 flags)
@@ -680,8 +675,7 @@ namespace array
 
 
         if(flags & Test_Flags::STRESS)
-            test_stress(print);
+            test_array_stress(print);
     }
-}
 }
 }

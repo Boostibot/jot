@@ -120,7 +120,7 @@ namespace jot
     }
     
     static
-    Array<void*> fill_stack_frames(CONTEXT context, Debug_Context* debug_context, DWORD image_type = 0, isize max_frames = (isize) 1 << 62)
+    Array<void*> fill_stack_frames(CONTEXT context, Debug_Context* debug_context, DWORD image_type = 0, isize max_frames = ISIZE_MAX)
     {
         STACKFRAME64 frame = {0};
         #ifdef _M_IX86
