@@ -122,31 +122,6 @@ namespace jot
     #endif
     #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
     
-    #ifndef SLICE_DEFINED
-        #define SLICE_DEFINED
-        template<typename T>
-        struct Slice
-        {
-            T* data = nullptr;
-            isize size = 0;
-
-            constexpr T const& operator[](isize index) const noexcept  
-            { 
-                assert(0 <= index && index < size && "index out of range"); return data[index]; 
-            }
-
-            constexpr T& operator[](isize index) noexcept 
-            { 
-                assert(0 <= index && index < size && "index out of range"); return data[index]; 
-            }
-        
-            constexpr operator Slice<const T>() const noexcept 
-            { 
-                return Slice<const T>{data, size}; 
-            }
-        };
-    #endif 
-    
     //Used to stop infering of arguments. Is useful for example with get(Array<T> arr, isize index, Id<T*> if_not_found)
     // if we tried to call get(arr, 2, nullptr) it wouldnt compile without Id because the T is either nullptr or whatever arr is...
     template<class _T>
