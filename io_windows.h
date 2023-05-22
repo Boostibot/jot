@@ -1,3 +1,4 @@
+
 #pragma once
 #include "io.h"
 
@@ -54,8 +55,8 @@ static void* wio_sure_realloc(void* allocated, int64_t size)
         return NULL;
     }
 
-    void* reallocated = realloc(allocated, size);
-    if(reallocated == nullptr)
+    void* reallocated = realloc(allocated, (size_t) size);
+    if(reallocated == NULL)
     {
         fprintf(stderr, "io.h allocation failed! Attempted to allocate %lld bytes\n", (long long) size);
         abort();
@@ -64,7 +65,7 @@ static void* wio_sure_realloc(void* allocated, int64_t size)
     return reallocated;
 }
     
-enum Normalize_Flags
+typedef enum Normalize_Flags
 {
     IO_NORMALIZE_WINDOWS = 1,
     IO_NORMALIZE_LINUX = 2,
@@ -72,7 +73,7 @@ enum Normalize_Flags
     IO_NORMALIZE_DIRECTORY = 8,
     IO_NORMALIZE_FILE = 16,
     IO_NORMALIZE_NO_RESIZE = 32,
-};
+} Normalize_Flags;
     
 static void wio_string_free(WIO_String* string);
 static void wio_string_resize(WIO_String* string, int64_t size);
@@ -183,7 +184,7 @@ File_IO_Result file_read(File* file, void* read_into, int64_t size)
     while(total_read < size)
     {
         int64_t remaining_size = size - total_read;
-        DWORD to_read = remaining_size & 0xFFFFFF;
+        DWORD to_read = (DWORD) (remaining_size & 0x8FFFFF);
         DWORD read = 0;
         result.error = (int) !ReadFile(handle, (char*) read_into + total_read, to_read, &read, NULL);
             
@@ -214,7 +215,7 @@ File_IO_Result file_write(File* file, const void* write_from, int64_t size)
     while(total_written < size)
     {
         int64_t remaining_size = size - total_written;
-        DWORD to_write = remaining_size & 0xFFFFFF;
+        DWORD to_write = (DWORD) (remaining_size & 0x8FFFFF);
         DWORD written = 0;
         result.error = (int) !ReadFile(handle, (char*) write_from + total_written, to_write, &written, NULL);
             
@@ -333,7 +334,7 @@ static time_t wio_filetime_to_time_t(FILETIME ft)
     ULARGE_INTEGER ull;    
     ull.LowPart = ft.dwLowDateTime;    
     ull.HighPart = ft.dwHighDateTime;    
-    return ull.QuadPart / 10000000ULL - 11644473600ULL;  
+    return (time_t) (ull.QuadPart / 10000000ULL - 11644473600ULL);  
 }
 
 bool file_info(const char* file_path, int64_t path_size, File_Info* info)
@@ -430,13 +431,13 @@ int64_t directory_list_contents_malloc(const char* directory_path, int64_t path_
 
     int64_t entries_size = 0;
     int64_t entries_capacity = 8;
-    Directory_Entry* local_entries = (Directory_Entry*) wio_sure_realloc(NULL, sizeof(Directory_Entry) * (entries_capacity+1));
+    Directory_Entry* local_entries = (Directory_Entry*) wio_sure_realloc(NULL, (int64_t) sizeof(Directory_Entry) * (entries_capacity+1));
 
     assert(dir_path.size != 0);
     //Specify a file mask. *.* = We want everything! 
     wio_w_concat(dir_path.data, L"\\*.*", NULL, &built_path);
         
-    WIN32_FIND_DATA found_file;
+    WIN32_FIND_DATAW found_file;
     HANDLE first_found = FindFirstFileW(built_path.data, &found_file);
     if(first_found != INVALID_HANDLE_VALUE) 
     {
@@ -470,7 +471,7 @@ int64_t directory_list_contents_malloc(const char* directory_path, int64_t path_
             if(entries_size >= entries_capacity)
             {
                 entries_capacity *= 2;
-                local_entries = (Directory_Entry*) wio_sure_realloc(local_entries, sizeof(Directory_Entry) * (entries_capacity+1));
+                local_entries = (Directory_Entry*) wio_sure_realloc(local_entries, (int64_t) sizeof(Directory_Entry) * (entries_capacity+1));
             }
 
             local_entries[entries_size++] = entry;
@@ -517,7 +518,7 @@ char* directory_get_current_working_malloc()
     if(current_working == NULL)
         abort();
 
-    WIO_String output = wio_convert_to_utf8_normalize_path(current_working, wcslen(current_working), IO_NORMALIZE_LINUX | IO_NORMALIZE_DIRECTORY, NULL, 0);
+    WIO_String output = wio_convert_to_utf8_normalize_path(current_working, (int64_t) wcslen(current_working), IO_NORMALIZE_LINUX | IO_NORMALIZE_DIRECTORY, NULL, 0);
     free(current_working);
     return output.data;
 }
@@ -542,7 +543,7 @@ static bool wio_is_separator(char c)
 static bool wio_is_prefixed_with(const char* str, int64_t str_size, const char* prefix)
 {
     assert(prefix != NULL);
-    isize prefix_len = strlen(prefix);
+    int64_t prefix_len = (int64_t) strlen(prefix);
     if(str_size < prefix_len)
         return false;
 
@@ -901,7 +902,7 @@ static void wio_w_string_resize(WIO_w_String* string, int64_t size)
         else
         {
             wchar_t* prev_data = string->data != string->buffer ? string->data : NULL;
-            string->data = (wchar_t*) wio_sure_realloc(prev_data, sizeof(wchar_t) * (size+1));
+            string->data = (wchar_t*) wio_sure_realloc(prev_data, (int64_t) sizeof(wchar_t) * (size+1));
             string->capacity = size;
         }
     }
@@ -940,9 +941,9 @@ static void wio_utf8_to_utf16(const char* utf8, int64_t utf8len, WIO_w_String* o
 
 static void wio_w_concat(const wchar_t* a, const wchar_t* b, const wchar_t* c, WIO_w_String* output)
 {
-    int64_t a_size = a != NULL ? wcslen(a) : 0;
-    int64_t b_size = b != NULL ? wcslen(b) : 0;
-    int64_t c_size = c != NULL ? wcslen(c) : 0;
+    int64_t a_size = a != NULL ? (int64_t) wcslen(a) : 0;
+    int64_t b_size = b != NULL ? (int64_t) wcslen(b) : 0;
+    int64_t c_size = c != NULL ? (int64_t) wcslen(c) : 0;
     int64_t composite_size = a_size + b_size + c_size;
         
     wio_w_string_resize(output, composite_size);
@@ -996,7 +997,7 @@ void test_normalize_path_single(const char* to_simplify, int style, const char* 
     normalized.buffer_size = IO_LOCAL_BUFFER_SIZE;
         
     printf("\nbefore:   \"%s\"\n", to_simplify);
-    int64_t len = strlen(to_simplify);
+    int64_t len = (int64_t) strlen(to_simplify);
     wio_normalize_allocate_path(to_simplify, len, style, &normalized);
 
     printf("simplify: \"%s\"\n", normalized.data);
@@ -1008,17 +1009,17 @@ void test_normalize_path_single(const char* to_simplify, int style, const char* 
     wio_string_free(&normalized);
 }
 
-enum Path_Info_Test_Flags
+typedef enum Path_Info_Test_Flags
 {
     TEST_PATH_INFO_ABSOLUTE = 1,
     TEST_PATH_INFO_ABSOLUTE_LINUX = 2,
     TEST_PATH_INFO_ABSOLUTE_DRIVE = 4,
     TEST_PATH_INFO_DIRECTORY = 8,
-};
+} Path_Info_Test_Flags;
     
 void test_path_get_info_single(const char* path, int64_t prefix, int64_t root, int64_t file, int64_t ext, int flag, char letter)
 {
-    int64_t len = strlen(path);
+    int64_t len = (int64_t) strlen(path);
     Path_Info info = path_get_info(path, len);
 
     assert(info.prefix_size == prefix);

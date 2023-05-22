@@ -99,7 +99,7 @@
 
 JOT_IO_BEGIN
 
-enum File_Open_Mode 
+typedef enum File_Open_Mode 
 {
     FILE_OPEN_READ = 1,
     FILE_OPEN_WRITE = 2,
@@ -113,16 +113,16 @@ enum File_Open_Mode
     FILE_OPEN_ALLOW_OTHER_READ = 64,
     FILE_OPEN_ALLOW_OTHER_WRITE = 128,
     FILE_OPEN_ALLOW_OTHER_DELETE = 256,
-};
+} File_Open_Mode;
 
-enum File_Seek
+typedef enum File_Seek
 {
-    FILE_SEEK_CURRENT = SEEK_CUR,
-    FILE_SEEK_START = SEEK_SET,
-    FILE_SEEK_END = SEEK_END,
-};
+    FILE_SEEK_START = 0,
+    FILE_SEEK_CURRENT = 1,
+    FILE_SEEK_END = 2,
+} File_Seek;
 
-enum File_Type
+typedef enum File_Type
 {
     FILE_TYPE_NOT_FOUND = 0,
     FILE_TYPE_FILE = 1,
@@ -130,7 +130,7 @@ enum File_Type
     FILE_TYPE_CHARACTER_DEVICE = 2,
     FILE_TYPE_PIPE_ = 3,
     FILE_TYPE_OTHER = 5,
-};
+} File_Type;
 
 typedef struct File
 {
