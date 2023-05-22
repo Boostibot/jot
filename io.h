@@ -138,7 +138,8 @@ typedef struct File
     uint64_t state[4];
         
     #ifndef JOT_IO_C
-    File();
+    //takes non explicit dummy to allow = {0} initialization
+    File(int dummy = 0); 
     ~File() noexcept;
 
     File(File && other) noexcept;

@@ -45,6 +45,8 @@ typedef struct WIO_w_String
     int64_t buffer_size;
 } WIO_w_String;
 
+
+
 //We assume allocations never fail and if they do we just abort the entire program. If you wish to handle it
 // differently feel free to change this function
 static void* wio_sure_realloc(void* allocated, int64_t size)
@@ -58,7 +60,7 @@ static void* wio_sure_realloc(void* allocated, int64_t size)
     void* reallocated = realloc(allocated, (size_t) size);
     if(reallocated == NULL)
     {
-        fprintf(stderr, "io.h allocation failed! Attempted to allocate %lld bytes\n", (long long) size);
+        fprintf(stderr, "io.h allocation failed! Attempted to allocate %lld bytes\n", (long long) size); 
         abort();
     }
 
@@ -100,7 +102,8 @@ HANDLE wio_get_file_handle_val(File CREF file)
 }
     
 #ifndef JOT_IO_C
-File::File()
+//@TODO: remove this and instead have 0 init
+File::File(int)
 {
     memset(this, 0, sizeof(*this));
     *wio_get_file_handle(this) = INVALID_HANDLE_VALUE;
@@ -169,7 +172,8 @@ void file_close(File* file)
     
 bool file_is_open(File CREF file)
 {
-    return wio_get_file_handle_val(file) != INVALID_HANDLE_VALUE;
+    HANDLE h = wio_get_file_handle_val(file);
+    return h != INVALID_HANDLE_VALUE && h != NULL;
 }
 
 File_IO_Result file_read(File* file, void* read_into, int64_t size)
@@ -180,18 +184,18 @@ File_IO_Result file_read(File* file, void* read_into, int64_t size)
     if(result.file_closed)
         return result;
 
-    int64_t total_read = 0;
-    while(total_read < size)
+    result.processed_size = 0;
+    while(result.processed_size < size)
     {
-        int64_t remaining_size = size - total_read;
+        int64_t remaining_size = size - result.processed_size;
         DWORD to_read = (DWORD) (remaining_size & 0x8FFFFF);
         DWORD read = 0;
-        result.error = (int) !ReadFile(handle, (char*) read_into + total_read, to_read, &read, NULL);
+        result.error = (int) !ReadFile(handle, (char*) read_into + result.processed_size, to_read, &read, NULL);
             
         if(result.error)
             break;
 
-        total_read += read;
+        result.processed_size += read;
         // Check for eof
         if (read == 0) 
         {
@@ -211,18 +215,18 @@ File_IO_Result file_write(File* file, const void* write_from, int64_t size)
     if(result.file_closed)
         return result;
 
-    int64_t total_written = 0;
-    while(total_written < size)
+    result.processed_size = 0;
+    while(result.processed_size < size)
     {
-        int64_t remaining_size = size - total_written;
+        int64_t remaining_size = size - result.processed_size;
         DWORD to_write = (DWORD) (remaining_size & 0x8FFFFF);
         DWORD written = 0;
-        result.error = (int) !ReadFile(handle, (char*) write_from + total_written, to_write, &written, NULL);
+        result.error = (int) !ReadFile(handle, (char*) write_from + result.processed_size, to_write, &written, NULL);
             
         if(result.error)
             break;
 
-        total_written += written;
+        result.processed_size += written;
     }
 
     return result;
@@ -986,6 +990,38 @@ WIO_String wio_convert_to_utf8_normalize_path(const wchar_t* path, int64_t path_
     return output;
 }
 
+void shutdown_testing();
+
+#define MAX_RESOURCE_NESTING 20
+#define MAX_FILE_RESOURCES 1000
+#define TESTING_DIR "__temp_testing"
+#define ARRAY_SIZE(str) (sizeof(str) - 1)
+
+struct Testing_File_Resource
+{
+    const char* path;
+    bool is_deleted;
+    bool is_directory;
+    bool panic_if_not_present;
+};
+
+Testing_File_Resource file_resources[MAX_FILE_RESOURCES];
+int64_t file_resources_count = 0;
+bool has_error = false;
+
+#define ERROR_PRINT(...) fprintf(stderr, __VA_ARGS__)
+
+#define TEST_PANIC_WITH(...) do { ERROR_PRINT(__VA_ARGS__); shutdown_testing(); abort(); } while(0)
+
+#ifdef TEST
+#undef TEST
+#endif
+
+#define TEST(a) if(!(a)) do { TEST_PANIC_WITH("TEST: failed \"" #a "\" at " __FILE__ " line %d\n", __LINE__); has_error = true; } while(0); 
+
+//doesnt abort on test fail instead just prints failed
+#define TEST_CONTINUE(a) if(!(a)) do { ERROR_PRINT("TEST: failed \"" #a "\" at " __FILE__ " line %d\n", __LINE__); has_error = true; } while(0); 
+
 void test_normalize_path_single(const char* to_simplify, int style, const char* expected_result)
 {
     char normalized_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
@@ -996,48 +1032,56 @@ void test_normalize_path_single(const char* to_simplify, int style, const char* 
     normalized.buffer = normalized_buffer;
     normalized.buffer_size = IO_LOCAL_BUFFER_SIZE;
         
-    printf("\nbefore:   \"%s\"\n", to_simplify);
     int64_t len = (int64_t) strlen(to_simplify);
     wio_normalize_allocate_path(to_simplify, len, style, &normalized);
 
-    printf("simplify: \"%s\"\n", normalized.data);
-    printf("expected: \"%s\"\n", expected_result);
-
     //int64_t expected_len = strlen(expected_result);
-    assert(strcmp(normalized.data, expected_result) == 0);
+    int differ_at = strcmp(normalized.data, expected_result);
+    if(differ_at != 0)
+    {
+        printf("\nbefore:   \"%s\"\n", to_simplify);
+        printf("simplify: \"%s\"\n", normalized.data);
+        printf("expected: \"%s\"\n", expected_result);
+        printf("differ at: %d\n", differ_at);
+        TEST_PANIC_WITH("TES: test_normalize_path_single failed!");
+    }
 
     wio_string_free(&normalized);
 }
 
-typedef enum Path_Info_Test_Flags
-{
-    TEST_PATH_INFO_ABSOLUTE = 1,
-    TEST_PATH_INFO_ABSOLUTE_LINUX = 2,
-    TEST_PATH_INFO_ABSOLUTE_DRIVE = 4,
-    TEST_PATH_INFO_DIRECTORY = 8,
-} Path_Info_Test_Flags;
-    
+#define TEST_PATH_INFO_ABSOLUTE 1
+#define TEST_PATH_INFO_DIRECTORY 2
+#define TEST_PATH_INFO_ABSOLUTE_LINUX 4
+#define TEST_PATH_INFO_ABSOLUTE_DRIVE 8
+
 void test_path_get_info_single(const char* path, int64_t prefix, int64_t root, int64_t file, int64_t ext, int flag, char letter)
 {
     int64_t len = (int64_t) strlen(path);
     Path_Info info = path_get_info(path, len);
 
-    assert(info.prefix_size == prefix);
-    assert(info.root_size == root);
-    assert(info.filename_size == file);
-    assert(info.extension_size == ext);
+    TEST(info.prefix_size == prefix);
+    TEST(info.root_size == root);
+    TEST(info.filename_size == file);
+    TEST(info.extension_size == ext);
 
-    assert(info.is_absolute == !!(flag & TEST_PATH_INFO_ABSOLUTE));
-    assert(info.is_linux_style_absolute == !!(flag & TEST_PATH_INFO_ABSOLUTE_LINUX));
-    assert(info.is_drive_style_absolute == !!(flag & TEST_PATH_INFO_ABSOLUTE_DRIVE));
-    assert(info.is_directory == !!(flag & TEST_PATH_INFO_DIRECTORY));
+    TEST(info.is_absolute == !!(flag & TEST_PATH_INFO_ABSOLUTE));
+    TEST(info.is_linux_style_absolute == !!(flag & TEST_PATH_INFO_ABSOLUTE_LINUX));
+    TEST(info.is_drive_style_absolute == !!(flag & TEST_PATH_INFO_ABSOLUTE_DRIVE));
+    TEST(info.is_directory == !!(flag & TEST_PATH_INFO_DIRECTORY));
 
-    assert(info.drive_letter == letter);
+    TEST(info.drive_letter == letter);
 }
 
 void test_normalize_path()
 {
     #define L_PREF PATH_PREFIX_LONG
+    #define LONG_SEG "a_very_long_segement_name_to_test_the_max_size_limit"
+
+    #define LONG_PATH LONG_SEG "/" LONG_SEG "/" LONG_SEG "/" LONG_SEG "/" LONG_SEG
+    #define VERY_LONG_PATH LONG_PATH "/" LONG_PATH "/" LONG_PATH
+    
+    #define WIN_LONG_PATH LONG_SEG "\\" LONG_SEG "\\" LONG_SEG "\\" LONG_SEG "\\" LONG_SEG
+    #define WIN_VERY_LONG_PATH WIN_LONG_PATH "\\" WIN_LONG_PATH "\\" WIN_LONG_PATH
 
     {
         int ABSL = TEST_PATH_INFO_ABSOLUTE_LINUX | TEST_PATH_INFO_ABSOLUTE;
@@ -1064,6 +1108,9 @@ void test_normalize_path()
         test_path_get_info_single("/",                          0, 1, 0, 0, ABSL | DIR, 0);
         test_path_get_info_single(L_PREF"h:",                   4, 6, 0, 0, ABSD | DIR, 'H');
         test_path_get_info_single(L_PREF"/",                    4, 5, 0, 0, ABSL | DIR, 0);
+        test_path_get_info_single("C:/" VERY_LONG_PATH "/file.txt", 0, 3, 8, 3, ABSD, 'C');
+        test_path_get_info_single("/" VERY_LONG_PATH "/",       0, 1, 0, 0, ABSL | DIR, 0);
+        test_path_get_info_single(L_PREF "/" VERY_LONG_PATH "/",4, 5, 0, 0, ABSL | DIR, 0);
     }
 
     {
@@ -1115,6 +1162,11 @@ void test_normalize_path()
         test_normalize_path_single(L_PREF "/./.././file.txt",      LIN,  "/file.txt");
         test_normalize_path_single("C:/../../../file.txt",         LWIN, L_PREF "C:\\file.txt");
         test_normalize_path_single("C:/../././../file.txt",        LWIN, L_PREF "C:\\file.txt");
+        test_normalize_path_single("z:" VERY_LONG_PATH "/f.txt",   LIN |  D, "Z:/" VERY_LONG_PATH "/f.txt/");
+        test_normalize_path_single("z:" VERY_LONG_PATH "/f.txt",   WIN |  D, L_PREF "Z:\\" WIN_VERY_LONG_PATH "\\f.txt\\");
+        test_normalize_path_single("z:" VERY_LONG_PATH "/f.txt",   LWIN | D, L_PREF "Z:\\" WIN_VERY_LONG_PATH "\\f.txt\\");
+        test_normalize_path_single("/" VERY_LONG_PATH "/f.txt/",   WIN | F, L_PREF "\\" WIN_VERY_LONG_PATH "\\f.txt");
+        test_normalize_path_single(L_PREF "/" VERY_LONG_PATH "/f.txt/f/../",   WIN | F, L_PREF "\\" WIN_VERY_LONG_PATH "\\f.txt");
 
         test_normalize_path_single("path/to/./file.txt",           WIN | D, "path\\to\\file.txt\\");
         test_normalize_path_single("path/./to/file.txt\\",         WIN | D, "path\\to\\file.txt\\");
@@ -1122,7 +1174,135 @@ void test_normalize_path()
         test_normalize_path_single("path/to/file.txt/",            WIN | F, "path\\to\\file.txt");
         test_normalize_path_single("path/to/file.txt",             LWIN | D, L_PREF "path\\to\\file.txt\\");
     }
+}
+
+
+void add_test_resource(const char* path, bool is_directory, bool must_persist)
+{
+    Testing_File_Resource resource = {path};
+    resource.is_directory = is_directory;
+    resource.panic_if_not_present = must_persist;
+
+    if(file_resources_count >= MAX_FILE_RESOURCES)
+        TEST_PANIC_WITH("TESTING: too many file resources!");
+
+    file_resources[file_resources_count++] = resource;
+}
+
+void make_test_directory(const char* path, bool must_persist)
+{
+    if(_mkdir(path) != 0)
+        TEST_PANIC_WITH("TESTING: couldnt create directory: \"%s\"", path);
+
+    add_test_resource(path, true, must_persist);
+}
+
+void make_test_file(const char* path, const char* content, bool must_persist)
+{
+    FILE* file = fopen(path, "wb");
+    if(file == NULL)
+        TEST_PANIC_WITH("TESTING: couldnt open file for testing: \"%s\"", path);
         
+    size_t content_len = strlen(content);
+    size_t written = fwrite(content, 1, content_len, file);
+    if(written != content_len)
+        ERROR_PRINT("TESTING: write all contents to file \"%s\"\n conetnts: \"%s\"\n", path, content);
+        
+    add_test_resource(path, false, must_persist);
+    fclose(file);
+}
+
+void remove_test_resources()
+{
+    //attempt to remove all resources. This has to be done multiple times
+    // since we can only ever delete empty directories and we do not track at all the 
+    // relationship between items resources. This means the algorhtimt is delete all we can.
+    // However if we dont exceed MAX_RESOURCE_NESTING we should be okay.
+    for(int64_t j = 0; j < MAX_RESOURCE_NESTING; j++)
+    {
+        //remove all not yet deleted resources
+        for(int64_t i = file_resources_count; i-- > 0; i)
+        {
+            bool ok = true;
+            if(file_resources[i].is_deleted)
+                continue;
+
+            if(file_resources[i].is_directory)
+                ok = _rmdir(file_resources[i].path) == 0;
+            else
+                ok = _unlink(file_resources[i].path) == 0;
+
+            if(!ok && file_resources[i].panic_if_not_present)
+            {
+                fprintf(stderr, "TEST: persistent resource deleted! \"%s\"", file_resources[i].path);
+                has_error = true;
+            }
+            file_resources[i].is_deleted = true;
+        }
+    }
+
+    if(has_error)
+        abort();
+}
+
+void test_file_functions()
+{
+    bool PERSIST = true;
+    bool TEMP = false;
+
+    const char test_string1[] = "hello world!";
+    const char test_string2[] = "hello world! longer string";
+    const char test_string3[] = "utf8 yey! ýíýščěšěšč";
+
+    const char path1[] = TESTING_DIR "/file1.txt";
+    const char path2[] = TESTING_DIR "/file2";
+    const char path3[] = TESTING_DIR "/utf8_friendly";
+    const char path4[] = TESTING_DIR "/dir";
+
+    make_test_directory(TESTING_DIR, PERSIST);
+    make_test_file(path1, test_string1, PERSIST);
+    make_test_file(path2, test_string2, PERSIST);
+    make_test_file(path3, test_string2, PERSIST);
+    make_test_directory(path4, PERSIST);
+
+    {
+        File_IO_Result result = {0};
+        File file = {0};
+        TEST_CONTINUE(file_is_open(file) == false);
+
+        file = file_open(path1, ARRAY_SIZE(path1), FILE_OPEN_READ);
+        TEST_CONTINUE(file_is_open(file));
+        char buffer[ARRAY_SIZE(test_string1) + 1] = {0};
+        result = file_read(&file, buffer, ARRAY_SIZE(test_string1));
+        TEST_CONTINUE(!result.error);
+        TEST_CONTINUE(!result.file_closed);
+        TEST_CONTINUE(!result.eof);
+        TEST_CONTINUE(result.processed_size == ARRAY_SIZE(test_string1));
+        TEST_CONTINUE(strcmp(buffer, test_string1) == 0);
+
+        file_close(&file);
+        TEST_CONTINUE(file_is_open(file) == false);
+    }
+
+    remove_test_resources();
+}
+
+void test_make_dir()
+{
+
+    remove_test_resources();
+}
+
+void shutdown_testing()
+{
+    remove_test_resources();
+}
+
+void test_io()
+{
+    test_normalize_path();
+    test_file_functions();
+    test_make_dir();
 }
 
 JOT_IO_END
