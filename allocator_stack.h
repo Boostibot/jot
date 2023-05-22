@@ -23,7 +23,7 @@ namespace jot
         
         static constexpr uint64_t USED_BIT = (uint64_t) 1 << 63;
 
-        Stack_Allocator(void* buffer, isize buffer_size, Allocator* parent = default_allocator()) 
+        explicit Stack_Allocator(void* buffer, isize buffer_size, Allocator* parent = default_allocator()) 
             : parent(parent) 
         {
             buffer_from = (uint8_t*) buffer;
@@ -51,7 +51,8 @@ namespace jot
                 return parent->allocate(size, size, callee);
 
             Slot* slot = ((Slot*) aligned_from) - 1;
-            slot->prev_offset = (uint64_t) ptrdiff(slot, last_block_from) | USED_BIT; 
+            isize diff = (isize) slot - (isize) last_block_from;
+            slot->prev_offset = (uint64_t) diff | USED_BIT; 
 
             current_alloced += size;
             if(max_alloced < current_alloced)

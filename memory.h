@@ -47,8 +47,6 @@ namespace jot
     inline bool  is_power_of_two(isize num);
     inline void* align_forward(void* ptr, isize align_to);
     inline void* align_backward(void* ptr, isize align_to);
-    //@TODO: remove
-    inline isize ptrdiff(void* ptr1, void* ptr2);
 
     ///c malloc except allocates aligned
     static void* aligned_malloc(isize byte_size, isize align) noexcept;
@@ -81,9 +79,6 @@ namespace jot
         virtual ~Malloc_Allocator() noexcept override {}
     };
 
-    template <typename T>
-    static constexpr isize DEF_ALIGNMENT = (isize) (alignof(T) > 32 ? alignof(T) : 32);
-    
     namespace memory_constants
     {
         static constexpr int64_t PAGE = 4096;
@@ -121,14 +116,6 @@ namespace jot
         #define __FUNCTION__ __func__
     #endif
     #define GET_LINE_INFO() ::jot::Line_Info{__FILE__, __FUNCTION__, __LINE__}
-    
-    //Used to stop infering of arguments. Is useful for example with get(Array<T> arr, isize index, Id<T*> if_not_found)
-    // if we tried to call get(arr, 2, nullptr) it wouldnt compile without Id because the T is either nullptr or whatever arr is...
-    template<class _T>
-    struct _Id {using T = _T;};
-
-    template<class T>
-    using Id = typename _Id<T>::T;
 
     namespace memory_globals
     {
@@ -222,6 +209,14 @@ namespace jot
         *b = (T&&) copy;
     };
     
+    //Used to stop infering of arguments. Is useful for example with get(Array<T> arr, isize index, Id<T*> if_not_found)
+    // if we tried to call get(arr, 2, nullptr) it wouldnt compile without Id because the T is either nullptr or whatever arr is...
+    template<class _T>
+    struct _Id {using T = _T;};
+
+    template<class T>
+    using Id = typename _Id<T>::T;
+
     #ifndef SLICE_DEFINED
         #define SLICE_DEFINED
         template<typename T>
@@ -266,11 +261,6 @@ namespace jot
     {
         usize n = (usize) num;
         return (n>0 && ((n & (n-1)) == 0));
-    }
-   
-    inline isize ptrdiff(void* ptr1, void* ptr2)
-    {
-        return (isize) ptr1 - (isize) ptr2;
     }
 
     inline void* align_forward(void* ptr, isize align_to)
@@ -326,13 +316,13 @@ namespace jot
         Aligned_Malloc_Header* header = aligned_ptr - 1;
 
         (void) original_end;
-        assert(ptrdiff(original_end, aligned_ptr) >= byte_size);
+        assert(original_end - (uint8_t*) aligned_ptr >= byte_size);
 
         //set the marker thats just before the return adress 
         #ifndef NDEBUG
         header->magic_number = 0xABCDABCD;
         #endif
-        header->align_padding = (uint32_t) ptrdiff(aligned_ptr, original_ptr);
+        header->align_padding = (uint32_t) ((uint8_t*) aligned_ptr - original_ptr);
         return aligned_ptr;
     }
     

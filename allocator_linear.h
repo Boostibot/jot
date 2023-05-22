@@ -17,7 +17,7 @@ namespace jot
 
         Allocator* parent = nullptr;
 
-        Linear_Allocator(void* buffer, isize buffer_size, Allocator* parent = default_allocator()) 
+        explicit Linear_Allocator(void* buffer, isize buffer_size, Allocator* parent = default_allocator()) 
             : parent(parent) 
         {
             buffer_from = (uint8_t*) buffer;

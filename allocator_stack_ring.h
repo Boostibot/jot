@@ -46,7 +46,7 @@ namespace jot
         static constexpr isize MAX_NOT_MULT_SIZE = ((uint32_t) -1) & ~USED_BIT;
         static constexpr isize MAX_BYTE_SIZE = MAX_NOT_MULT_SIZE * SIZE_MULT;
 
-        Stack_Ring_Allocator(void* buffer, isize buffer_size, Allocator* parent = default_allocator()) 
+        explicit Stack_Ring_Allocator(void* buffer, isize buffer_size, Allocator* parent = default_allocator()) 
             : parent(parent) 
         {
             //Slice<uint8_t> aligned = align_forward(buffer, alignof(Slot));
@@ -204,6 +204,11 @@ namespace jot
             }
 
             return (uint8_t*) current_used_from;
+        }
+
+        static isize ptrdiff(void* ptr1, void* ptr2)
+        {
+            return (isize) ptr1 - (isize) ptr2;
         }
 
         isize bytes_used() const

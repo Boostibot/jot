@@ -200,7 +200,7 @@ namespace jot
         auto c_ = hash(row.c);
         //auto d_ = int_array_hash(row.d, 0);
 
-        Handle h = insert(&into->rows, move(&row));
+        Handle h = insert(&into->rows, (Row&&) row);
         insert_hash(into->a_hash, into->hashes_capacity, a_, h.index);
         insert_hash(into->b_hash, into->hashes_capacity, b_, h.index);
         insert_hash(into->c_hash, into->hashes_capacity, c_, h.index);

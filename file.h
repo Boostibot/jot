@@ -17,8 +17,8 @@
 
 #include "unistd.h"
 
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#define min(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 using isize = ptrdiff_t;
 
@@ -43,14 +43,14 @@ namespace jot
     //Shared flags
     enum class File_Open_Mode 
     {
-        READ = O_RDONLY,
-        WRITE = O_WRONLY,
+        READ       = O_RDONLY,
+        WRITE      = O_WRONLY,
         READ_WRITE = O_RDWR,
 
-        APPEND = O_APPEND,
-        CREATE = O_CREAT,
+        APPEND    = O_APPEND,
+        CREATE    = O_CREAT,
         EXCLUSIVE = O_EXCL,
-        TRUNCATE = O_TRUNC,
+        TRUNCATE  = O_TRUNC,
 
         WINDOWS_TEXT       = O_TEXT,
         WINDOWS_BINARY     = O_BINARY,
@@ -60,11 +60,11 @@ namespace jot
         WINDOWS_SEQUENTIAL = O_SEQUENTIAL,
         WINDOWS_RANDOM     = O_RANDOM,
         
-        LINUX_DSYNC = O_DSYNC,
-        LINUX_NOCTTY = O_NOCTTY,
-        LINUX_NONBLOCK = O_NONBLOCK,
-        LINUX_RSYNC = O_RSYNC,
-        LINUX_SYNC = O_SYNC,
+        LINUX_DSYNC     = O_DSYNC,
+        LINUX_NOCTTY    = O_NOCTTY,
+        LINUX_NONBLOCK  = O_NONBLOCK,
+        LINUX_RSYNC     = O_RSYNC,
+        LINUX_SYNC      = O_SYNC,
     };
 
     enum class File_Permission_Mode 
@@ -333,7 +333,7 @@ namespace jot
             while(result.processed_size < buffer_size)
             {
                 isize remaining = buffer_size - result.processed_size;;
-                unsigned single_read = (unsigned) min(remaining, MAX_READ_WRITE_CHUNK);
+                unsigned single_read = (unsigned) MIN(remaining, MAX_READ_WRITE_CHUNK);
                 void* read_to = (char*) buffer + result.processed_size;
 
                 int res = ::read(file->descriptor, read_to, single_read);
@@ -410,7 +410,7 @@ namespace jot
             while(result.processed_size < buffer_size)
             {
                 isize remaining = buffer_size - result.processed_size;;
-                unsigned single_read = (unsigned) min(remaining, MAX_READ_WRITE_CHUNK);
+                unsigned single_read = (unsigned) MIN(remaining, MAX_READ_WRITE_CHUNK);
                 void* read_to = (char*) buffer + result.processed_size;
 
                 int res = ::write(file->descriptor, read_to, single_read);
@@ -536,5 +536,5 @@ namespace jot
     #endif // !SET_UTF8_LOCALE
 }
 
-#undef min
-#undef max
+#undef MIN
+#undef MAX

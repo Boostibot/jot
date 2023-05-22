@@ -13,18 +13,26 @@ namespace jot
     template<typename T> constexpr
     static isize simple_strlen(const T* str, isize max_size = ISIZE_MAX) noexcept
     {
+        if(str == nullptr)
+            return 0;
+
         isize size = 0;
         while(size < max_size && str[size] != 0)
             size++;
 
         return size;
     };
-
+    
     template<typename T> NO_SANITIZE_ADDR 
-    isize strlen(const T* str, isize max_size = ISIZE_MAX) noexcept;
+    static isize strlen(const T* str, isize max_size = ISIZE_MAX) noexcept
+    {
+        return simple_strlen(str, max_size);
+    }
+
+    NO_SANITIZE_ADDR
+    static isize strlen(const char* str, isize max_size = ISIZE_MAX) noexcept;
 
     #define DEFINE_STRING_TYPE(CHAR_T)                                                          \
-        template<> constexpr bool is_string_char<CHAR_T> = true;                                \
         template<> struct Slice<CHAR_T>                                                         \
         {                                                                                       \
             using T = CHAR_T;                                                                   \
@@ -79,10 +87,10 @@ namespace jot
     DEFINE_STRING_TYPE(const char16_t);
     DEFINE_STRING_TYPE(const char32_t);
     
-    #ifdef __cpp_char8_t
-    //DEFINE_STRING_TYPE(char8_t);
-    DEFINE_STRING_TYPE(const char8_t);
-    #endif
+    template<> constexpr bool is_string_char<char> = true;
+    template<> constexpr bool is_string_char<wchar_t> = true;
+    template<> constexpr bool is_string_char<char16_t> = true;
+    template<> constexpr bool is_string_char<char32_t> = true;
 
     using String = Slice<const char>;
     //@TODO: maybe decide against Mutable_String because it is simply not needed as a concept
@@ -142,20 +150,17 @@ namespace jot
 
 namespace jot
 {
-    //@TODO: dont use this version for wide!
-    //@TODO: include if for nullptr in the normal one
-    template<typename T> NO_SANITIZE_ADDR 
-    isize strlen(const T* s, isize max_size) noexcept
+    NO_SANITIZE_ADDR 
+    static isize strlen(const char* s, isize max_size) noexcept
     {
         //slightly modified (4B -> 8B) from: stb_sprintf.h 
         //https://github.com/nothings/stb/blob/master/stb_sprintf.h
-        
-        assert(s != nullptr);
-
-        const T* sn = s;
-        isize remainign = max_size;
-        if(sn == nullptr)
+        if(s == nullptr)
             return 0;
+
+        assert(s != nullptr);
+        const char* sn = s;
+        isize remainign = max_size;
 
         // get up to 8-byte alignment
         for (;;) {

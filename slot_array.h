@@ -31,7 +31,7 @@ namespace jot
         // bugs in access.
         uint32_t _handle_offset = 0; 
 
-        Slot_Array(Allocator* allocator = default_allocator(), uint32_t handle_offset = 0) noexcept
+        explicit Slot_Array(Allocator* allocator = default_allocator(), uint32_t handle_offset = 0) noexcept
             : _allocator(allocator), _handle_offset(handle_offset)
         {}
 

@@ -15,7 +15,7 @@ namespace jot
         isize _size = 0;
         isize _capacity = 0;
         
-        Array(Allocator* allocator = default_allocator()) noexcept;
+        explicit Array(Allocator* allocator = default_allocator()) noexcept;
         Array(Array && other) noexcept;
         Array(Array const& other);
         ~Array() noexcept;
@@ -174,7 +174,7 @@ namespace jot
 
         void* new_data = nullptr;
         bool state = memory_resize_allocate(array->_allocator, &new_data, new_byte_cap, 
-            array->_data, old_byte_cap, DEF_ALIGNMENT<T>, GET_LINE_INFO());
+            array->_data, old_byte_cap, (isize) alignof(T), GET_LINE_INFO());
 
         if(state == false)
             return false;
@@ -195,7 +195,7 @@ namespace jot
 
         array_internal::destruct_items(array->_data, new_capacity, array->_size);
         memory_resize_deallocate(array->_allocator, &new_data, new_byte_cap, 
-            array->_data, old_byte_cap, DEF_ALIGNMENT<T>, GET_LINE_INFO());
+            array->_data, old_byte_cap, (isize) alignof(T), GET_LINE_INFO());
 
         array->_size = to_size;
         array->_data = (T*) new_data;
@@ -225,7 +225,7 @@ namespace jot
         {
             array_internal::destruct_items(_data, 0, _size);
             isize cap = _capacity + (isize) is_string_char<T>;
-            _allocator->deallocate(_data, cap * (isize) sizeof(T), DEF_ALIGNMENT<T>, GET_LINE_INFO());
+            _allocator->deallocate(_data, cap * (isize) sizeof(T), (isize) alignof(T), GET_LINE_INFO());
         }
     }
 
@@ -268,12 +268,14 @@ namespace jot
         if (is_string_char<T>)
         {
             espcape_inv = array._data != nullptr;
-            espcape_inv = espcape_inv && memcmp(array._data, array_internal::null_termination(), sizeof(T)) == 0;
+            espcape_inv = espcape_inv && memcmp(array._data + array._size, array_internal::null_termination(), sizeof(T)) == 0;
         }
         else
             data_inv = (array._capacity == 0) == (array._data == nullptr);
 
-        return size_inv && capa_inv && data_inv && espcape_inv;
+        bool result = size_inv && capa_inv && data_inv && espcape_inv;
+        assert(result);
+        return result;
     }
      
     template<class T>

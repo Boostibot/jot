@@ -235,7 +235,7 @@ namespace jot
                 }
             }
 
-            push(&entries, move(&entry));
+            push(&entries, (Stack_Trace_Entry&&) entry);
         }
 
         return entries;

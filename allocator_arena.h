@@ -40,7 +40,7 @@ namespace jot
         
         static constexpr isize ARENA_BLOCK_ALIGN = 16;
 
-        Arena_Allocator(
+        explicit Arena_Allocator(
             Allocator* parent = memory_globals::default_allocator(), 
             isize chunk_size = memory_constants::PAGE,
             Grow_Fn chunk_grow = default_arena_grow) 
@@ -211,7 +211,7 @@ namespace jot
             {
                 uint8_t* block_data = data(curr);
                 void* aligned = align_forward(block_data, align);
-                isize aligned_size = ptrdiff(block_data + curr->size, aligned);
+                isize aligned_size = (isize) (block_data + curr->size) - (isize) aligned;
                 if(aligned_size >= size)
                 {
                     obtained = extract_node_sl(&first_block, &last_block, before, curr);

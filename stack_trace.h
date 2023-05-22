@@ -72,7 +72,7 @@ namespace jot
             {
                 mark_traces_from_file_as_archutectural(&trace, "stack_trace.h");
                 Fallback_Fn& fn = *(Fallback_Fn*) args;
-                fn(move(&trace));
+                fn((Array<Stack_Trace_Entry>&&) trace);
             }
         };
 

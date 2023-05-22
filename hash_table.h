@@ -55,7 +55,7 @@ namespace jot
         // only then properly removes the deleted jump table entries.
 
         Hash_Table() noexcept {};
-        Hash_Table(Allocator* alloc, uint64_t seed = *hash_table_globals::seed_ptr()) noexcept 
+        explicit Hash_Table(Allocator* alloc, uint64_t seed = *hash_table_globals::seed_ptr()) noexcept 
             : _allocator(alloc), _seed(seed) {}
         Hash_Table(Hash_Table&& other) noexcept;
         Hash_Table(Hash_Table const& other) = delete;
@@ -215,13 +215,13 @@ namespace jot
             void* new_keys = nullptr;
             void* new_values = nullptr;
             
-            bool state1 = memory_resize_allocate(alloc, &new_keys, new_capacity*key_size, table->_keys, capa*key_size, DEF_ALIGNMENT<Key>, GET_LINE_INFO());
-            bool state2 = memory_resize_allocate(alloc, &new_values, new_capacity*value_size, table->_values, capa*value_size, DEF_ALIGNMENT<Value>, GET_LINE_INFO());
+            bool state1 = memory_resize_allocate(alloc, &new_keys, new_capacity*key_size, table->_keys, capa*key_size, (isize) alignof(Key), GET_LINE_INFO());
+            bool state2 = memory_resize_allocate(alloc, &new_values, new_capacity*value_size, table->_values, capa*value_size, (isize) alignof(Value), GET_LINE_INFO());
 
             if(!state1 || !state2)
             {
-                memory_resize_undo(alloc, &new_keys,   new_capacity*key_size,   table->_keys,   capa*key_size, DEF_ALIGNMENT<Key>, GET_LINE_INFO());
-                memory_resize_undo(alloc, &new_values, new_capacity*value_size, table->_values, capa*value_size, DEF_ALIGNMENT<Value>, GET_LINE_INFO());
+                memory_resize_undo(alloc, &new_keys,   new_capacity*key_size,   table->_keys,   capa*key_size, (isize) alignof(Key), GET_LINE_INFO());
+                memory_resize_undo(alloc, &new_values, new_capacity*value_size, table->_values, capa*value_size, (isize) alignof(Value), GET_LINE_INFO());
             }
 
             //destruct extra
@@ -240,8 +240,8 @@ namespace jot
             if(new_keys != table->_keys)        memmove(new_keys, table->_keys, new_size*sizeof(Key));
             if(new_values != table->_values)    memmove(new_values, table->_values, new_size*sizeof(Value));
         
-            memory_resize_deallocate(alloc, &new_keys,   new_capacity*key_size,   table->_keys,   capa*key_size, DEF_ALIGNMENT<Key>, GET_LINE_INFO());
-            memory_resize_deallocate(alloc, &new_values, new_capacity*value_size, table->_values, capa*value_size, DEF_ALIGNMENT<Value>, GET_LINE_INFO());
+            memory_resize_deallocate(alloc, &new_keys,   new_capacity*key_size,   table->_keys,   capa*key_size, (isize) alignof(Key), GET_LINE_INFO());
+            memory_resize_deallocate(alloc, &new_values, new_capacity*value_size, table->_values, capa*value_size, (isize) alignof(Value), GET_LINE_INFO());
 
             table->_entries_size = (uint32_t) new_size;
             table->_entries_capacity = (uint32_t) new_capacity;
