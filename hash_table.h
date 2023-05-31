@@ -155,7 +155,7 @@ namespace jot
     {
         return table._max_hash_collisions;
     }
-
+    
     template<class Key, class Value, Hash_Fn<Key> hash, Equal_Fn<Key> equals>
     void swap(Hash_Table<Key, Value, hash, equals>* left, Hash_Table<Key, Value, hash, equals>* right) noexcept
     {

@@ -6,9 +6,8 @@
 
 
 //This is a simple filesystem io wrapper. It focuses on simplicity and usability.
-//Note that all file IO is unbuffered.
 
-//This interface does NOT support sockets, pipes, sym links, network drives, 
+//This interface does NOT support sockets, pipes, network drives, 
 //windows UNC (unified naming convention), windows \\.\ prefix (physical drive path). 
 //If you need those expand the interface or use a proper library
 
@@ -97,6 +96,8 @@
 #define CREF const&
 #endif
 
+#define JAPI
+
 JOT_IO_BEGIN
 
 typedef enum File_Open_Mode 
@@ -107,8 +108,8 @@ typedef enum File_Open_Mode
 
     FILE_OPEN_CREATE = 4,           //the file can exist or not not in both cases it is opened
     FILE_OPEN_CREATE_ELSE_FAIL = 8, //if the file does exist fail
-    FILE_OPEN_TRANSLATE = 16,
-    FILE_OPEN_TEMPORARY = 32,
+    //FILE_OPEN_TRANSLATE = 16,  //probably remove
+    //FILE_OPEN_TEMPORARY = 32,  //@TODO: implement
 
     FILE_OPEN_ALLOW_OTHER_READ = 64,
     FILE_OPEN_ALLOW_OTHER_WRITE = 128,
@@ -132,6 +133,13 @@ typedef enum File_Type
     FILE_TYPE_OTHER = 5,
 } File_Type;
 
+typedef enum File_IO_State {
+    FILE_IO_STATE_OK = 0,
+    FILE_IO_STATE_ERROR = 1,
+    FILE_IO_STATE_EOF = 2,
+    FILE_IO_STATE_FILE_CLOSED = 3,
+} File_IO_State;
+
 typedef struct File
 {
     int open_mode;
@@ -150,22 +158,14 @@ typedef struct File
     #endif
 } File;
 
-//FILE_ATTRIBUTE_DIRECTORY
-typedef struct File_IO_Result
-{
-    int64_t processed_size;  // how many bytes were successfully read/written. If is not the requested ammount then error or eof was encountered
-    int64_t error;           // has the value of errno at the time of error or 0 if no error ofccured
-    bool eof;              // if end of file was reached
-    bool file_closed;      // if file was not opened
-} File_IO_Result;
-
 typedef struct File_Info
 {
-    File_Type type;
     int64_t size;
+    File_Type type;
     time_t created_time;
     time_t last_write_time;  
     time_t last_access_time; //The last time file was either read or written
+    bool is_link; //if file/dictionary is actually just a link (hardlink or softlink or symlink)
 } File_Info;
     
 typedef struct Path_Info
@@ -185,44 +185,72 @@ typedef struct Directory_Entry
 {
     char* path;
     int64_t path_size;
-    bool is_directory;
+    int64_t index_within_directory;
+    int64_t directory_depth;
+    File_Info info;
 } Directory_Entry;
 
+typedef struct IO_Allocator {
+    void* (*reallocate)(void* old_data, size_t new_size, void* context);
+    void* context;
+} IO_Allocator;
+
+//Sets the default allocator for this module
+JAPI void io_set_allocator(IO_Allocator allocator);
+//Queries the currently set default alloctaor for this module
+JAPI IO_Allocator io_get_allocator();
+//Reallocates memory by the currenlty set allocator
+JAPI void* io_realloc(void* allocated, size_t size);
+//Allocates memory by the currenlty set allocator
+JAPI void* io_malloc(size_t size);
+//Frees memory by the currenlty set allocator
+JAPI void  io_free(void* ptr);
+
 //Opens a file given the open_mode and permission_mode.
-File file_open(const char* path, int64_t path_size, int open_mode);
+JAPI File file_open(const char* path, int64_t path_size, int open_mode);
 //Closes previously opened file
-void file_close(File* file);
+JAPI void file_close(File* file);
 //returns true if the provied file is open
-bool file_is_open(File CREF file);
+JAPI bool file_is_open(File CREF file);
 
 //Attempts to read up to size bytes from file into read_into.
-File_IO_Result file_read(File* file, void* read_into, int64_t size);
+JAPI int64_t file_read(File* file, void* read_into, int64_t size, File_IO_State* state);
 //Attempts to write up to size bytes into file from write_from.
-File_IO_Result file_write(File* file, const void* write_from, int64_t size);
+JAPI int64_t file_write(File* file, const void* write_from, int64_t size, File_IO_State* state);
 
-//Offsets the current possition in file by offset relative to from
-bool  file_seek(File* file, int64_t offset, File_Seek from);
-//Returns the current position in file relative to start of the file. This can be used as argument to file_seek
-int64_t file_tell(File CREF file);
+//Offsets the current possition in file by offset relative to from. If offset is illegal (ie. negative when from start) fails.
+JAPI bool  file_seek(File* file, int64_t offset, File_Seek from);
+//Returns the current offset in bytes from start of the file. This can also be used as argument to file_seek.
+//If fails returns -1.
+JAPI int64_t file_tell(File CREF file);
+//trims the file so that it is not larger than max_size. If the current reading position is greater than max_size it is rewinded back to max_size.
+JAPI bool file_trim(File* file, int64_t max_size);
 
-bool file_create(const char* file_path, int64_t path_size);
-bool file_remove(const char* file_path, int64_t path_size);
-//moves or renames a file. If the file cannot be found or renamed to file already exists fails
-bool file_move(const char* new_path, int64_t new_path_size, const char* old_path, int64_t old_path_size);
-bool file_copy(const char* copy_to_path, int64_t to_path_size, const char* copy_from_path, int64_t from_path_size);
-bool file_info(const char* file_path, int64_t path_size, File_Info* info);
+//retrieves info about the specified file or directory
+JAPI bool file_info(const char* file_path, int64_t path_size, File_Info* info);
+//Creates an empty file at the specified path
+JAPI bool file_create(const char* file_path, int64_t path_size);
+//Removes a file at the specified path
+JAPI bool file_remove(const char* file_path, int64_t path_size);
+//Moves or renames a file. If the file cannot be found or renamed to file already exists fails
+JAPI bool file_move(const char* new_path, int64_t new_path_size, const char* old_path, int64_t old_path_size);
+//Copies a file. If the file cannot be found or copy_to_path file already exists fails
+JAPI bool file_copy(const char* copy_to_path, int64_t to_path_size, const char* copy_from_path, int64_t from_path_size);
 
-bool directory_create(const char* dir_path, int64_t path_size);
-bool directory_remove(const char* dir_path, int64_t path_size);
-bool directory_move(const char* new_path, int64_t new_path_size, const char* old_path, int64_t old_path_size);
+//Makes an empty directory
+JAPI bool directory_create(const char* dir_path, int64_t path_size);
+//Removes an empty directory
+JAPI bool directory_remove(const char* dir_path, int64_t path_size);
 //changes the current working directory to the new_working_dir.  
-bool directory_set_current_working(const char* new_working_dir, int64_t path_size);    
-char* directory_get_current_working_malloc();    
+JAPI bool directory_set_current_working(const char* new_working_dir, int64_t path_size);    
+//Retrieves the current working directory as allocated string. Needs to be freed using io_free()
+JAPI char* directory_get_current_working_malloc();    
 
-//Gathers and allocates list of files in the current directory.
-int64_t directory_list_contents_malloc(const char* directory_path, int64_t path_size, Directory_Entry** entries);
+//Gathers and allocates list of files in the specified directory. Saves a pointer to array of entries to entries and its size to entries_count. 
+//Needs to be freed using directory_list_contents_free()
+JAPI bool directory_list_contents_malloc(const char* directory_path, int64_t path_size, Directory_Entry** entries, int64_t* entries_count, bool recursive);
 //Frees previously allocated file list
-void  directory_list_contents_free(Directory_Entry* entries);
+JAPI void directory_list_contents_free(Directory_Entry* entries);
    
 //Paths are decomposed into the following: 
 // path:      "//?/C:/path/to/file.txt"
@@ -232,22 +260,16 @@ void  directory_list_contents_free(Directory_Entry* entries);
 // extension: "txt"
 
 //Does basic parsing of the path. Does not involve any filesystem calls.
-Path_Info path_get_info(const char* path, int64_t path_size);
+JAPI Path_Info path_get_info(const char* path, int64_t path_size);
 
-//converts a relative (or absolute) path to absolute path. Writes to buffer up to buffer_capacity characters (including the null termination).
-//Returns the needed size for the whole path which may be bigger than buffer_capacity.
-char* path_get_full_malloc(const char* path, int64_t path_size);   
-//Normalizes path into normalized form. Does not involve any filesystem calls.
-//The norm_as_filetype takes values of File_Type specifies if the path should be transformed into directory or file path.
-//If any other values such as 0 are given does leave the path directory/file state as it is.
-char* path_normalize_malloc(const char* path, int64_t path_siz, int norm_as_filetype);
+//Converts a relative (or absolute) path to absolute path but does not validate if the target path is actually valid.
+//Returns an allocated string that needs to be freed using io_free()
+JAPI char* path_get_full_malloc(const char* path, int64_t path_size);   
 //attempst to normalize into the provided buffer. Does not involve any filesystem calls. 
 //The norm_as_filetype takes values of File_Type specifies if the path should be transformed into directory or file path.
 //If any other values such as 0 are given does leave the path directory/file state as it is.
 //Returns the size of the written string not including null termination.
 //When the buffer is too small returns size bigger than buffer_size and the buffer should grow (generally by twice its size).
-int64_t path_normalize(const char* path, int64_t path_size, int norm_as_filetype, char* buffer, int64_t buffer_size);
-//Returns true if path leads to file or directory. Also reports if the found item is directory. The is_directory argument can be null.
-bool path_validate(const char* path, int64_t path_size, bool* is_directory);
+JAPI int64_t path_normalize(const char* path, int64_t path_size, int norm_as_filetype, char* buffer, int64_t buffer_size);
 
 JOT_IO_END

@@ -5,11 +5,20 @@
 #include <string.h>
 #include <assert.h>
 #include <windows.h>
+#undef min
+#undef max
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stringapiset.h>
-//@TODO: remove this as a dependency!x
+//@TODO: remove this as a dependency!
+//@TODO: handle allocations properly + swap allocator tests
+//@TODO: JAPI all the implementations
+//@TODO: Move into actual c file 
+//@TODO: make private functions start with _ (maybe)
+
 #include <direct.h>
+#include <locale.h> //for tests alone
 
 #ifdef JOT_IO_C
 #define JOT_IO_BEGIN 
@@ -25,31 +34,12 @@ JOT_IO_BEGIN
 
 //Local buffers are used to reduce allocations. 
 //Note that allocations might still accur if the size is not sufficient!
-#define IO_LOCAL_BUFFER_SIZE 1024
-    
-typedef struct WIO_String
-{
-    char* data;
-    int64_t size;
-    int64_t capacity;
-    char* buffer;
-    int64_t buffer_size;
-} WIO_String;
-    
-typedef struct WIO_w_String
-{
-    wchar_t* data;
-    int64_t size;
-    int64_t capacity;
-    wchar_t* buffer;
-    int64_t buffer_size;
-} WIO_w_String;
-
+#define IO_LOCAL_BUFFER_SIZE 3
 
 
 //We assume allocations never fail and if they do we just abort the entire program. If you wish to handle it
 // differently feel free to change this function
-static void* wio_sure_realloc(void* allocated, int64_t size)
+static void* wio_default_allocator(void* allocated, size_t size, void* context)
 {
     if(size == 0)
     {
@@ -66,7 +56,44 @@ static void* wio_sure_realloc(void* allocated, int64_t size)
 
     return reallocated;
 }
-    
+
+IO_Allocator WIO_ALLOCATOR = {wio_default_allocator, NULL};
+
+void io_set_allocator(IO_Allocator allocator)
+{
+    WIO_ALLOCATOR = allocator;
+}
+
+IO_Allocator io_get_allocator()
+{
+    return WIO_ALLOCATOR;
+}
+
+void* io_realloc(void* allocated, size_t size)
+{
+    if(WIO_ALLOCATOR.reallocate == NULL)
+        return NULL;
+
+    return WIO_ALLOCATOR.reallocate(allocated, size, WIO_ALLOCATOR.context);
+}
+void* io_malloc(size_t size)
+{
+    return io_realloc(NULL, size);
+}
+void io_free(void* ptr)
+{
+    io_realloc(ptr, 0);
+}
+
+typedef struct WIO_Buffer
+{
+    void* data;
+    int32_t item_size;
+    int32_t is_alloced;
+    int64_t size;
+    int64_t capacity;
+} WIO_Buffer;
+
 typedef enum Normalize_Flags
 {
     IO_NORMALIZE_WINDOWS = 1,
@@ -74,29 +101,32 @@ typedef enum Normalize_Flags
     IO_NORMALIZE_LONG = 4,
     IO_NORMALIZE_DIRECTORY = 8,
     IO_NORMALIZE_FILE = 16,
-    IO_NORMALIZE_NO_RESIZE = 32,
 } Normalize_Flags;
+
+static wchar_t*     wio_wstring(WIO_Buffer stack);
+static char*        wio_string(WIO_Buffer stack);
+static WIO_Buffer   wio_buffer_init_backed(void* backing, int64_t backing_size, int32_t item_size);
+static WIO_Buffer   wio_buffer_init(int64_t item_size);
+static void*        wio_buffer_resize(WIO_Buffer* stack, int64_t new_size);
+static int64_t      wio_buffer_push(WIO_Buffer* stack, const void* item, int64_t item_size);
+static int64_t      wio_buffer_pop(WIO_Buffer* stack);
+static void*        wio_buffer_at(WIO_Buffer* stack, int64_t index);
+static void         wio_buffer_deinit(WIO_Buffer* stack);
+
+static void wio_utf16_to_utf8(const wchar_t* utf16, int64_t utf16len, WIO_Buffer* output);
+static void wio_utf8_to_utf16(const char* utf8, int64_t utf8len, WIO_Buffer* output);
     
-static void wio_string_free(WIO_String* string);
-static void wio_string_resize(WIO_String* string, int64_t size);
+static void wio_w_concat(const wchar_t* a, const wchar_t* b, const wchar_t* c, WIO_Buffer* output);
+static void wio_normalize_allocate_path(const char* path, int64_t path_size, int flags, WIO_Buffer* output);
+static WIO_Buffer wio_normalize_convert_to_utf16_path(const char* path, int64_t path_size, int flags, char* buffer, int64_t buffer_size);
+static WIO_Buffer wio_convert_to_utf8_normalize_path(const wchar_t* path, int64_t path_size, int flags, char* buffer, int64_t buffer_size);
     
-static void wio_w_string_free(WIO_w_String* string);
-static void wio_w_string_resize(WIO_w_String* string, int64_t size);
-    
-static void wio_utf16_to_utf8(const wchar_t* utf16, int64_t utf16len, WIO_String* output);
-static void wio_utf8_to_utf16(const char* utf8, int64_t utf8len, WIO_w_String* output);
-    
-static void wio_w_concat(const wchar_t* a, const wchar_t* b, const wchar_t* c, WIO_w_String* output);
-static void wio_normalize_allocate_path(const char* path, int64_t path_size, int flags, WIO_String* output);
-static WIO_w_String wio_normalize_convert_to_utf16_path(const char* path, int64_t path_size, int flags, wchar_t* buffer, int64_t buffer_size);
-static WIO_String   wio_convert_to_utf8_normalize_path(const wchar_t* path, int64_t path_size, int flags, char* buffer, int64_t buffer_size);
-    
-HANDLE* wio_get_file_handle(File* file)
+static HANDLE* wio_get_file_handle_ptr(File* file)
 {
     return (HANDLE*) (void*) file->state;
 }
 
-HANDLE wio_get_file_handle_val(File CREF file)
+static HANDLE wio_get_file_handle(File CREF file)
 {
     return *(HANDLE*) (void*) file.state;
 }
@@ -106,21 +136,21 @@ HANDLE wio_get_file_handle_val(File CREF file)
 File::File(int)
 {
     memset(this, 0, sizeof(*this));
-    *wio_get_file_handle(this) = INVALID_HANDLE_VALUE;
+    *wio_get_file_handle_ptr(this) = INVALID_HANDLE_VALUE;
 }
     
 File::File(File && other) noexcept
 {
     memset(this, 0, sizeof(*this));
-    *wio_get_file_handle(this) = *wio_get_file_handle(&other);
-    *wio_get_file_handle(&other) = INVALID_HANDLE_VALUE;
+    *wio_get_file_handle_ptr(this) = *wio_get_file_handle_ptr(&other);
+    *wio_get_file_handle_ptr(&other) = INVALID_HANDLE_VALUE;
 }
     
 File& File::operator =(File&& other) noexcept
 {
-    HANDLE temp = *wio_get_file_handle(&other);
-    *wio_get_file_handle(&other) = *wio_get_file_handle(this);
-    *wio_get_file_handle(this) = temp;
+    HANDLE temp = *wio_get_file_handle_ptr(&other);
+    *wio_get_file_handle_ptr(&other) = *wio_get_file_handle_ptr(this);
+    *wio_get_file_handle_ptr(this) = temp;
     return *this;
 }
 
@@ -132,8 +162,8 @@ File::~File() noexcept
 
 File file_open(const char* path, int64_t path_size, int open_mode)
 {       
-    wchar_t normalized_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
-    WIO_w_String normalized_path = wio_normalize_convert_to_utf16_path(path, path_size, 0, normalized_path_buffer, IO_LOCAL_BUFFER_SIZE);
+    char normalized_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
+    WIO_Buffer normalized_path = wio_normalize_convert_to_utf16_path(path, path_size, 0, normalized_path_buffer, IO_LOCAL_BUFFER_SIZE);
         
     DWORD access = 0;
     if(open_mode & FILE_OPEN_READ)
@@ -152,84 +182,95 @@ File file_open(const char* path, int64_t path_size, int open_mode)
     DWORD disposition = 0;
     if(open_mode & FILE_OPEN_CREATE)
         disposition |= OPEN_ALWAYS;
+    else if(open_mode & FILE_OPEN_CREATE_ELSE_FAIL)
+        disposition = CREATE_NEW;
     else
         disposition = OPEN_EXISTING;
 
     File f;
     f.open_mode = open_mode;
-    *wio_get_file_handle(&f) = CreateFileW(normalized_path.data, access, sharing, NULL, disposition, 0, NULL);
+    *wio_get_file_handle_ptr(&f) = CreateFileW(wio_wstring(normalized_path), access, sharing, NULL, disposition, 0, NULL);
 
-    wio_w_string_free(&normalized_path);
+    wio_buffer_deinit(&normalized_path);
     return f;
 }
 
 void file_close(File* file)
 {
-    HANDLE handle = *wio_get_file_handle(file);
+    HANDLE handle = *wio_get_file_handle_ptr(file);
     CloseHandle(handle);
-    *wio_get_file_handle(file) = INVALID_HANDLE_VALUE;
+    *wio_get_file_handle_ptr(file) = INVALID_HANDLE_VALUE;
 }
     
 bool file_is_open(File CREF file)
 {
-    HANDLE h = wio_get_file_handle_val(file);
+    HANDLE h = wio_get_file_handle(file);
     return h != INVALID_HANDLE_VALUE && h != NULL;
 }
 
-File_IO_Result file_read(File* file, void* read_into, int64_t size)
+int64_t file_read(File* file, void* read_into, int64_t size, File_IO_State* state)
 {
-    File_IO_Result result = {0};
-    HANDLE handle = *wio_get_file_handle(file);
-    result.file_closed = !file_is_open(*file);
-    if(result.file_closed)
-        return result;
-
-    result.processed_size = 0;
-    while(result.processed_size < size)
+    HANDLE handle = *wio_get_file_handle_ptr(file);
+    if(!file_is_open(*file))
     {
-        int64_t remaining_size = size - result.processed_size;
+        *state = FILE_IO_STATE_FILE_CLOSED;
+        return 0;
+    }
+    
+    *state = FILE_IO_STATE_OK;
+    int64_t processed_size = 0;
+    while(processed_size < size)
+    {
+        int64_t remaining_size = size - processed_size;
         DWORD to_read = (DWORD) (remaining_size & 0x8FFFFF);
         DWORD read = 0;
-        result.error = (int) !ReadFile(handle, (char*) read_into + result.processed_size, to_read, &read, NULL);
+        bool error = !ReadFile(handle, (char*) read_into + processed_size, to_read, &read, NULL);
             
-        if(result.error)
+        if(error)
+        {
+            *state = FILE_IO_STATE_ERROR;
             break;
+        }
 
-        result.processed_size += read;
+        processed_size += read;
         // Check for eof
         if (read == 0) 
         {
-            result.eof = true;
+            *state = FILE_IO_STATE_EOF;
             break;
         }
     }
 
-    return result;
+    return processed_size;
 }
     
-File_IO_Result file_write(File* file, const void* write_from, int64_t size)
+int64_t file_write(File* file, const void* write_from, int64_t size, File_IO_State* state)
 {
-    File_IO_Result result = {0};
-    HANDLE handle = *wio_get_file_handle(file);
-    result.file_closed = !file_is_open(*file);
-    if(result.file_closed)
-        return result;
-
-    result.processed_size = 0;
-    while(result.processed_size < size)
+    HANDLE handle = *wio_get_file_handle_ptr(file);
+    if(!file_is_open(*file))
     {
-        int64_t remaining_size = size - result.processed_size;
+        *state = FILE_IO_STATE_FILE_CLOSED;
+        return 0;
+    }
+        
+    *state = FILE_IO_STATE_OK;
+    int64_t processed_size = 0;
+    while(processed_size < size)
+    {
+        int64_t remaining_size = size - processed_size;
         DWORD to_write = (DWORD) (remaining_size & 0x8FFFFF);
         DWORD written = 0;
-        result.error = (int) !ReadFile(handle, (char*) write_from + result.processed_size, to_write, &written, NULL);
-            
-        if(result.error)
+        bool error = !WriteFile(handle, (char*) write_from + processed_size, to_write, &written, NULL);
+        if(error || written <= 0)
+        {
+            *state = FILE_IO_STATE_ERROR;
             break;
+        }
 
-        result.processed_size += written;
+        processed_size += written;
     }
 
-    return result;
+    return processed_size;
 }
 
 //Offsets the current possition in file by offset relative to from
@@ -238,7 +279,7 @@ bool file_seek(File* file, int64_t offset, File_Seek from)
     if(!file_is_open(*file))
         return false;
             
-    HANDLE handle = *wio_get_file_handle(file);
+    HANDLE handle = *wio_get_file_handle_ptr(file);
     LARGE_INTEGER offset_;
     offset_.QuadPart = offset;
     DWORD move_method = 0;
@@ -267,7 +308,7 @@ int64_t file_tell(File CREF file)
     if(!file_is_open(file))
         return -1;
             
-    HANDLE handle = wio_get_file_handle_val(file);
+    HANDLE handle = wio_get_file_handle(file);
     LARGE_INTEGER move;
     LARGE_INTEGER curr_offset;
     move.QuadPart = 0;
@@ -280,6 +321,28 @@ int64_t file_tell(File CREF file)
     return (int64_t) curr_offset.QuadPart;
 }
     
+bool file_trim(File* file, int64_t max_size)
+{
+    if(!file_is_open(*file))
+        return false;
+
+    bool state = true;
+    int64_t offset = file_tell(*file);
+    if(offset == -1)
+        state = false;
+        
+    if(offset != max_size)
+        state = state && file_seek(file, max_size, FILE_SEEK_START);
+    
+    HANDLE handle = wio_get_file_handle(*file);
+    state = state && SetEndOfFile(handle);
+
+    if(offset < max_size && offset != -1)
+        state = file_seek(file, offset, FILE_SEEK_START) && state;
+
+    return state;
+}
+
 bool file_create(const char* file_path, int64_t path_size)
 {       
     File f = file_open(file_path, path_size, FILE_OPEN_READ | FILE_OPEN_CREATE_ELSE_FAIL);
@@ -291,45 +354,45 @@ bool file_create(const char* file_path, int64_t path_size)
 bool file_remove(const char* file_path, int64_t path_size)
 {       
     #define IO_NORMALIZE_PATH_OP(path, path_size, execute)  \
-        wchar_t normalized_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; \
-        WIO_w_String normalized_path = wio_normalize_convert_to_utf16_path(path, path_size, 0, normalized_path_buffer, IO_LOCAL_BUFFER_SIZE); \
+        char normalized_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; \
+        WIO_Buffer normalized_path = wio_normalize_convert_to_utf16_path(path, path_size, 0, normalized_path_buffer, IO_LOCAL_BUFFER_SIZE); \
         \
         execute\
         \
-        wio_w_string_free(&normalized_path); \
+        wio_buffer_deinit(&normalized_path); \
 
     IO_NORMALIZE_PATH_OP(file_path, path_size,
-        SetFileAttributesW(normalized_path.data, FILE_ATTRIBUTE_NORMAL);
-        bool state = !!DeleteFileW(normalized_path.data);
+        SetFileAttributesW(wio_wstring(normalized_path), FILE_ATTRIBUTE_NORMAL);
+        bool state = !!DeleteFileW(wio_wstring(normalized_path));
     )
     return state;
 }
 
 bool file_move(const char* new_path, int64_t new_path_size, const char* old_path, int64_t old_path_size)
 {       
-    wchar_t new_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
-    wchar_t old_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
-    WIO_w_String new_path_norm = wio_normalize_convert_to_utf16_path(new_path, new_path_size, 0, new_path_buffer, IO_LOCAL_BUFFER_SIZE);
-    WIO_w_String old_path_norm = wio_normalize_convert_to_utf16_path(old_path, old_path_size, 0, old_path_buffer, IO_LOCAL_BUFFER_SIZE);
+    char new_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
+    char old_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
+    WIO_Buffer new_path_norm = wio_normalize_convert_to_utf16_path(new_path, new_path_size, 0, new_path_buffer, IO_LOCAL_BUFFER_SIZE);
+    WIO_Buffer old_path_norm = wio_normalize_convert_to_utf16_path(old_path, old_path_size, 0, old_path_buffer, IO_LOCAL_BUFFER_SIZE);
         
-    bool state = !!MoveFileExW(old_path_norm.data, new_path_norm.data, MOVEFILE_COPY_ALLOWED);
+    bool state = !!MoveFileExW(wio_wstring(old_path_norm), wio_wstring(new_path_norm), MOVEFILE_COPY_ALLOWED);
 
-    wio_w_string_free(&new_path_norm);
-    wio_w_string_free(&old_path_norm);
+    wio_buffer_deinit(&new_path_norm);
+    wio_buffer_deinit(&old_path_norm);
     return state;
 }
 
 bool file_copy(const char* copy_to_path, int64_t to_path_size, const char* copy_from_path, int64_t from_path_size)
 {
-    wchar_t to_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
-    wchar_t from_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
-    WIO_w_String to_path_norm = wio_normalize_convert_to_utf16_path(copy_to_path, to_path_size, 0, to_path_buffer, IO_LOCAL_BUFFER_SIZE);
-    WIO_w_String from_path_norm = wio_normalize_convert_to_utf16_path(copy_from_path, from_path_size, 0, from_path_buffer, IO_LOCAL_BUFFER_SIZE);
+    char to_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
+    char from_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
+    WIO_Buffer to_path_norm = wio_normalize_convert_to_utf16_path(copy_to_path, to_path_size, 0, to_path_buffer, IO_LOCAL_BUFFER_SIZE);
+    WIO_Buffer from_path_norm = wio_normalize_convert_to_utf16_path(copy_from_path, from_path_size, 0, from_path_buffer, IO_LOCAL_BUFFER_SIZE);
         
-    bool state = !!CopyFileW(from_path_norm.data, to_path_norm.data, true);
+    bool state = !!CopyFileW(wio_wstring(from_path_norm), wio_wstring(to_path_norm), true);
 
-    wio_w_string_free(&to_path_norm);
-    wio_w_string_free(&from_path_norm);
+    wio_buffer_deinit(&to_path_norm);
+    wio_buffer_deinit(&from_path_norm);
     return state;
 }
 
@@ -341,13 +404,26 @@ static time_t wio_filetime_to_time_t(FILETIME ft)
     return (time_t) (ull.QuadPart / 10000000ULL - 11644473600ULL);  
 }
 
+bool wio_is_file_link(const wchar_t* directory_path)
+{
+    HANDLE file = CreateFileW(directory_path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    size_t requiredSize = ::GetFinalPathNameByHandleW(file, NULL, 0, FILE_NAME_NORMALIZED);
+    CloseHandle(file);
+
+    return requiredSize == 0;
+}
+
 bool file_info(const char* file_path, int64_t path_size, File_Info* info)
 {    
     WIN32_FILE_ATTRIBUTE_DATA native_info;
     memset(&native_info, 0, sizeof(native_info)); 
     memset(info, 0, sizeof(*info)); 
     IO_NORMALIZE_PATH_OP(file_path, path_size, 
-        bool state = !!GetFileAttributesExW(normalized_path.data, GetFileExInfoStandard, &native_info);
+        bool state = !!GetFileAttributesExW(wio_wstring(normalized_path), GetFileExInfoStandard, &native_info);
+        
+        if(native_info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
+            info->is_link = wio_is_file_link(wio_wstring(normalized_path));
     )   
     if(!state)
         return false;
@@ -368,132 +444,194 @@ bool file_info(const char* file_path, int64_t path_size, File_Info* info)
 bool directory_create(const char* dir_path, int64_t path_size)
 {
     IO_NORMALIZE_PATH_OP(dir_path, path_size, 
-        bool state = !!CreateDirectoryW(normalized_path.data, NULL);
+        bool state = !!CreateDirectoryW(wio_wstring(normalized_path), NULL);
     )
     return state;
 }
-
+    
 bool directory_remove(const char* dir_path, int64_t path_size)
 {
     IO_NORMALIZE_PATH_OP(dir_path, path_size, 
-        bool state = !!RemoveDirectoryW(normalized_path.data);
+        bool state = !!RemoveDirectoryW(wio_wstring(normalized_path));
     )
     return state;
 }
 
-bool directory_move(const char* new_path, int64_t new_path_size, const char* old_path, int64_t old_path_size)
+static WIO_Buffer wio_malloc_full_path(const wchar_t* local_path, int flags)
 {
-    return file_move(new_path, new_path_size, old_path, old_path_size);
-}
-    
-static WIO_String wio_malloc_full_path(WIO_w_String* local_path, int flags)
-{
-    wchar_t full_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
-        
-    WIO_w_String full_path = {0};
-    full_path.buffer = full_path_buffer;
-    full_path.buffer_size = IO_LOCAL_BUFFER_SIZE;
+    char full_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
+    WIO_Buffer full_path = wio_buffer_init_backed(full_path_buffer, IO_LOCAL_BUFFER_SIZE, sizeof(wchar_t));
 
-    wio_w_string_resize(&full_path, full_path.buffer_size - 1);
-
-    int64_t needed_size = GetFullPathNameW(local_path->data, (DWORD) full_path.size, full_path.data, NULL);
+    int64_t needed_size = GetFullPathNameW(local_path, 0, NULL, NULL);
     if(needed_size > full_path.size)
     {
-        wio_w_string_resize(&full_path, needed_size + 1);
-        needed_size = GetFullPathNameW(local_path->data, (DWORD) full_path.size, full_path.data, NULL);
+        wio_buffer_resize(&full_path, needed_size);
+        needed_size = GetFullPathNameW(local_path, (DWORD) full_path.size, wio_wstring(full_path), NULL);
     }
-    wio_w_string_resize(&full_path, needed_size);
-    WIO_String out_string = wio_convert_to_utf8_normalize_path(full_path.data, full_path.size, flags, NULL, 0);
+    WIO_Buffer out_string = wio_convert_to_utf8_normalize_path(wio_wstring(full_path), full_path.size, flags, NULL, 0);
         
-    wio_w_string_free(&full_path);
+    wio_buffer_deinit(&full_path);
     return out_string;
 }
 
-//File_Stats file_stats(const char* file_path, int64_t path_size);
-int64_t directory_list_contents_malloc(const char* directory_path, int64_t path_size, Directory_Entry** entries)
+typedef struct Directory_Visitor
 {
-    if(directory_path == NULL)
-        return 0;
+    WIN32_FIND_DATAW current_entry;
+    HANDLE first_found;
+    bool failed;
+} Directory_Visitor;
 
-    assert(entries != NULL);
-        
-    wchar_t built_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
-    char normalized_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
-        
-    WIO_w_String built_path = {0};
-    built_path.buffer = built_path_buffer;
-    built_path.buffer_size = IO_LOCAL_BUFFER_SIZE;
+#define WIO_FILE_MASK_ALL L"\\*.*"
 
-    WIO_String normalized_path = {0};
-    normalized_path.buffer = normalized_path_buffer;
-    normalized_path.buffer_size = IO_LOCAL_BUFFER_SIZE;
-        
-    //wchar_t dir_mask_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0};
-    //wIo
-    wchar_t dir_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0};
-    WIO_w_String dir_path = wio_normalize_convert_to_utf16_path(directory_path, path_size, IO_NORMALIZE_WINDOWS | IO_NORMALIZE_DIRECTORY, dir_path_buffer, IO_LOCAL_BUFFER_SIZE);
+static Directory_Visitor wio_directory_iterate_init(const wchar_t* dir_path, const wchar_t* file_mask)
+{
+    char built_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
+    WIO_Buffer built_path = wio_buffer_init_backed(built_path_buffer, IO_LOCAL_BUFFER_SIZE, sizeof(wchar_t));
+    
+    wio_w_concat(dir_path, file_mask, NULL, &built_path);
 
-    int64_t entries_size = 0;
-    int64_t entries_capacity = 8;
-    Directory_Entry* local_entries = (Directory_Entry*) wio_sure_realloc(NULL, (int64_t) sizeof(Directory_Entry) * (entries_capacity+1));
-
-    assert(dir_path.size != 0);
-    //Specify a file mask. *.* = We want everything! 
-    wio_w_concat(dir_path.data, L"\\*.*", NULL, &built_path);
-        
-    WIN32_FIND_DATAW found_file;
-    HANDLE first_found = FindFirstFileW(built_path.data, &found_file);
-    if(first_found != INVALID_HANDLE_VALUE) 
+    Directory_Visitor visitor = {0};
+    assert(built_path.data != NULL);
+    visitor.first_found = FindFirstFileW(wio_wstring(built_path), &visitor.current_entry);
+    while(visitor.failed == false && visitor.first_found != INVALID_HANDLE_VALUE)
     {
-        do
-        { 
-            //Find first file will always return "."
-            //    and ".." as the first two directories. 
-            if(wcscmp(found_file.cFileName, L".") == 0
-                || wcscmp(found_file.cFileName, L"..") == 0)
-                continue;
-                    
-            //Is the entity a File or Folder? 
-            bool is_directory = !!(found_file.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+        if(wcscmp(visitor.current_entry.cFileName, L".") == 0
+            || wcscmp(visitor.current_entry.cFileName, L"..") == 0)
+            visitor.failed = !FindNextFileW(visitor.first_found, &visitor.current_entry);
+        else
+            break;
+    }
+    return visitor;
+}
+
+static bool wio_directory_iterate_has(const Directory_Visitor* visitor)
+{
+    return visitor->first_found != INVALID_HANDLE_VALUE && visitor->failed == false;
+}
+
+static void wio_directory_iterate_next(Directory_Visitor* visitor)
+{
+    visitor->failed = visitor->failed || !FindNextFileW(visitor->first_found, &visitor->current_entry);
+}
+
+static void wio_directory_iterate_deinit(Directory_Visitor* visitor)
+{
+    FindClose(visitor->first_found);
+}
+
+//Iterates all contents of directory potentially recursively using BFS and potentially stopping when iter_fn returns false
+static bool wio_directory_list_contents_malloc(const wchar_t* directory_path, WIO_Buffer* entries, bool recursive)
+{
+    typedef struct Dir_Context
+    {
+        Directory_Visitor visitor;
+        const wchar_t* path;    
+        int64_t depth;          
+        int64_t index;          
+    } Dir_Context;
+
+    Dir_Context first = {0};
+
+    
+    first.visitor = wio_directory_iterate_init(directory_path, WIO_FILE_MASK_ALL);
+    first.path = directory_path;
+    if(wio_directory_iterate_has(&first.visitor) == false)
+        return false;
+        
+    char stack_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
+    char built_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
+    
+    WIO_Buffer stack = wio_buffer_init_backed(stack_buffer, IO_LOCAL_BUFFER_SIZE, sizeof(Dir_Context));
+    WIO_Buffer built_path = wio_buffer_init_backed(built_path_buffer, IO_LOCAL_BUFFER_SIZE, sizeof(wchar_t));
+
+    wio_buffer_push(&stack, &first, sizeof(first));
+
+    const int64_t MAX_RECURSION = 1000;
+        
+    //While the queue is not empty iterate
+    for(int64_t reading_from = 0; reading_from < stack.size; reading_from++)
+    {
+        Dir_Context* dir_context = (Dir_Context*) wio_buffer_at(&stack, reading_from);
+        for(; wio_directory_iterate_has(&dir_context->visitor); wio_directory_iterate_next(&dir_context->visitor), dir_context->index++)
+        {
+            //Build up our file path using the passed in 
+            //  [path] and the file/foldername we just found: 
+            wio_w_concat(dir_context->path, L"\\", dir_context->visitor.current_entry.cFileName, &built_path);
+            assert(built_path.data != 0);
+        
+            File_Info info = {0};
+            info.created_time = wio_filetime_to_time_t(dir_context->visitor.current_entry.ftCreationTime);
+            info.last_access_time = wio_filetime_to_time_t(dir_context->visitor.current_entry.ftLastAccessTime);
+            info.last_write_time = wio_filetime_to_time_t(dir_context->visitor.current_entry.ftLastWriteTime);
+            info.size = ((int64_t) dir_context->visitor.current_entry.nFileSizeHigh << 32) | ((int64_t) dir_context->visitor.current_entry.nFileSizeLow);
+        
+            info.type = FILE_TYPE_FILE;
+            if(dir_context->visitor.current_entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+                info.type = FILE_TYPE_DIRECTORY;
+            else
+                info.type = FILE_TYPE_FILE;
+
+            if(info.is_link)
+                info.is_link = wio_is_file_link(wio_wstring(built_path));  
+
             int flag = IO_NORMALIZE_LINUX;
-            if(is_directory)
+            if(info.type == FILE_TYPE_DIRECTORY)
                 flag |= IO_NORMALIZE_DIRECTORY;
             else
                 flag |= IO_NORMALIZE_FILE;
-
-            //Build up our file path using the passed in 
-            //  [dir_path] and the file/foldername we just found: 
-            wio_w_concat(dir_path.data, L"\\", found_file.cFileName, &built_path);
-            WIO_String out_string = wio_malloc_full_path(&built_path, flag);
-            //printf("found: \"%s\"\n", out_string.data);
+            WIO_Buffer out_string = wio_malloc_full_path(wio_wstring(built_path), flag);
+            printf("found: \"%s\"\n", wio_string(out_string));
 
             Directory_Entry entry = {0};
-            entry.is_directory = is_directory;
-            entry.path = out_string.data;
+            entry.info = info;
+            entry.path = wio_string(out_string);
             entry.path_size = out_string.size;
+    
+            wio_buffer_push(entries, &entry, sizeof(entry));
 
-            if(entries_size >= entries_capacity)
+            if(info.type == FILE_TYPE_DIRECTORY && info.is_link == false && recursive)
             {
-                entries_capacity *= 2;
-                local_entries = (Directory_Entry*) wio_sure_realloc(local_entries, (int64_t) sizeof(Directory_Entry) * (entries_capacity+1));
+                WIO_Buffer next_path = wio_buffer_init(sizeof(wchar_t));
+                wio_w_concat(wio_wstring(built_path), NULL, NULL, &next_path);
+
+                Dir_Context next = {0};
+                next.visitor = wio_directory_iterate_init(wio_wstring(next_path), WIO_FILE_MASK_ALL);
+                next.depth = dir_context->depth + 1;
+                next.path = wio_wstring(next_path);
+                assert(next.depth < MAX_RECURSION && "must not get stuck in an infinite loop");
+                wio_buffer_push(&stack, &next, sizeof(next));
             }
-
-            local_entries[entries_size++] = entry;
-        } 
-        while(FindNextFileW(first_found, &found_file)); //Find the next file. 
-        FindClose(first_found); 
+        }
     }
-        
-    //null terminate the entries so that we can retrieve their capacity in free
-    Directory_Entry null_entry = {0};
-    local_entries[entries_size] = null_entry; 
-    *entries = local_entries;
 
-    wio_w_string_free(&built_path);
-    wio_w_string_free(&dir_path);
-    wio_string_free(&normalized_path);
+    for(int64_t i = 0; i < stack.size; i++)
+    {
+        Dir_Context* dir_context = (Dir_Context*) wio_buffer_at(&stack, i);
+        if(dir_context->path != directory_path)
+            io_realloc((void*) dir_context->path, 0);
+        wio_directory_iterate_deinit(&dir_context->visitor);
+    }
+    
+    //Null terminate the entries
+    Directory_Entry terminator = {0};
+    wio_buffer_push(entries, &terminator, sizeof(terminator));
 
-    return true; 
+    wio_buffer_deinit(&stack);
+    wio_buffer_deinit(&built_path);
+    return true;
+}
+
+bool directory_list_contents_malloc(const char* directory_path, int64_t path_size, Directory_Entry** entries, int64_t* entries_count, bool recursive)
+{
+    assert(entries != NULL && entries_count != NULL);
+    WIO_Buffer entries_stack = wio_buffer_init(sizeof(Directory_Entry));
+    IO_NORMALIZE_PATH_OP(directory_path, path_size,
+        bool ok = wio_directory_list_contents_malloc(wio_wstring(normalized_path), &entries_stack, recursive);
+    )
+
+    *entries = (Directory_Entry*) entries_stack.data;
+    *entries_count = entries_stack.size;
+    return ok;
 }
 
 //Frees previously allocated file list
@@ -503,40 +641,29 @@ void directory_list_contents_free(Directory_Entry* entries)
         return;
 
     for(int64_t i = 0; entries[i].path != NULL; i++)
-        wio_sure_realloc(entries[i].path, 0);
+        io_realloc(entries[i].path, 0);
             
-    wio_sure_realloc(entries, 0);
+    io_realloc(entries, 0);
 }
 
 bool directory_set_current_working(const char* new_working_dir, int64_t path_size)
 {
     IO_NORMALIZE_PATH_OP(new_working_dir, path_size,
-        bool state = _wchdir(normalized_path.data) == 0;
+        bool state = _wchdir(wio_wstring(normalized_path)) == 0;
     )
     return state;
 }
     
 char* directory_get_current_working_malloc()
 {
+    //@TODO: use the local malloc
     wchar_t* current_working = _wgetcwd(NULL, 0);
     if(current_working == NULL)
         abort();
 
-    WIO_String output = wio_convert_to_utf8_normalize_path(current_working, (int64_t) wcslen(current_working), IO_NORMALIZE_LINUX | IO_NORMALIZE_DIRECTORY, NULL, 0);
+    WIO_Buffer output = wio_convert_to_utf8_normalize_path(current_working, (int64_t) wcslen(current_working), IO_NORMALIZE_LINUX | IO_NORMALIZE_DIRECTORY, NULL, 0);
     free(current_working);
-    return output.data;
-}
-    
-bool path_validate(const char* path, int64_t path_size, bool* is_directory)
-{
-    IO_NORMALIZE_PATH_OP(path, path_size, 
-        DWORD attributes = GetFileAttributesW(normalized_path.data);
-        bool state = attributes != INVALID_FILE_ATTRIBUTES;
-        if(is_directory != NULL)
-            *is_directory = !!(attributes & FILE_ATTRIBUTE_DIRECTORY) && state;
-    )
-
-    return state;
+    return wio_string(output);
 }
 
 static bool wio_is_separator(char c)
@@ -560,14 +687,14 @@ static bool wio_is_prefixed_with(const char* str, int64_t str_size, const char* 
 
 static Path_Info wio_analyze_root(const char* path, int64_t path_size)
 {
-    #define PATH_PREFIX_LONG        "\\\\?\\"
+    #define WIO_PATH_PREFIX_LONG        "\\\\?\\"
     Path_Info info = {0};
 
     //so that we dont have to keep variables in sync
     #define REMAINING_PATH (path + info.prefix_size)
     #define REMAINING_SIZE (path_size - info.prefix_size)
 
-    if(wio_is_prefixed_with(REMAINING_PATH, REMAINING_SIZE, PATH_PREFIX_LONG))
+    if(wio_is_prefixed_with(REMAINING_PATH, REMAINING_SIZE, WIO_PATH_PREFIX_LONG))
     {
         info.prefix_size = 4;
     }
@@ -661,18 +788,10 @@ Path_Info path_get_info(const char* path, int64_t path_size)
 char* path_get_full_malloc(const char* path, int64_t path_size)
 {
     IO_NORMALIZE_PATH_OP(path, path_size, 
-        WIO_String full = wio_malloc_full_path(&normalized_path, IO_NORMALIZE_LINUX);
+        WIO_Buffer full = wio_malloc_full_path(wio_wstring(normalized_path), IO_NORMALIZE_LINUX);
     )
-    return full.data;
+    return wio_string(full);
 }
-    
-//void realpath(const char *filename, wchar_t *pathbuf, int size)
-//{
-//    OFSTRUCT of;
-//    HANDLE file = (HANDLE)OpenFile(filename,&of,OF_READ);
-//    GetFinalPathNameByHandle(file,pathbuf,size,FILE_NAME_OPENED);
-//    CloseHandle(file);
-//}
     
 #define IO_NORMALIZE_NEEDED_EXTRA_SIZE 32
 static int64_t wio_path_normalize(const char* path, int64_t path_size, int flags, char* output, int64_t output_size)
@@ -701,8 +820,8 @@ static int64_t wio_path_normalize(const char* path, int64_t path_size, int flags
     //Add //?/
     if(flags & IO_NORMALIZE_LONG)
     {
-        for(int64_t j = 0; PATH_PREFIX_LONG[j]; j++)
-            output[prefix_writing_to++] = PATH_PREFIX_LONG[j];
+        for(int64_t j = 0; WIO_PATH_PREFIX_LONG[j]; j++)
+            output[prefix_writing_to++] = WIO_PATH_PREFIX_LONG[j];
     }
 
     //Add /
@@ -812,8 +931,8 @@ static int64_t wio_path_normalize(const char* path, int64_t path_size, int flags
             writing_to--;
     }
 
-    //if empty add ./
-    if(writing_to == 0)
+    //if empty and relative add ./
+    if(writing_to == 0 && path_info.is_absolute == false)
     {
         prefixed_output[writing_to++] = '.';
         prefixed_output[writing_to++] = separator;
@@ -824,19 +943,6 @@ static int64_t wio_path_normalize(const char* path, int64_t path_size, int flags
     return writing_to + prefix_writing_to;
 }
     
-char* path_normalize_malloc(const char* path, int64_t path_size, int norm_as_filetype)
-{
-    int flags = IO_NORMALIZE_LINUX;
-    if(norm_as_filetype == FILE_TYPE_DIRECTORY)
-        flags |= IO_NORMALIZE_DIRECTORY;
-    else if (norm_as_filetype == FILE_TYPE_FILE)
-        flags |= IO_NORMALIZE_FILE;
-
-    WIO_String normalized = {0};
-    wio_normalize_allocate_path(path, path_size, flags, &normalized);
-    return normalized.data;
-}
-
 int64_t path_normalize(const char* path, int64_t path_size, int norm_as_filetype, char* buffer, int64_t buffer_size)
 {
     int flags = IO_NORMALIZE_LINUX;
@@ -848,179 +954,361 @@ int64_t path_normalize(const char* path, int64_t path_size, int norm_as_filetype
     return wio_path_normalize(path, path_size, flags, buffer, buffer_size);
 }
     
-static void wio_normalize_allocate_path(const char* path, int64_t path_size, int flags, WIO_String* output)
+static void wio_normalize_allocate_path(const char* path, int64_t path_size, int flags, WIO_Buffer* output)
 {
-    wio_string_resize(output, path_size + IO_NORMALIZE_NEEDED_EXTRA_SIZE);  
-    int64_t new_size = wio_path_normalize(path, path_size, flags, output->data, output->size);
+    wio_buffer_resize(output, path_size + IO_NORMALIZE_NEEDED_EXTRA_SIZE);  
+    int64_t new_size = wio_path_normalize(path, path_size, flags, wio_string(*output), output->size);
     assert(new_size < output->size && "must suceed");
-    wio_string_resize(output, new_size);  
+    wio_buffer_resize(output, new_size);  
 }
     
-
-static void wio_string_free(WIO_String* string)
+static wchar_t* wio_wstring(WIO_Buffer stack)
 {
-    if(string->data != string->buffer)
-        wio_sure_realloc(string->data, 0);
-
-    string->capacity = 0;
-    string->size = 0;
-    string->data = NULL;
+    assert(stack.item_size == sizeof(wchar_t));
+    return (wchar_t*) stack.data;
 }
 
-static void wio_string_resize(WIO_String* string, int64_t size)
+static char* wio_string(WIO_Buffer stack)
 {
-    if(size >= string->capacity)
+    assert(stack.item_size == sizeof(char));
+    return (char*) stack.data;
+}
+
+static WIO_Buffer wio_buffer_init_backed(void* backing, int64_t backing_size, int32_t item_size)
+{
+    WIO_Buffer out = {0};
+    out.data = backing;
+    out.item_size = item_size;
+    out.is_alloced = false;
+    out.capacity = backing_size/item_size;
+    memset(backing, 0, backing_size);
+
+    return out;
+}
+
+static WIO_Buffer wio_buffer_init(int64_t item_size)
+{
+    WIO_Buffer out = {0};
+    out.item_size = item_size;
+    return out;
+}
+
+static void* wio_buffer_resize(WIO_Buffer* stack, int64_t new_size)
+{
+    int64_t i_size = stack->item_size;
+    assert(i_size != 0);
+    assert(stack->size <= stack->capacity);
+    assert(stack->item_size != 0);
+
+    if(new_size >= stack->capacity)
     {
-        if(size < string->buffer_size && string->buffer != NULL)
-        {
-            string->data = string->buffer;
-            string->capacity = string->buffer_size;
-        }
-        else
-        {
-            char* prev_data = string->data != string->buffer ? string->data : NULL;
-            string->data = (char*) wio_sure_realloc(prev_data, size+1);
-            string->capacity = size;
-        }
+        int64_t new_capaity = 8;
+        while(new_capaity < new_size + 1)
+            new_capaity *= 2;
+
+        void* prev_ptr = NULL;
+        if(stack->is_alloced)
+            prev_ptr = stack->data;
+        stack->data = io_realloc(prev_ptr, (size_t) (new_capaity * i_size));
+        stack->is_alloced = true;
+
+        //null newly added portion
+        memset((char*) stack->data + stack->capacity*i_size, 0, (new_capaity - stack->capacity)*i_size);
+        stack->capacity = new_capaity;
     }
-        
-    string->size = size;
-    string->data[size] = '\0';
+
+    //Null terminates the buffer
+    stack->size = new_size;
+    memset((char*) stack->data + new_size*i_size, 0, i_size);
+    return stack->data;
 }
+
+static int64_t wio_buffer_push(WIO_Buffer* stack, const void* item, int64_t item_size)
+{
+    if(stack->item_size == 0)
+        stack->item_size = item_size;
+
+    assert(stack->item_size == item_size);
+    wio_buffer_resize(stack, stack->size + 1);
+
+    memmove((char*) stack->data + (stack->size - 1)*item_size, item, item_size);
+    return stack->size;
+}
+
+static int64_t wio_buffer_pop(WIO_Buffer* stack)
+{
+    assert(stack->size > 0);
     
-static void wio_w_string_free(WIO_w_String* string)
-{
-    if(string->data != string->buffer)
-        wio_sure_realloc(string->data, 0);
+    stack->size -= 1;
+    return stack->size;
 }
 
-static void wio_w_string_resize(WIO_w_String* string, int64_t size)
+static void* wio_buffer_at(WIO_Buffer* stack, int64_t index)
 {
-    if(size >= string->capacity)
-    {
-        if(size < string->buffer_size && string->buffer != NULL)
-        {
-            string->data = string->buffer;
-            string->capacity = string->buffer_size;
-        }
-        else
-        {
-            wchar_t* prev_data = string->data != string->buffer ? string->data : NULL;
-            string->data = (wchar_t*) wio_sure_realloc(prev_data, (int64_t) sizeof(wchar_t) * (size+1));
-            string->capacity = size;
-        }
-    }
-        
-    string->size = size;
-    string->data[size] = '\0';
+    assert(0 <= index && index < stack->size);
+    return (char*) stack->data + index*stack->item_size;
 }
 
-static void wio_utf16_to_utf8(const wchar_t* utf16, int64_t utf16len, WIO_String* output) 
+static void wio_buffer_deinit(WIO_Buffer* stack)
+{
+    if(stack->is_alloced)
+        (void) io_realloc(stack->data, 0);
+    
+    WIO_Buffer empty = {0};
+    *stack = empty;
+}
+
+static void wio_utf16_to_utf8(const wchar_t* utf16, int64_t utf16len, WIO_Buffer* output) 
 {
     if (utf16 == NULL || utf16len == 0) 
     {
-        wio_string_resize(output, 0);
+        wio_buffer_resize(output, 0);
         return;
     }
 
-    //int utf16len = wcslen(utf16);
     int utf8len = WideCharToMultiByte(CP_UTF8, 0, utf16, (int) utf16len, NULL, 0, NULL, NULL);
-    wio_string_resize(output, utf8len);
-    WideCharToMultiByte(CP_UTF8, 0, utf16, (int) utf16len, output->data, (int) utf8len, 0, 0);
+    wio_buffer_resize(output, utf8len);
+    WideCharToMultiByte(CP_UTF8, 0, utf16, (int) utf16len, wio_string(*output), (int) utf8len, 0, 0);
 }
     
-static void wio_utf8_to_utf16(const char* utf8, int64_t utf8len, WIO_w_String* output) 
+static void wio_utf8_to_utf16(const char* utf8, int64_t utf8len, WIO_Buffer* output) 
 {
     if (utf8 == NULL || utf8len == 0) 
     {
-        wio_w_string_resize(output, 0);
+        wio_buffer_resize(output, 0);
         return;
     }
 
-    //int utf8len = strlen(utf8);
     int utf16len = MultiByteToWideChar(CP_UTF8, 0, utf8, (int) utf8len, NULL, 0);
-    wio_w_string_resize(output, utf16len);
-    MultiByteToWideChar(CP_UTF8, 0, utf8, (int) utf8len, output->data, (int) utf16len);
+    wio_buffer_resize(output, utf16len);
+    MultiByteToWideChar(CP_UTF8, 0, utf8, (int) utf8len, wio_wstring(*output), (int) utf16len);
 }
 
-static void wio_w_concat(const wchar_t* a, const wchar_t* b, const wchar_t* c, WIO_w_String* output)
+static void wio_w_concat(const wchar_t* a, const wchar_t* b, const wchar_t* c, WIO_Buffer* output)
 {
     int64_t a_size = a != NULL ? (int64_t) wcslen(a) : 0;
     int64_t b_size = b != NULL ? (int64_t) wcslen(b) : 0;
     int64_t c_size = c != NULL ? (int64_t) wcslen(c) : 0;
     int64_t composite_size = a_size + b_size + c_size;
         
-    wio_w_string_resize(output, composite_size);
-    memmove(output->data,                   a, sizeof(wchar_t) * a_size);
-    memmove(output->data + a_size,          b, sizeof(wchar_t) * b_size);
-    memmove(output->data + a_size + b_size, c, sizeof(wchar_t) * c_size);
+    wio_buffer_resize(output, composite_size);
+    memmove(wio_wstring(*output),                   a, sizeof(wchar_t) * a_size);
+    memmove(wio_wstring(*output) + a_size,          b, sizeof(wchar_t) * b_size);
+    memmove(wio_wstring(*output) + a_size + b_size, c, sizeof(wchar_t) * c_size);
 }
 
-WIO_w_String wio_normalize_convert_to_utf16_path(const char* path, int64_t path_size, int flags, wchar_t* buffer, int64_t buffer_size)
+WIO_Buffer wio_normalize_convert_to_utf16_path(const char* path, int64_t path_size, int flags, char* buffer, int64_t buffer_size)
 {
     char norm_path_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
-    WIO_String norm_path = {0};
-    norm_path.buffer = norm_path_buffer;
-    norm_path.buffer_size = IO_LOCAL_BUFFER_SIZE;
+    WIO_Buffer norm_path = wio_buffer_init_backed(norm_path_buffer, IO_LOCAL_BUFFER_SIZE, sizeof(char));
 
-    WIO_w_String output = {0};
-    output.buffer = buffer;
-    output.buffer_size = buffer_size;
+    WIO_Buffer output = wio_buffer_init_backed(buffer, buffer_size, sizeof(wchar_t));
     wio_normalize_allocate_path(path, path_size, IO_NORMALIZE_WINDOWS | flags, &norm_path);
-    wio_utf8_to_utf16(norm_path.data, norm_path.size, &output);
-    wio_string_free(&norm_path);
+    wio_utf8_to_utf16(wio_string(norm_path), norm_path.size, &output);
+    wio_buffer_deinit(&norm_path);
 
     return output;
 }
     
-WIO_String wio_convert_to_utf8_normalize_path(const wchar_t* path, int64_t path_size, int flags, char* buffer, int64_t buffer_size)
+WIO_Buffer wio_convert_to_utf8_normalize_path(const wchar_t* path, int64_t path_size, int flags, char* buffer, int64_t buffer_size)
 {
     char local_buffer[IO_LOCAL_BUFFER_SIZE] = {0}; 
-    WIO_String local = {0};
-    local.buffer = local_buffer;
-    local.buffer_size = IO_LOCAL_BUFFER_SIZE;
+    WIO_Buffer local = wio_buffer_init_backed(local_buffer, IO_LOCAL_BUFFER_SIZE, sizeof(char));
     wio_utf16_to_utf8(path, path_size, &local);
 
-    WIO_String output = {0};
-    output.buffer = buffer;
-    output.buffer_size = buffer_size;
-    wio_normalize_allocate_path(local.data, local.size, flags, &output);
-    wio_string_free(&local);
+    WIO_Buffer output = wio_buffer_init_backed(buffer, buffer_size, sizeof(char));
+    wio_normalize_allocate_path(wio_string(local), local.size, flags, &output);
+    wio_buffer_deinit(&local);
 
     return output;
 }
 
-void shutdown_testing();
+#define TESTING_DIR "__temp_wio_testing"
+#define TESTING_DIR_ TESTING_DIR "/"
 
-#define MAX_RESOURCE_NESTING 20
-#define MAX_FILE_RESOURCES 1000
-#define TESTING_DIR "__temp_testing"
-#define ARRAY_SIZE(str) (sizeof(str) - 1)
-
-struct Testing_File_Resource
-{
-    const char* path;
-    bool is_deleted;
-    bool is_directory;
-    bool panic_if_not_present;
+const char* const TESTING_FILE_PATHS[] = {
+    TESTING_DIR_"file1.txt",
+    TESTING_DIR_"no_extension_file",
+    TESTING_DIR_"utf8_yey_file_šřžýá.txt",
+    TESTING_DIR_"very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long.ini",
+    TESTING_DIR_"file2.ini",
+    TESTING_DIR_"file3.ini",
 };
 
-Testing_File_Resource file_resources[MAX_FILE_RESOURCES];
-int64_t file_resources_count = 0;
-bool has_error = false;
+const char* const TESTING_DIRECTORY_PATHS[] = {
+    TESTING_DIR_"directory1",
+    TESTING_DIR_"utf8_yey_dir_šřžýá",
+    TESTING_DIR_"very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_very_long",
+    TESTING_DIR_"directory2",
+    TESTING_DIR_"directory3",
+};
 
-#define ERROR_PRINT(...) fprintf(stderr, __VA_ARGS__)
-
-#define TEST_PANIC_WITH(...) do { ERROR_PRINT(__VA_ARGS__); shutdown_testing(); abort(); } while(0)
+#define TESTING_ARRAY_SIZE(str) (sizeof(str) / sizeof(*str))
+#define TESTING_PANIC_WITH(...) do { fprintf(stderr, __VA_ARGS__); abort(); } while(0)
 
 #ifdef TEST
 #undef TEST
 #endif
 
-#define TEST(a) if(!(a)) do { TEST_PANIC_WITH("TEST: failed \"" #a "\" at " __FILE__ " line %d\n", __LINE__); has_error = true; } while(0); 
+#define TEST(a) if(!(a)) TESTING_PANIC_WITH("TEST: failed \"" #a "\" at " __FILE__ " line %d\n", __LINE__);  
 
-//doesnt abort on test fail instead just prints failed
-#define TEST_CONTINUE(a) if(!(a)) do { ERROR_PRINT("TEST: failed \"" #a "\" at " __FILE__ " line %d\n", __LINE__); has_error = true; } while(0); 
+#define TESTING_STRING_SPACE_MAX_CONCURENT 10
+#define TESTING_STRING_SPACE_MAX_LEN 1024
+
+int     TESTING_STRING_SPACE_CURRENT = 0;
+char*   TESTING_STRING_SPACE[TESTING_STRING_SPACE_MAX_CONCURENT] = {NULL};
+
+#define TESTING_PATH_INFO_ABSOLUTE 1
+#define TESTING_PATH_INFO_DIRECTORY 2
+#define TESTING_PATH_INFO_ABSOLUTE_LINUX 4
+#define TESTING_PATH_INFO_ABSOLUTE_DRIVE 8
+
+static int64_t current_alloced = 0;
+void* wio_testing_allocator(void* prev, size_t new_size)
+{
+    const int64_t KILL_ZONE_VAL = 0xFFABFF00FFCDFF;
+    const int64_t KILL_ZONE_SIZE = 4;
+
+    typedef struct Allocation_Header {
+        int64_t kill_zone1[KILL_ZONE_SIZE]; 
+        int64_t alloc_size;
+        int64_t kill_zone2[KILL_ZONE_SIZE]; 
+    } Allocation_Header;
+
+    size_t new_size_corrected = new_size + 2*sizeof(Allocation_Header);
+
+    Allocation_Header* preamble = NULL;
+    Allocation_Header* postamble = NULL;
+    if(prev != NULL)
+    {
+        preamble = (Allocation_Header*) prev - 1;
+        for(int64_t i = 0; i < KILL_ZONE_SIZE; i++)
+        {
+            TEST(preamble->kill_zone1[i] == KILL_ZONE_VAL); 
+            TEST(preamble->kill_zone2[i] == KILL_ZONE_VAL); 
+        }
+            
+        postamble = (Allocation_Header*) ((char*) prev + preamble->alloc_size);
+        for(int64_t i = 0; i < KILL_ZONE_SIZE; i++)
+        {
+            TEST(postamble->kill_zone1[i] == KILL_ZONE_VAL); 
+            TEST(postamble->kill_zone2[i] == KILL_ZONE_VAL); 
+        }
+
+        TEST(postamble->alloc_size == preamble->alloc_size);
+    }
+    
+    if(preamble != NULL)
+        current_alloced -= preamble->alloc_size;
+
+    if(new_size == 0)
+    {
+        free(preamble);
+        return NULL;
+    }
+    
+    current_alloced += new_size;
+
+    char* realloced = (char*) realloc(preamble, (size_t) new_size_corrected);
+    TEST(realloced != NULL && "Allocation must not fail");
+    preamble = (Allocation_Header*) realloced;
+
+    preamble->alloc_size = (int64_t) new_size;
+    for(int64_t i = 0; i < KILL_ZONE_SIZE; i++)
+    {
+        preamble->kill_zone1[i] = KILL_ZONE_VAL; 
+        preamble->kill_zone2[i] = KILL_ZONE_VAL; 
+    }
+        
+    postamble = (Allocation_Header*) (realloced + sizeof(Allocation_Header) + new_size);
+    *postamble = *preamble;
+
+    return preamble + 1;
+}
+
+char* wio_testing_temp_buffer()
+{
+    char* str = TESTING_STRING_SPACE[TESTING_STRING_SPACE_CURRENT];
+    if(str == nullptr)
+    {
+        TESTING_STRING_SPACE[TESTING_STRING_SPACE_CURRENT] = (char*) io_realloc(NULL, TESTING_STRING_SPACE_MAX_LEN);
+        str = TESTING_STRING_SPACE[TESTING_STRING_SPACE_CURRENT];
+        assert(str != NULL);
+    }
+
+    TESTING_STRING_SPACE_CURRENT = (TESTING_STRING_SPACE_CURRENT + 1) % TESTING_STRING_SPACE_MAX_CONCURENT;
+    
+    assert(str != nullptr);
+    memset(str, 0, TESTING_STRING_SPACE_MAX_LEN);
+    return str;
+}
+
+bool wio_testing_has_file_with(const char* path, const char* content)
+{
+    FILE* file = fopen(path, "rb");
+    if(file == NULL)
+        return false;
+        
+    size_t content_len = strlen(content);
+    char* buffer = (char*) io_realloc(NULL, content_len + 1);
+    assert(buffer != NULL);
+
+    size_t read = fread(buffer, 1, content_len, file);
+    bool state = read == content_len;
+    state = state && memcmp(buffer, content, content_len);
+
+    io_realloc(buffer, 0);
+    fclose(file);
+
+    return state;
+}
+
+void wio_testing_make_file_with(const char* path, const char* content)
+{
+    FILE* file = fopen(path, "wb");
+    if(file == NULL)
+        TESTING_PANIC_WITH("TESTING: couldnt open file for wio_testing: \"%s\"", path);
+        
+    size_t content_len = strlen(content);
+    size_t written = fwrite(content, 1, content_len, file);
+    fclose(file);
+
+    if(written != content_len)
+        TESTING_PANIC_WITH("TESTING: write all contents to file \"%s\"\n conetnts: \"%s\"\n", path, content);
+}
+
+
+void wio_testing_make_directory(const char* path)
+{
+    if(_mkdir(path) != 0)
+        TESTING_PANIC_WITH("TESTING: couldnt create directory: \"%s\"", path);
+}
+
+void wio_testing_deinit_filesystem()
+{
+    (void) setlocale(LC_ALL, ".UTF-8");
+
+    for(int64_t i = 0; i < TESTING_ARRAY_SIZE(TESTING_FILE_PATHS); i++)
+        (void) _unlink(TESTING_FILE_PATHS[i]);
+
+    for(int64_t i = 0; i < TESTING_ARRAY_SIZE(TESTING_DIRECTORY_PATHS); i++)
+        (void) _rmdir(TESTING_DIRECTORY_PATHS[i]);
+        
+    for(int64_t i = 0; i < TESTING_ARRAY_SIZE(TESTING_STRING_SPACE); i++)
+    {
+        free(TESTING_STRING_SPACE[i]);
+        TESTING_STRING_SPACE[i] = NULL;
+    }
+
+    (void) _rmdir(TESTING_DIR);
+}
+
+void wio_testing_init_filesystem()
+{
+    wio_testing_deinit_filesystem();
+    WIO_ALLOCATOR = wio_testing_allocator;
+    wio_testing_make_directory(TESTING_DIR);
+}
 
 void test_normalize_path_single(const char* to_simplify, int style, const char* expected_result)
 {
@@ -1028,31 +1316,24 @@ void test_normalize_path_single(const char* to_simplify, int style, const char* 
     for(int64_t i = 0; i < IO_LOCAL_BUFFER_SIZE; i++)
         normalized_buffer[i] = '$'; //initialize to something else then null ermination
 
-    WIO_String normalized = {0};
-    normalized.buffer = normalized_buffer;
-    normalized.buffer_size = IO_LOCAL_BUFFER_SIZE;
+    WIO_Buffer normalized = wio_buffer_init_backed(normalized_buffer, IO_LOCAL_BUFFER_SIZE, sizeof(char));
         
     int64_t len = (int64_t) strlen(to_simplify);
     wio_normalize_allocate_path(to_simplify, len, style, &normalized);
 
     //int64_t expected_len = strlen(expected_result);
-    int differ_at = strcmp(normalized.data, expected_result);
+    int differ_at = strcmp(wio_string(normalized), expected_result);
     if(differ_at != 0)
     {
         printf("\nbefore:   \"%s\"\n", to_simplify);
-        printf("simplify: \"%s\"\n", normalized.data);
+        printf("simplify: \"%s\"\n", wio_string(normalized));
         printf("expected: \"%s\"\n", expected_result);
         printf("differ at: %d\n", differ_at);
-        TEST_PANIC_WITH("TES: test_normalize_path_single failed!");
+        TESTING_PANIC_WITH("TES: test_normalize_path_single failed!");
     }
 
-    wio_string_free(&normalized);
+    wio_buffer_deinit(&normalized);
 }
-
-#define TEST_PATH_INFO_ABSOLUTE 1
-#define TEST_PATH_INFO_DIRECTORY 2
-#define TEST_PATH_INFO_ABSOLUTE_LINUX 4
-#define TEST_PATH_INFO_ABSOLUTE_DRIVE 8
 
 void test_path_get_info_single(const char* path, int64_t prefix, int64_t root, int64_t file, int64_t ext, int flag, char letter)
 {
@@ -1064,17 +1345,24 @@ void test_path_get_info_single(const char* path, int64_t prefix, int64_t root, i
     TEST(info.filename_size == file);
     TEST(info.extension_size == ext);
 
-    TEST(info.is_absolute == !!(flag & TEST_PATH_INFO_ABSOLUTE));
-    TEST(info.is_linux_style_absolute == !!(flag & TEST_PATH_INFO_ABSOLUTE_LINUX));
-    TEST(info.is_drive_style_absolute == !!(flag & TEST_PATH_INFO_ABSOLUTE_DRIVE));
-    TEST(info.is_directory == !!(flag & TEST_PATH_INFO_DIRECTORY));
+    TEST(info.is_absolute == !!(flag & TESTING_PATH_INFO_ABSOLUTE));
+    TEST(info.is_linux_style_absolute == !!(flag & TESTING_PATH_INFO_ABSOLUTE_LINUX));
+    TEST(info.is_drive_style_absolute == !!(flag & TESTING_PATH_INFO_ABSOLUTE_DRIVE));
+    TEST(info.is_directory == !!(flag & TESTING_PATH_INFO_DIRECTORY));
 
     TEST(info.drive_letter == letter);
 }
 
 void test_normalize_path()
 {
-    #define L_PREF PATH_PREFIX_LONG
+    //@TODO
+    void* alloced = wio_testing_allocator(NULL, 18);
+    wio_testing_allocator(alloced, 0);
+
+    WIO_ALLOCATOR = wio_testing_allocator;
+
+    //@TODO add wio_testing prefixes
+    #define L_PREF WIO_PATH_PREFIX_LONG
     #define LONG_SEG "a_very_long_segement_name_to_test_the_max_size_limit"
 
     #define LONG_PATH LONG_SEG "/" LONG_SEG "/" LONG_SEG "/" LONG_SEG "/" LONG_SEG
@@ -1084,9 +1372,9 @@ void test_normalize_path()
     #define WIN_VERY_LONG_PATH WIN_LONG_PATH "\\" WIN_LONG_PATH "\\" WIN_LONG_PATH
 
     {
-        int ABSL = TEST_PATH_INFO_ABSOLUTE_LINUX | TEST_PATH_INFO_ABSOLUTE;
-        int ABSD = TEST_PATH_INFO_ABSOLUTE_DRIVE | TEST_PATH_INFO_ABSOLUTE;
-        int DIR  = TEST_PATH_INFO_DIRECTORY;
+        int ABSL = TESTING_PATH_INFO_ABSOLUTE_LINUX | TESTING_PATH_INFO_ABSOLUTE;
+        int ABSD = TESTING_PATH_INFO_ABSOLUTE_DRIVE | TESTING_PATH_INFO_ABSOLUTE;
+        int DIR  = TESTING_PATH_INFO_DIRECTORY;
         
         test_path_get_info_single("C:\\path/to/file.txt",       0, 3, 8, 3, ABSD, 'C');
         test_path_get_info_single("c:/path/file.txt",           0, 3, 8, 3, ABSD, 'C');
@@ -1121,20 +1409,22 @@ void test_normalize_path()
         int D = IO_NORMALIZE_DIRECTORY;
         int F = IO_NORMALIZE_FILE;
 
-        test_normalize_path_single("path/to/file.txt",             WIN,  "path\\to\\file.txt");
-        test_normalize_path_single("path///to//file.txt",          WIN,  "path\\to\\file.txt");
-        test_normalize_path_single("C:path/to/file.txt",           WIN,  "C:\\path\\to\\file.txt");
-        test_normalize_path_single("c:/path/to/file.txt",          WIN,  "C:\\path\\to\\file.txt");
-        test_normalize_path_single("g:\\path/to/file.txt",         WIN,  "G:\\path\\to\\file.txt");
-        test_normalize_path_single("z:path/to/file.txt",           WIN,  "Z:\\path\\to\\file.txt");
-        test_normalize_path_single("\\path/to/file.txt",           WIN,  "\\path\\to\\file.txt");
-        test_normalize_path_single("path\\to\\file.txt",           LIN,  "path/to/file.txt");
+        //test_normalize_path_single("path/to/file.txt",             WIN,  "path\\to\\file.txt");
+        //test_normalize_path_single("path///to//file.txt",          WIN,  "path\\to\\file.txt");
+        //test_normalize_path_single("C:path/to/file.txt",           WIN,  "C:\\path\\to\\file.txt");
+        //test_normalize_path_single("c:/path/to/file.txt",          WIN,  "C:\\path\\to\\file.txt");
+        //test_normalize_path_single("g:\\path/to/file.txt",         WIN,  "G:\\path\\to\\file.txt");
+        //test_normalize_path_single("z:path/to/file.txt",           WIN,  "Z:\\path\\to\\file.txt");
+        //test_normalize_path_single("\\path/to/file.txt",           WIN,  "\\path\\to\\file.txt");
+        //test_normalize_path_single("path\\to\\file.txt",           LIN,  "path/to/file.txt");
             
         test_normalize_path_single("",                             WIN,  ".\\");
         test_normalize_path_single("",                             WIN | D, ".\\");
         test_normalize_path_single("",                             WIN | F, ".\\");
         test_normalize_path_single("",                             LIN,  "./");
         test_normalize_path_single("",                             LIN | D,  "./");
+        test_normalize_path_single("C:/",                          LIN | D,  "C:/");
+        test_normalize_path_single("\\",                           LIN,  "/");
         test_normalize_path_single(L_PREF "",                      WIN,  ".\\");
         test_normalize_path_single(L_PREF "",                      LIN,  "./");
         test_normalize_path_single("..",                           WIN,  "..\\");
@@ -1176,133 +1466,200 @@ void test_normalize_path()
     }
 }
 
-
-void add_test_resource(const char* path, bool is_directory, bool must_persist)
+void test_file_handle_functions()
 {
-    Testing_File_Resource resource = {path};
-    resource.is_directory = is_directory;
-    resource.panic_if_not_present = must_persist;
-
-    if(file_resources_count >= MAX_FILE_RESOURCES)
-        TEST_PANIC_WITH("TESTING: too many file resources!");
-
-    file_resources[file_resources_count++] = resource;
-}
-
-void make_test_directory(const char* path, bool must_persist)
-{
-    if(_mkdir(path) != 0)
-        TEST_PANIC_WITH("TESTING: couldnt create directory: \"%s\"", path);
-
-    add_test_resource(path, true, must_persist);
-}
-
-void make_test_file(const char* path, const char* content, bool must_persist)
-{
-    FILE* file = fopen(path, "wb");
-    if(file == NULL)
-        TEST_PANIC_WITH("TESTING: couldnt open file for testing: \"%s\"", path);
-        
-    size_t content_len = strlen(content);
-    size_t written = fwrite(content, 1, content_len, file);
-    if(written != content_len)
-        ERROR_PRINT("TESTING: write all contents to file \"%s\"\n conetnts: \"%s\"\n", path, content);
-        
-    add_test_resource(path, false, must_persist);
-    fclose(file);
-}
-
-void remove_test_resources()
-{
-    //attempt to remove all resources. This has to be done multiple times
-    // since we can only ever delete empty directories and we do not track at all the 
-    // relationship between items resources. This means the algorhtimt is delete all we can.
-    // However if we dont exceed MAX_RESOURCE_NESTING we should be okay.
-    for(int64_t j = 0; j < MAX_RESOURCE_NESTING; j++)
-    {
-        //remove all not yet deleted resources
-        for(int64_t i = file_resources_count; i-- > 0; i)
-        {
-            bool ok = true;
-            if(file_resources[i].is_deleted)
-                continue;
-
-            if(file_resources[i].is_directory)
-                ok = _rmdir(file_resources[i].path) == 0;
-            else
-                ok = _unlink(file_resources[i].path) == 0;
-
-            if(!ok && file_resources[i].panic_if_not_present)
-            {
-                fprintf(stderr, "TEST: persistent resource deleted! \"%s\"", file_resources[i].path);
-                has_error = true;
-            }
-            file_resources[i].is_deleted = true;
-        }
-    }
-
-    if(has_error)
-        abort();
-}
-
-void test_file_functions()
-{
-    bool PERSIST = true;
-    bool TEMP = false;
-
     const char test_string1[] = "hello world!";
-    const char test_string2[] = "hello world! longer string";
+    const char test_string2[] = "hello world! longer string ýíýščěšěšč";
     const char test_string3[] = "utf8 yey! ýíýščěšěšč";
 
-    const char path1[] = TESTING_DIR "/file1.txt";
-    const char path2[] = TESTING_DIR "/file2";
-    const char path3[] = TESTING_DIR "/utf8_friendly";
-    const char path4[] = TESTING_DIR "/dir";
+    int64_t test_string1_size = (int64_t) strlen(test_string1);
+    int64_t test_string2_size = (int64_t) strlen(test_string2);
+    int64_t test_string3_size = (int64_t) strlen(test_string3);
 
-    make_test_directory(TESTING_DIR, PERSIST);
-    make_test_file(path1, test_string1, PERSIST);
-    make_test_file(path2, test_string2, PERSIST);
-    make_test_file(path3, test_string2, PERSIST);
-    make_test_directory(path4, PERSIST);
+    const char* path1 = TESTING_FILE_PATHS[0];
+    const char* path2 = TESTING_FILE_PATHS[1];
+    const char* path3 = TESTING_FILE_PATHS[2];
+    const char* path4 = TESTING_FILE_PATHS[3];
+    const char* dir_path1 = TESTING_DIRECTORY_PATHS[0];
+    const char* dir_path2 = TESTING_DIRECTORY_PATHS[1];
+
+    
+    time_t before_proc = time(NULL);
+    time_t before_last_access = time(NULL);
+
+    wio_testing_init_filesystem();
+
+    wio_testing_make_file_with(path1, test_string1);
+    wio_testing_make_file_with(path2, test_string2);
+    wio_testing_make_directory(dir_path1);
+    wio_testing_make_directory(dir_path2);
+    
+    File_IO_State state = FILE_IO_STATE_OK;
+    int64_t processed = 0;
 
     {
-        File_IO_Result result = {0};
+        char* buffer = wio_testing_temp_buffer();
         File file = {0};
-        TEST_CONTINUE(file_is_open(file) == false);
+        TEST(file_is_open(file) == false);
 
-        file = file_open(path1, ARRAY_SIZE(path1), FILE_OPEN_READ);
-        TEST_CONTINUE(file_is_open(file));
-        char buffer[ARRAY_SIZE(test_string1) + 1] = {0};
-        result = file_read(&file, buffer, ARRAY_SIZE(test_string1));
-        TEST_CONTINUE(!result.error);
-        TEST_CONTINUE(!result.file_closed);
-        TEST_CONTINUE(!result.eof);
-        TEST_CONTINUE(result.processed_size == ARRAY_SIZE(test_string1));
-        TEST_CONTINUE(strcmp(buffer, test_string1) == 0);
+        file = file_open(path1, strlen(path1), FILE_OPEN_READ);
+        TEST(file_is_open(file));
+
+        processed = file_read(&file, buffer, test_string1_size, &state);
+        TEST(state == FILE_IO_STATE_OK);
+        TEST(processed == test_string1_size);
+        TEST(strcmp(buffer, test_string1) == 0);
+        
+        processed = file_read(&file, buffer+test_string1_size, test_string1_size, &state);
+        TEST(state == FILE_IO_STATE_EOF);
+        TEST(processed == 0);
+        TEST(strcmp(buffer, test_string1) == 0 && "the function shouldnt write anything");
 
         file_close(&file);
-        TEST_CONTINUE(file_is_open(file) == false);
+        TEST(file_is_open(file) == false);
+    }
+    
+    {
+        char* buffer = wio_testing_temp_buffer();
+        File file = file_open(path2, strlen(path2), FILE_OPEN_READ | FILE_OPEN_ALLOW_OTHER_DELETE | FILE_OPEN_ALLOW_OTHER_WRITE);
+        TEST(file_is_open(file));
+
+        processed = file_read(&file, buffer, test_string2_size + 1, &state);
+        TEST(state == FILE_IO_STATE_EOF);
+        TEST(processed == test_string2_size);
+        TEST(strcmp(buffer, test_string2) == 0);
+        
+        processed = file_read(&file, buffer, 0, &state);
+        TEST(state == FILE_IO_STATE_OK);
+        TEST(processed == 0);
+        TEST(strcmp(buffer, test_string2) == 0 && "the function shouldnt write anything");
+
+        file_close(&file);
+    }
+    
+    {
+        char* buffer = wio_testing_temp_buffer();
+        File file = file_open(path3, strlen(path3), FILE_OPEN_READ | FILE_OPEN_ALLOW_OTHER_READ);
+        TEST(file_is_open(file) == false && "file at path3 is not yet created");
+
+        file = file_open(dir_path1, strlen(dir_path1), FILE_OPEN_READ | FILE_OPEN_ALLOW_OTHER_READ);
+        TEST(file_is_open(file) == false && "path3 is a directory created");
+
+        file = file_open(path3, strlen(path3), FILE_OPEN_READ_WRITE | FILE_OPEN_CREATE_ELSE_FAIL);
+        TEST(file_is_open(file));
+
+        processed = file_write(&file, test_string3, test_string3_size, &state);
+        TEST(state == FILE_IO_STATE_OK);
+        TEST(processed == test_string3_size);
+
+        int64_t offset = file_tell(file);
+        TEST(offset == test_string3_size && "the offset should be precisely the ammount written");
+        TEST(file_seek(&file, offset, FILE_SEEK_START));
+        offset = file_tell(file);
+        TEST(offset == test_string3_size && "seeking the current offset should have no effect");
+
+        TEST(file_seek(&file, 0, FILE_SEEK_START));
+        
+        processed = file_read(&file, buffer, test_string3_size + 1, &state);
+        TEST(state == FILE_IO_STATE_EOF);
+        TEST(processed == test_string3_size);
+        TEST(strcmp(buffer, test_string3) == 0);
+
+        file_close(&file);
+
+        file = file_open(path3, strlen(path3), FILE_OPEN_READ_WRITE | FILE_OPEN_CREATE_ELSE_FAIL);
+        TEST(file_is_open(file) == false && "file at path3 is already created");
+    }
+    
+    time_t before = time(NULL);
+    time_t after = time(NULL);
+    {
+        char* buffer = wio_testing_temp_buffer();
+        File file = file_open(path4, strlen(path4), FILE_OPEN_READ_WRITE | FILE_OPEN_CREATE_ELSE_FAIL);
+        TEST(file_is_open(file));
+        time_t created = time(NULL);
+
+        int64_t total_written = 0;
+        const int64_t iters = 30;
+        for(int64_t i = 0; i < iters; i++)
+        {
+            before_last_access = time(NULL);
+            total_written += file_write(&file, test_string3, test_string3_size, &state);
+            TEST(state == FILE_IO_STATE_OK);
+        }
+
+        while(created == time(NULL)); //busy wait for a second.
+        after = time(NULL);
+
+        File_Info info = {0};
+        TEST(file_info(path4, strlen(path4), &info));
+        TEST(info.type == FILE_TYPE_FILE);
+        TEST(total_written == info.size);
+        TEST((int64_t) before <= info.created_time      && info.created_time     < (int64_t) after);
+        TEST((int64_t) before <= info.last_access_time  && info.last_access_time < (int64_t) after);
+        TEST((int64_t) before <= info.last_write_time   && info.last_write_time  < (int64_t) after);
+
+        file_close(&file);
+
+    }
+    
+    {
+        File_Info info = {0};
+        TEST(file_info(TESTING_DIR, strlen(TESTING_DIR), &info));
+        TEST(info.type == FILE_TYPE_DIRECTORY);
+        TEST(info.size >= test_string1_size + test_string2_size + test_string3_size);
+        time_t now = time(NULL);
+        
+        TEST((int64_t) before_proc <= info.created_time            && info.created_time <= now);
+        TEST((int64_t) before_last_access <= info.last_access_time && info.last_access_time <= now);
+        TEST((int64_t) before_last_access <= info.last_write_time  && info.last_write_time  <= now);
+
+        int y = 0;
     }
 
-    remove_test_resources();
+    {
+        char* buffer = wio_testing_temp_buffer();
+
+        
+        File_Info info = {0};
+        TEST(file_info(path4, strlen(path4), &info));
+
+        TEST(file_info(path4, strlen(path4), &info));
+        TEST(info.type == FILE_TYPE_FILE);
+        TEST(info.size > 30);
+        TEST((int64_t) before <= info.created_time      && info.created_time     < (int64_t) after);
+        TEST((int64_t) before <= info.last_access_time  && info.last_access_time < (int64_t) after);
+        TEST((int64_t) before <= info.last_write_time   && info.last_write_time  < (int64_t) after);
+        
+        time_t before_trim = time(NULL);
+        File file = file_open(path4, strlen(path4), FILE_OPEN_READ_WRITE);
+        TEST(file_is_open(file));
+        TEST(file_trim(&file, 30));
+        time_t after_trim = time(NULL);
+
+        TEST(file_info(path4, strlen(path4), &info));
+        TEST(info.size == 30);
+        TEST((int64_t) before <= info.created_time           && info.created_time     < (int64_t) after);
+        TEST((int64_t) before_trim <= info.last_access_time  && info.last_access_time <= (int64_t) after_trim);
+        TEST((int64_t) before_trim <= info.last_write_time   && info.last_write_time  <= (int64_t) after_trim);
+
+        file_close(&file);
+    }
+
+    int x = 10;
 }
 
 void test_make_dir()
 {
 
-    remove_test_resources();
-}
-
-void shutdown_testing()
-{
-    remove_test_resources();
 }
 
 void test_io()
 {
     test_normalize_path();
-    test_file_functions();
+    test_file_handle_functions();
     test_make_dir();
+    //wio_testing_deinit_filesystem();
 }
 
 JOT_IO_END

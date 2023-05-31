@@ -143,7 +143,7 @@ namespace tests
     
     #define TEST(cond) \
         (!(cond)    \
-            ? (println("test failed: "#cond " at: " __FILE__ __FUNCTION__ " line ", __LINE__), *(int*) 0 = 1, (void) 0)    \
+            ? (println("test failed: "#cond " at: " __FILE__ __FUNCTION__ " line ", __LINE__), abort(), (void) 0)    \
             : (void) 0) \
 
 }
