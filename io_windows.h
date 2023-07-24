@@ -408,7 +408,7 @@ bool wio_is_file_link(const wchar_t* directory_path)
 {
     HANDLE file = CreateFileW(directory_path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                               NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    size_t requiredSize = ::GetFinalPathNameByHandleW(file, NULL, 0, FILE_NAME_NORMALIZED);
+    size_t requiredSize = GetFinalPathNameByHandleW(file, NULL, 0, FILE_NAME_NORMALIZED);
     CloseHandle(file);
 
     return requiredSize == 0;
@@ -580,7 +580,7 @@ static bool wio_directory_list_contents_malloc(const wchar_t* directory_path, WI
             else
                 flag |= IO_NORMALIZE_FILE;
             WIO_Buffer out_string = wio_malloc_full_path(wio_wstring(built_path), flag);
-            printf("found: \"%s\"\n", wio_string(out_string));
+            //printf("found: \"%s\"\n", wio_string(out_string));
 
             Directory_Entry entry = {0};
             entry.info = info;
